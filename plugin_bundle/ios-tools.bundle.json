@@ -1,0 +1,44 @@
+{
+  "id": "ios-tools",
+  "version": "0.1.0",
+  "name": "iOS Tools",
+  "description": "iOS real-device automation worker plugin (Appium/XCUITest)",
+  "min_host_version": "0.1.0",
+  "mcp_protocol_version": "2025-06-18",
+  "requires_entitlement": false,
+  "required_product_ids": [],
+  "platforms": ["macos_universal"],
+  "workers": [
+    {
+      "id": "ios",
+      "kind": "mcp_stdio",
+      "auto_start": false,
+      "tools_namespace": "plugin:ios-tools",
+      "entrypoints": {
+        "macos_universal": "bin/macos/universal/rzn-ios-tools-worker"
+      },
+      "args": [],
+      "env": {}
+    }
+  ],
+  "resources": [
+    { "path": "resources/workflows/safari_google_search_v1.json" },
+    { "path": "resources/workflows/reddit_read_first_post_v1.json" },
+    { "path": "resources/workflows/reddit_comment_first_post_v1.json" }
+  ],
+  "payloads": [
+    {
+      "source": "$RZN_PHONE_ROOT/dist/bin/macos/universal/rzn-ios-tools-worker",
+      "dest": "bin/macos/universal/rzn-ios-tools-worker",
+      "platforms": ["macos_universal"],
+      "mode": "755"
+    },
+    {
+      "source": "$RZN_PHONE_ROOT/crates/rzn_ios_tools_worker/resources/workflows",
+      "dest": "resources/workflows",
+      "platforms": ["macos_universal"],
+      "mode": "644"
+    }
+  ],
+  "shared_payloads": []
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "safari.google_search",
+  "version": "1.0.0",
+  "description": "Open Safari on iOS, run a Google search, and extract top organic results.",
+  "inputs": {
+    "query": { "type": "string", "required": true },
+    "limit": { "type": "integer", "default": 5, "min": 1, "max": 20 }
+  },
+  "notes": [
+    "This workflow is read-only.",
+    "Consent and layout variance are handled with best-effort retries."
+  ]
+}

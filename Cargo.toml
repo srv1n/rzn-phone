@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/rzn_ios_tools_worker"]
+resolver = "2"

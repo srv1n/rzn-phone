@@ -1,0 +1,66 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "reddit.comment_first_post",
+  "version": "1.1.0",
+  "description": "Open Reddit, open the first non-promoted feed post, draft a comment, and submit (requires commit=true).",
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.reddit.Reddit",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "reddit_feed__post__post_cell" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.reddit.open_first_post",
+      "arguments": { "maxCandidates": 8, "skipPromoted": true }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "reddit__comment_composer__comment_text_view" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.type",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "reddit__comment_composer__comment_text_view" },
+        "text": "{{commentText}}",
+        "clearFirst": true
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "requiresCommit": true,
+      "arguments": { "target": { "using": "accessibility id", "value": "reddit__comment_composer__reply_button" } }
+    },
+    { "tool": "ios.reddit.extract_post", "arguments": { "maxComments": 3, "maxRawLines": 80 } },
+    { "tool": "ios.ui.screenshot", "arguments": {} },
+    { "tool": "ios.ui.observe_compact", "arguments": { "nodeFilter": "interactive", "maxNodes": 140 } }
+  ]
+}

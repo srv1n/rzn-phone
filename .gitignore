@@ -1,0 +1,13 @@
+# Rust build artifacts
+/target/
+
+# Plugin build outputs
+/dist/
+
+# Local secrets (plugin signing keys)
+/.secrets/
+
+# OS / editor noise
+.DS_Store
+**/.DS_Store
+**/__pycache__/
