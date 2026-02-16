@@ -31,6 +31,7 @@ Primary selectors observed on real devices:
 
 Submission behavior:
 - `appstore.search_results` supports `submit_mode` (`suggestion` default, `keyboard` to press Enter/return).
+- For workflows that allow `submit_mode=keyboard`, if search hints remain visible after typing, the workflow taps the first hint as a fallback to avoid failed Enter/return submits.
 
 Reviews workflow behavior:
 - `appstore.reviews` opens the Ratings & Reviews view by tapping the rating badge.
@@ -68,6 +69,7 @@ Notes:
 
 - `title`, `tagline`, `subtitle`, `developer`, `offer`, `offerSubtitle`
 - `badges`: raw badge labels (ratings, age, category, etc.)
+- `category`: best-effort category from the Information section (scrolls to fetch)
 - `screenshotItems`: raw media cell identifiers + `screenshotCount`
 - `screenshot` + `uiSource.source`
 
@@ -76,6 +78,8 @@ Notes:
 - `ratingSummary`: raw summary label(s)
 - `reviewSummary`: best-effort LLM/summary text if present
 - `reviews`: extracted review rows (title/body/rating/author/response fields)
+- `reviewCount30d`, `reviewCount60d`: counts based on parsed review dates from the author line
+- `reviewDateBuckets`, `reviewDatesParsed`, `reviewDatesSkipped` for diagnostics
 - `reviewCount` + `screenshot` + `uiSource.source`
 
 `appstore.version_history` returns:
@@ -92,4 +96,4 @@ Notes:
 - Device must be unlocked and trusted.
 - App Store should already be logged in.
 - Workflows are read-only: no purchase/download/submit actions.
-- Popups are dismissed best-effort when possible.
+- Popups/story cards are dismissed best-effort when possible.

@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "appstore.search_results",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Submit an App Store search query, capture ordered result rows, and compute optional observed rank (read-only).",
   "inputs": {
     "query": { "type": "string", "required": true },
@@ -79,6 +79,28 @@
         "clearFirst": true,
         "pressEnter": true
       }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "when": { "var": "submit_mode", "equals": "keyboard" },
+      "saveAs": "keyboardHints",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeCell", "ancestorName": "AppStore.searchHints", "max": 2 },
+        "limit": 2,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.first",
+      "when": { "var": "submit_mode", "equals": "keyboard" },
+      "saveAs": "keyboardHintFirst",
+      "arguments": { "list": "{{steps.keyboardHints.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.keyboardHintFirst.found", "truthy": true },
+      "arguments": { "target": { "using": "xpath", "value": "//XCUIElementTypeCollectionView[@name='AppStore.searchHints']//XCUIElementTypeCell[1]" } }
     },
     {
       "tool": "ios.action.wait",

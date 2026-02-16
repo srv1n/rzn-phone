@@ -1,11 +1,13 @@
 use anyhow::{anyhow, bail, Context, Result};
 use quick_xml::events::Event;
 use quick_xml::Reader;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::str;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::process::Command;
 
 use crate::appium::{ensure_appium, probe_webdriver_base, EnsureOptions};
@@ -179,6 +181,8 @@ pub fn list_tool_definitions() -> Vec<Value> {
                             "name": { "type": "string" },
                             "namePrefix": { "type": "string" },
                             "nameContains": { "type": "string" },
+                            "label": { "type": "string" },
+                            "labelContains": { "type": "string" },
                             "ancestorName": { "type": "string" },
                             "ancestorNameContains": { "type": "string" },
                             "ancestorType": { "type": "string" }
@@ -800,6 +804,21 @@ pub fn list_tool_definitions() -> Vec<Value> {
             }),
         ),
         tool(
+            "util.date.bucket_counts",
+            "Parse date-like strings and compute counts within day windows (generic helper).",
+            json!({
+                "type": "object",
+                "properties": {
+                    "items": { "type": "array" },
+                    "field": { "type": "string" },
+                    "windowsDays": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+                    "nowEpochMs": { "type": "integer" }
+                },
+                "required": ["items", "windowsDays"],
+                "additionalProperties": false
+            }),
+        ),
+        tool(
             "ios.script.run",
             "Execute a deterministic step list (each step calls an existing tool).",
             json!({
@@ -886,6 +905,7 @@ pub async fn handle_tool_call(
         "util.list.length" => util_list_length(&arguments).await,
         "util.list.first" => util_list_first(&arguments).await,
         "util.list.nth" => util_list_nth(&arguments).await,
+        "util.date.bucket_counts" => util_date_bucket_counts(&arguments).await,
         _ => bail!("unknown tool '{tool_name}'"),
     }
 }
@@ -2602,6 +2622,8 @@ struct RowQuery {
     name: Option<String>,
     name_prefix: Option<String>,
     name_contains: Option<String>,
+    label: Option<String>,
+    label_contains: Option<String>,
     ancestor_name: Option<String>,
     ancestor_name_contains: Option<String>,
     ancestor_type: Option<String>,
@@ -2674,6 +2696,14 @@ fn parse_row_query(value: Option<&Value>) -> Result<RowQuery> {
             .and_then(|value| normalize_text(value.to_string())),
         name_contains: obj
             .get("nameContains")
+            .and_then(Value::as_str)
+            .and_then(|value| normalize_text(value.to_string())),
+        label: obj
+            .get("label")
+            .and_then(Value::as_str)
+            .and_then(|value| normalize_text(value.to_string())),
+        label_contains: obj
+            .get("labelContains")
             .and_then(Value::as_str)
             .and_then(|value| normalize_text(value.to_string())),
         ancestor_name: obj
@@ -3060,6 +3090,12 @@ fn node_matches(
             return false;
         }
     }
+    if let Some(contains) = &query.label_contains {
+        let label = attr_text(elem, "label").unwrap_or_default().to_lowercase();
+        if !label.contains(&contains.to_lowercase()) {
+            return false;
+        }
+    }
 
     if query.ancestor_name.is_none() && query.ancestor_type.is_none() {
         return true;
@@ -3210,6 +3246,17 @@ fn element_matches_row(
     if let Some(contains) = &query.name_contains {
         let name = attr_text(elem, "name").unwrap_or_default().to_lowercase();
         if !name.contains(&contains.to_lowercase()) {
+            return false;
+        }
+    }
+    if let Some(label) = &query.label {
+        if attr_text(elem, "label").as_deref() != Some(label.as_str()) {
+            return false;
+        }
+    }
+    if let Some(contains) = &query.label_contains {
+        let label = attr_text(elem, "label").unwrap_or_default().to_lowercase();
+        if !label.contains(&contains.to_lowercase()) {
             return false;
         }
     }
@@ -4295,6 +4342,186 @@ async fn util_list_nth(arguments: &Value) -> Result<Value> {
         json!({ "ok": true, "index": index, "found": found, "value": extracted }),
         "nth item selected",
     ))
+}
+
+async fn util_date_bucket_counts(arguments: &Value) -> Result<Value> {
+    let items = arguments
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("items must be an array"))?;
+    let field = arguments.get("field").and_then(Value::as_str).map(str::trim);
+    let windows = arguments
+        .get("windowsDays")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("windowsDays must be an array"))?;
+    let windows_days: Vec<i64> = windows
+        .iter()
+        .filter_map(Value::as_i64)
+        .filter(|value| *value > 0)
+        .collect();
+    if windows_days.is_empty() {
+        return Err(anyhow!("windowsDays must contain at least one positive integer"));
+    }
+
+    let now_ms = arguments
+        .get("nowEpochMs")
+        .and_then(Value::as_i64)
+        .unwrap_or_else(now_epoch_ms);
+    let now_days = now_ms / 86_400_000;
+
+    let mut ages_days: Vec<i64> = Vec::new();
+    let mut parsed = 0usize;
+    let mut skipped = 0usize;
+
+    for item in items {
+        let text_opt = if let Some(field) = field.filter(|f| !f.is_empty()) {
+            item.get(field).and_then(Value::as_str).map(str::to_string)
+        } else {
+            item.as_str().map(str::to_string)
+        };
+        let Some(text) = text_opt else {
+            skipped += 1;
+            continue;
+        };
+        if let Some(age_days) = parse_age_days(&text, now_ms, now_days) {
+            ages_days.push(age_days);
+            parsed += 1;
+        } else {
+            skipped += 1;
+        }
+    }
+
+    let mut counts = Vec::new();
+    for window in windows_days {
+        let count = ages_days
+            .iter()
+            .filter(|age| **age <= window)
+            .count();
+        counts.push(json!({ "windowDays": window, "count": count }));
+    }
+
+    Ok(tool_success(
+        json!({
+            "ok": true,
+            "nowEpochMs": now_ms,
+            "parsed": parsed,
+            "skipped": skipped,
+            "counts": counts
+        }),
+        "bucket counts computed",
+    ))
+}
+
+fn parse_age_days(text: &str, now_ms: i64, now_days: i64) -> Option<i64> {
+    if let Some(days) = parse_relative_days(text) {
+        return Some(days);
+    }
+    parse_absolute_days(text, now_ms, now_days)
+}
+
+fn parse_relative_days(text: &str) -> Option<i64> {
+    static RELATIVE_RE: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r"(?i)(\d+)\s*(sec|secs|second|seconds|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|wk|wks|week|weeks|mo|mos|month|months|y|yr|yrs|year|years)\b")
+            .expect("relative regex")
+    });
+
+    let caps = RELATIVE_RE.captures(text)?;
+    let value: i64 = caps.get(1)?.as_str().parse().ok()?;
+    let unit = caps.get(2)?.as_str().to_lowercase();
+    let days = match unit.as_str() {
+        "sec" | "secs" | "second" | "seconds" => 0,
+        "min" | "mins" | "minute" | "minutes" => 0,
+        "h" | "hr" | "hrs" | "hour" | "hours" => 0,
+        "d" | "day" | "days" => value,
+        "w" | "wk" | "wks" | "week" | "weeks" => value * 7,
+        "mo" | "mos" | "month" | "months" => value * 30,
+        "y" | "yr" | "yrs" | "year" | "years" => value * 365,
+        _ => return None,
+    };
+    Some(days)
+}
+
+fn parse_absolute_days(text: &str, _now_ms: i64, now_days: i64) -> Option<i64> {
+    static ABSOLUTE_RE: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(
+            r"(?i)\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:,\s*(\d{4}))?"
+        )
+        .expect("absolute regex")
+    });
+
+    let caps = ABSOLUTE_RE.captures(text)?;
+    let month_str = caps.get(1)?.as_str();
+    let day: i32 = caps.get(2)?.as_str().parse().ok()?;
+    let year_opt = caps.get(3).and_then(|m| m.as_str().parse::<i32>().ok());
+    let (current_year, _, _) = civil_from_days(now_days);
+    let mut year = year_opt.unwrap_or(current_year);
+
+    let month = month_str_to_number(month_str)?;
+    let mut date_days = days_from_civil(year, month, day);
+    if year_opt.is_none() && date_days - now_days > 7 {
+        year -= 1;
+        date_days = days_from_civil(year, month, day);
+    }
+    let age = now_days - date_days;
+    if age < 0 {
+        None
+    } else {
+        Some(age)
+    }
+}
+
+fn month_str_to_number(raw: &str) -> Option<u32> {
+    let value = raw.to_lowercase();
+    let month = match value.as_str() {
+        "jan" | "january" => 1,
+        "feb" | "february" => 2,
+        "mar" | "march" => 3,
+        "apr" | "april" => 4,
+        "may" => 5,
+        "jun" | "june" => 6,
+        "jul" | "july" => 7,
+        "aug" | "august" => 8,
+        "sep" | "sept" | "september" => 9,
+        "oct" | "october" => 10,
+        "nov" | "november" => 11,
+        "dec" | "december" => 12,
+        _ => return None,
+    };
+    Some(month)
+}
+
+fn days_from_civil(year: i32, month: u32, day: i32) -> i64 {
+    let mut y = year as i64;
+    let m = month as i64;
+    let d = day as i64;
+    y -= if m <= 2 { 1 } else { 0 };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let mp = m + if m > 2 { -3 } else { 9 };
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+fn civil_from_days(days_since_epoch: i64) -> (i32, u32, u32) {
+    let z = days_since_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = (yoe as i32) + (era as i32) * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = mp + if mp < 10 { 3 } else { -9 };
+    let year = y + if m <= 2 { 1 } else { 0 };
+    (year, m as u32, d as u32)
+}
+
+fn now_epoch_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::from_secs(0))
+        .as_millis() as i64
 }
 
 fn substitute_vars(value: Value, vars: &Value) -> Value {
