@@ -109,6 +109,18 @@ All step kinds share:
 - `requires_commit` (optional): safety gate
 - `save_as` / `saveAs` (optional): store result into context under a variable name
 
+#### Runner support for `when` (implemented in this repo)
+
+The runner supports a minimal `when` shape:
+
+- `boolean` — run when true
+- `string` — treat as a variable path and run if truthy
+- object examples:
+  - `{ "var": "submit_mode", "equals": "suggestion" }`
+  - `{ "var": "flag", "truthy": true }`
+  - `{ "var": "value", "notEquals": "x" }`
+  - `{ "var": "value", "exists": true }`
+
 ### 3.2 Tool-call steps (supported today in this repo)
 
 ```jsonc

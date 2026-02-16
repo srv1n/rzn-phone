@@ -33,6 +33,7 @@ Commands:
   appstore-typeahead <udid> <query> [--out <dir>] [--limit <n>] [--typing-mode <full|char-by-char>] [--country <cc>] [--locale <locale>]
                         Run appstore.typeahead and write result.json + screenshot.png + ui_source.xml.
   appstore-search-results <udid> <query> [--out <dir>] [--limit <n>] [--target-app-name <name>] [--max-scrolls <n>] [--country <cc>] [--locale <locale>]
+  appstore-search-results <udid> <query> [--out <dir>] [--limit <n>] [--target-app-name <name>] [--max-scrolls <n>] [--submit-mode <suggestion|keyboard>] [--country <cc>] [--locale <locale>]
                         Run appstore.search_results and write result.json + screenshot.png + ui_source.xml.
   appstore-smoke <udid> [query]
                         Real-device smoke test; asserts at least 1 suggestion and 1 result row.
@@ -400,6 +401,7 @@ JSON
     LIMIT=10
     MAX_SCROLLS=5
     TARGET_APP_NAME=""
+    SUBMIT_MODE="suggestion"
     COUNTRY=""
     LOCALE=""
     OUT_DIR=""
@@ -421,6 +423,10 @@ JSON
           TARGET_APP_NAME="${2:-}"
           shift 2
           ;;
+        --submit-mode)
+          SUBMIT_MODE="${2:-suggestion}"
+          shift 2
+          ;;
         --country)
           COUNTRY="${2:-}"
           shift 2
@@ -436,7 +442,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$QUERY" ]]; then
-      echo "usage: scripts/ios_tools.sh appstore-search-results <udid> <query> [--out <dir>] [--limit <n>] [--target-app-name <name>] [--max-scrolls <n>] [--country <cc>] [--locale <locale>]" >&2
+      echo "usage: scripts/ios_tools.sh appstore-search-results <udid> <query> [--out <dir>] [--limit <n>] [--target-app-name <name>] [--max-scrolls <n>] [--submit-mode <suggestion|keyboard>] [--country <cc>] [--locale <locale>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -465,11 +471,12 @@ JSON
     ARGS_JSON="$(jq -nc \
       --arg query "$QUERY" \
       --arg target_app_name "$TARGET_APP_NAME" \
+      --arg submit_mode "$SUBMIT_MODE" \
       --arg country "$COUNTRY" \
       --arg locale "$LOCALE" \
       --argjson limit "$LIMIT" \
       --argjson maxScrolls "$MAX_SCROLLS" \
-      '{query:$query,limit:$limit,maxScrolls:$maxScrolls}
+      '{query:$query,limit:$limit,maxScrolls:$maxScrolls,submit_mode:$submit_mode}
        + (if $target_app_name == "" then {} else {target_app_name:$target_app_name} end)
        + (if $country == "" then {} else {country:$country} end)
        + (if $locale == "" then {} else {locale:$locale} end)')"

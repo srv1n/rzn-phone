@@ -178,7 +178,9 @@ pub fn list_tool_definitions() -> Vec<Value> {
                             "type": { "type": "string", "default": "XCUIElementTypeCell" },
                             "name": { "type": "string" },
                             "namePrefix": { "type": "string" },
+                            "nameContains": { "type": "string" },
                             "ancestorName": { "type": "string" },
+                            "ancestorNameContains": { "type": "string" },
                             "ancestorType": { "type": "string" }
                         },
                         "additionalProperties": false
@@ -200,6 +202,35 @@ pub fn list_tool_definitions() -> Vec<Value> {
                             "stripPrefix": { "type": "string" }
                         },
                         "additionalProperties": false
+                    },
+                    "fields": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": { "type": "string" },
+                                "attr": { "type": "string", "enum": ["label", "name", "value"], "default": "label" },
+                                "pick": { "type": "string", "enum": ["first", "last", "longest", "all"], "default": "first" },
+                                "joinDelimiter": { "type": "string" },
+                                "query": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": { "type": "string", "default": "XCUIElementTypeStaticText" },
+                                        "name": { "type": "string" },
+                                        "namePrefix": { "type": "string" },
+                                        "nameContains": { "type": "string" },
+                                        "label": { "type": "string" },
+                                        "labelContains": { "type": "string" },
+                                        "ancestorName": { "type": "string" },
+                                        "ancestorType": { "type": "string" },
+                                        "max": { "type": "integer", "minimum": 1, "maximum": 100 }
+                                    },
+                                    "additionalProperties": false
+                                }
+                            },
+                            "required": ["name", "query"],
+                            "additionalProperties": false
+                        }
                     },
                     "split": {
                         "type": "object",
@@ -225,6 +256,37 @@ pub fn list_tool_definitions() -> Vec<Value> {
                     "order": { "type": "string", "enum": ["y", "x"], "default": "y" }
                 },
                 "required": ["row", "primary"],
+                "additionalProperties": false
+            }),
+        ),
+        tool(
+            "ios.ui.extract_text",
+            "Extract ordered text nodes from a UI source XML using generic selectors.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string" },
+                    "source": { "type": "string" },
+                    "query": {
+                        "type": "object",
+                        "properties": {
+                            "type": { "type": "string", "default": "XCUIElementTypeStaticText" },
+                            "name": { "type": "string" },
+                            "namePrefix": { "type": "string" },
+                            "nameContains": { "type": "string" },
+                            "label": { "type": "string" },
+                            "labelContains": { "type": "string" },
+                            "ancestorName": { "type": "string" },
+                            "ancestorType": { "type": "string" },
+                            "max": { "type": "integer", "minimum": 1, "maximum": 200 }
+                        },
+                        "additionalProperties": false
+                    },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+                    "unique": { "type": "boolean", "default": true },
+                    "order": { "type": "string", "enum": ["y", "x"], "default": "y" }
+                },
+                "required": ["query"],
                 "additionalProperties": false
             }),
         ),
@@ -293,7 +355,8 @@ pub fn list_tool_definitions() -> Vec<Value> {
 	                        "additionalProperties": false
 	                    },
                     "text": { "type": "string" },
-                    "clearFirst": { "type": "boolean", "default": true }
+                    "clearFirst": { "type": "boolean", "default": true },
+                    "pressEnter": { "type": "boolean", "default": false }
                 },
                 "required": ["text"],
                 "additionalProperties": false
@@ -328,7 +391,9 @@ pub fn list_tool_definitions() -> Vec<Value> {
                             "type": { "type": "string", "default": "XCUIElementTypeCell" },
                             "name": { "type": "string" },
                             "namePrefix": { "type": "string" },
+                            "nameContains": { "type": "string" },
                             "label": { "type": "string" },
+                            "labelContains": { "type": "string" },
                             "ancestorName": { "type": "string" },
                             "ancestorType": { "type": "string" },
                             "max": { "type": "integer", "minimum": 1, "maximum": 50 }
@@ -538,44 +603,18 @@ pub fn list_tool_definitions() -> Vec<Value> {
 	                "additionalProperties": false
 	            }),
 	        ),
-	        tool(
-	            "ios.alert.wait",
-	            "Wait until a system alert is present and return its text (read-only).",
-	            json!({
-	                "type": "object",
-	                "properties": {
-	                    "sessionId": { "type": "string" },
-	                    "timeoutMs": { "type": "integer", "default": 10000 }
-	                },
-	                "additionalProperties": false
-	            }),
-	        ),
-	        tool(
-	            "ios.reddit.open_first_post",
-	            "Open the first non-promoted Reddit feed post (best-effort).",
-	            json!({
-	                "type": "object",
-	                "properties": {
-	                    "sessionId": { "type": "string" },
-	                    "maxCandidates": { "type": "integer", "default": 8 },
-	                    "skipPromoted": { "type": "boolean", "default": true }
-	                },
-	                "additionalProperties": false
-	            }),
-	        ),
-	        tool(
-	            "ios.reddit.extract_post",
-	            "Extract best-effort post details from the current Reddit post screen (read-only).",
-	            json!({
-	                "type": "object",
-	                "properties": {
-	                    "sessionId": { "type": "string" },
-	                    "maxComments": { "type": "integer", "default": 3 },
-	                    "maxRawLines": { "type": "integer", "default": 80 }
-	                },
-	                "additionalProperties": false
-	            }),
-	        ),
+        tool(
+            "ios.alert.wait",
+            "Wait until a system alert is present and return its text (read-only).",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string" },
+                    "timeoutMs": { "type": "integer", "default": 10000 }
+                },
+                "additionalProperties": false
+            }),
+        ),
 	        tool(
 	            "ios.web.goto",
 	            "Navigate Safari session to a URL.",
@@ -734,6 +773,33 @@ pub fn list_tool_definitions() -> Vec<Value> {
             }),
         ),
         tool(
+            "util.list.first",
+            "Return the first item in an array (optionally extract a field).",
+            json!({
+                "type": "object",
+                "properties": {
+                    "list": { "type": "array" },
+                    "field": { "type": "string" }
+                },
+                "required": ["list"],
+                "additionalProperties": false
+            }),
+        ),
+        tool(
+            "util.list.nth",
+            "Return the Nth (1-based) item in an array (optionally extract a field).",
+            json!({
+                "type": "object",
+                "properties": {
+                    "list": { "type": "array" },
+                    "index": { "type": "integer", "minimum": 1 },
+                    "field": { "type": "string" }
+                },
+                "required": ["list", "index"],
+                "additionalProperties": false
+            }),
+        ),
+        tool(
             "ios.script.run",
             "Execute a deterministic step list (each step calls an existing tool).",
             json!({
@@ -746,6 +812,7 @@ pub fn list_tool_definitions() -> Vec<Value> {
                             "properties": {
                                 "tool": { "type": "string" },
                                 "arguments": { "type": "object" },
+                                "when": {},
                                 "timeoutMs": { "type": "integer" },
                                 "retries": { "type": "integer", "default": 0 },
                                 "requiresCommit": { "type": "boolean", "default": false },
@@ -787,6 +854,7 @@ pub async fn handle_tool_call(
         "ios.ui.screenshot" => ui_screenshot(state, &arguments).await,
         "ios.ui.observe_compact" => ui_observe_compact(state, &arguments).await,
         "ios.ui.extract_rows" => ui_extract_rows(state, &arguments).await,
+        "ios.ui.extract_text" => ui_extract_text(state, &arguments).await,
         "ios.target.resolve" => target_resolve(state, &arguments).await,
         "ios.action.tap" => action_tap(state, &arguments).await,
         "ios.action.type" => action_type(state, &arguments).await,
@@ -803,8 +871,6 @@ pub async fn handle_tool_call(
         "ios.alert.accept" => alert_accept(state, &arguments).await,
         "ios.alert.dismiss" => alert_dismiss(state, &arguments).await,
         "ios.alert.wait" => alert_wait(state, &arguments).await,
-        "ios.reddit.open_first_post" => reddit_open_first_post(state, &arguments).await,
-        "ios.reddit.extract_post" => reddit_extract_post(state, &arguments).await,
         "ios.web.goto" => web_goto(state, &arguments).await,
         "ios.web.wait_css" => web_wait_css(state, &arguments).await,
         "ios.web.click_css" => web_click_css(state, &arguments).await,
@@ -818,6 +884,8 @@ pub async fn handle_tool_call(
         "ios.script.run" => script_run(state, &arguments).await,
         "util.rank_by_name" => util_rank_by_name(&arguments).await,
         "util.list.length" => util_list_length(&arguments).await,
+        "util.list.first" => util_list_first(&arguments).await,
+        "util.list.nth" => util_list_nth(&arguments).await,
         _ => bail!("unknown tool '{tool_name}'"),
     }
 }
@@ -1471,6 +1539,7 @@ async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
     let row_query = parse_row_query(arguments.get("row"))?;
     let primary_query = parse_primary_query(arguments.get("primary"))?;
     let tag_query = parse_tag_query(arguments.get("tag"));
+    let field_queries = parse_field_queries(arguments.get("fields"))?;
     let split_cfg = parse_split_config(arguments.get("split"));
     let limit = arguments
         .get("limit")
@@ -1525,13 +1594,14 @@ async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
         } else {
             driver.page_source(&session_id).await?
         };
-        let mut rows = extract_rows_from_source(
-            &source,
-            &row_query,
-            &primary_query,
-            tag_query.as_ref(),
-            &split_cfg,
-        );
+    let mut rows = extract_rows_from_source(
+        &source,
+        &row_query,
+        &primary_query,
+        tag_query.as_ref(),
+        &field_queries,
+        &split_cfg,
+    );
 
         if order == "x" {
             rows.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
@@ -1578,6 +1648,9 @@ async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
             for (k, v) in row.fields {
                 obj.insert(k, json!(v));
             }
+            for (k, v) in row.extra_fields {
+                obj.insert(k, json!(v));
+            }
             if let Some(tag_field) = row.tag_field {
                 obj.insert(tag_field, json!(row.tag_value.unwrap_or_default()));
             }
@@ -1595,6 +1668,68 @@ async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
             "scrolls": scrolls_done
         }),
         "rows extracted",
+    ))
+}
+
+async fn ui_extract_text(state: &AppState, arguments: &Value) -> Result<Value> {
+    let session_id = resolve_session_id(state, arguments).await?;
+    let driver = driver_from_state(state).await?;
+
+    let source = if let Some(raw) = arguments.get("source").and_then(Value::as_str) {
+        raw.to_string()
+    } else {
+        driver.page_source(&session_id).await?
+    };
+
+    let query = parse_node_query(arguments.get("query"));
+    let limit = arguments
+        .get("limit")
+        .and_then(Value::as_u64)
+        .map(|value| value as usize)
+        .filter(|value| *value > 0)
+        .unwrap_or(50);
+    let unique = arguments.get("unique").and_then(Value::as_bool).unwrap_or(true);
+    let order = arguments
+        .get("order")
+        .and_then(Value::as_str)
+        .unwrap_or("y")
+        .to_lowercase();
+
+    let mut nodes = extract_nodes_from_source(&source, &query);
+    if order == "x" {
+        nodes.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
+    } else {
+        nodes.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal));
+    }
+
+    let mut out = Vec::new();
+    let mut seen = HashSet::<String>::new();
+    for node in nodes {
+        if unique {
+            let key = normalize_match_key(&node.text);
+            if key.is_empty() || !seen.insert(key) {
+                continue;
+            }
+        }
+        out.push(json!({
+            "position": out.len() + 1,
+            "text": node.text,
+            "x": node.x,
+            "y": node.y
+        }));
+        if out.len() >= limit {
+            break;
+        }
+    }
+
+    Ok(tool_success(
+        json!({
+            "ok": true,
+            "sessionId": session_id,
+            "count": out.len(),
+            "texts": out
+        }),
+        "texts extracted",
     ))
 }
 
@@ -1803,6 +1938,11 @@ async fn action_type(state: &AppState, arguments: &Value) -> Result<Value> {
     let session_id = resolve_session_id(state, arguments).await?;
     let text = required_str(arguments, "text")?;
     let clear_first = arguments.get("clearFirst").and_then(Value::as_bool).unwrap_or(true);
+    let press_enter = arguments
+        .get("pressEnter")
+        .and_then(Value::as_bool)
+        .or_else(|| arguments.get("press_enter").and_then(Value::as_bool))
+        .unwrap_or(false);
 
     let resolved = resolve_target(state, arguments)
         .await?
@@ -1855,6 +1995,9 @@ async fn action_type(state: &AppState, arguments: &Value) -> Result<Value> {
         let _ = driver.clear_element(&session_id, element_id).await;
     }
     driver.type_element(&session_id, element_id, text).await?;
+    if press_enter {
+        driver.press_enter(&session_id).await?;
+    }
 
     Ok(tool_success(
         json!({
@@ -1862,6 +2005,7 @@ async fn action_type(state: &AppState, arguments: &Value) -> Result<Value> {
             "sessionId": session_id,
             "elementId": element_id,
             "typedLength": text.chars().count(),
+            "pressEnter": press_enter,
             "targetSpec": {"using": &resolved.using, "value": &resolved.value, "index": resolved.index}
         }),
         "type complete",
@@ -2372,201 +2516,12 @@ async fn alert_wait(state: &AppState, arguments: &Value) -> Result<Value> {
     }
 }
 
-async fn reddit_open_first_post(state: &AppState, arguments: &Value) -> Result<Value> {
-    let session_id = resolve_session_id(state, arguments).await?;
-    let max_candidates = arguments
-        .get("maxCandidates")
-        .and_then(Value::as_u64)
-        .unwrap_or(8)
-        .clamp(1, 50) as usize;
-    let skip_promoted = arguments
-        .get("skipPromoted")
-        .and_then(Value::as_bool)
-        .unwrap_or(true);
-
-    let driver = driver_from_state(state).await?;
-    let cells = driver
-        .find_elements(&session_id, "accessibility id", "reddit_feed__post__post_cell")
-        .await?;
-
-    if cells.is_empty() {
-        return Err(ToolCallError::new(
-            ToolErrorCode::ElementNotFound,
-            "no Reddit feed post cells found",
-            json!({"using": "accessibility id", "value": "reddit_feed__post__post_cell"}),
-        )
-        .into());
-    }
-
-    let mut checked = 0usize;
-    let mut skipped = 0usize;
-
-    let promoted_predicate = r#"
-        label CONTAINS[c] "Promoted" OR
-        label CONTAINS[c] "Sponsored" OR
-        label == "Ad" OR
-        name CONTAINS[c] "Promoted" OR
-        name CONTAINS[c] "Sponsored"
-    "#;
-
-    for (idx, cell_id) in cells.iter().take(max_candidates).enumerate() {
-        checked += 1;
-        let mut is_promoted = false;
-        if skip_promoted {
-            if let Ok(found) = driver
-                .find_elements_from_element(
-                    &session_id,
-                    cell_id,
-                    "ios predicate string",
-                    promoted_predicate,
-                )
-                .await
-            {
-                is_promoted = !found.is_empty();
-            }
-        }
-
-        if is_promoted {
-            skipped += 1;
-            continue;
-        }
-
-        driver.click_element(&session_id, cell_id).await?;
-        return Ok(tool_success(
-            json!({
-                "ok": true,
-                "sessionId": session_id,
-                "openedIndex": idx,
-                "elementId": cell_id,
-                "checked": checked,
-                "skippedPromoted": skipped
-            }),
-            "opened reddit post",
-        ));
-    }
-
-    // Fallback: open the first candidate if we could not conclusively skip promoted items.
-    let fallback = cells
-        .get(0)
-        .ok_or_else(|| ToolCallError::new(ToolErrorCode::ElementNotFound, "no candidates", json!({})))?;
-    driver.click_element(&session_id, fallback).await?;
-    Ok(tool_success(
-        json!({
-            "ok": true,
-            "sessionId": session_id,
-            "openedIndex": 0,
-            "elementId": fallback,
-            "checked": checked,
-            "skippedPromoted": skipped,
-            "fallback": true
-        }),
-        "opened reddit post (fallback)",
-    ))
-}
-
-#[derive(Debug, Clone)]
-struct RedditXmlNode {
-    element: String,
-    name: Option<String>,
-    label: Option<String>,
-    value: Option<String>,
-    visible: bool,
-    x: f64,
-    y: f64,
-}
-
-fn parse_reddit_nodes(xml: &str) -> Result<Vec<RedditXmlNode>> {
-    let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
-    reader.config_mut().check_end_names = false;
-
-    let mut buf = Vec::new();
-    let mut out: Vec<RedditXmlNode> = Vec::new();
-
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
-                let elem_name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
-                if !elem_name.starts_with("XCUIElementType") {
-                    buf.clear();
-                    continue;
-                }
-
-                let mut name: Option<String> = None;
-                let mut label: Option<String> = None;
-                let mut value: Option<String> = None;
-                let mut visible: bool = true;
-                let mut x: f64 = 0.0;
-                let mut y: f64 = 0.0;
-
-                for attr in e.attributes().with_checks(false) {
-                    let attr = attr.context("invalid XML attribute")?;
-                    let key = str::from_utf8(attr.key.as_ref()).context("invalid attribute key")?;
-                    let val = attr
-                        .unescape_value()
-                        .context("invalid attribute value")?
-                        .into_owned();
-                    match key {
-                        "name" => name = normalize_text(val),
-                        "label" => label = normalize_text(val),
-                        "value" => value = normalize_text(val),
-                        "visible" => visible = parse_bool(&val, true),
-                        "x" => x = val.parse::<f64>().unwrap_or(0.0),
-                        "y" => y = val.parse::<f64>().unwrap_or(0.0),
-                        _ => {}
-                    }
-                }
-
-                if !visible {
-                    buf.clear();
-                    continue;
-                }
-
-                if label.is_none() && value.is_none() {
-                    buf.clear();
-                    continue;
-                }
-
-                out.push(RedditXmlNode {
-                    element: elem_name,
-                    name,
-                    label,
-                    value,
-                    visible,
-                    x,
-                    y,
-                });
-            }
-            Ok(Event::Eof) => break,
-            Err(err) => return Err(anyhow!("failed to parse XML: {err}")),
-            _ => {}
-        }
-        buf.clear();
-    }
-
-    out.sort_by(|a, b| {
-        a.y.partial_cmp(&b.y)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal))
-    });
-
-    Ok(out)
-}
-
 fn normalize_text(value: String) -> Option<String> {
     let trimmed = value.trim().to_string();
     if trimmed.is_empty() {
         None
     } else {
         Some(trimmed)
-    }
-}
-
-fn parse_bool(value: &str, default: bool) -> bool {
-    match value.trim().to_lowercase().as_str() {
-        "true" | "1" | "yes" => true,
-        "false" | "0" | "no" => false,
-        _ => default,
     }
 }
 
@@ -2583,7 +2538,9 @@ struct NodeQuery {
     element_type: Option<String>,
     name: Option<String>,
     name_prefix: Option<String>,
+    name_contains: Option<String>,
     label: Option<String>,
+    label_contains: Option<String>,
     ancestor_name: Option<String>,
     ancestor_type: Option<String>,
     max: Option<usize>,
@@ -2594,7 +2551,9 @@ fn parse_node_query(value: Option<&Value>) -> NodeQuery {
         element_type: Some("XCUIElementTypeCell".to_string()),
         name: None,
         name_prefix: None,
+        name_contains: None,
         label: None,
+        label_contains: None,
         ancestor_name: None,
         ancestor_type: None,
         max: None,
@@ -2615,8 +2574,14 @@ fn parse_node_query(value: Option<&Value>) -> NodeQuery {
     if let Some(value) = obj.get("namePrefix").and_then(Value::as_str) {
         query.name_prefix = normalize_text(value.to_string());
     }
+    if let Some(value) = obj.get("nameContains").and_then(Value::as_str) {
+        query.name_contains = normalize_text(value.to_string());
+    }
     if let Some(value) = obj.get("label").and_then(Value::as_str) {
         query.label = normalize_text(value.to_string());
+    }
+    if let Some(value) = obj.get("labelContains").and_then(Value::as_str) {
+        query.label_contains = normalize_text(value.to_string());
     }
     if let Some(value) = obj.get("ancestorName").and_then(Value::as_str) {
         query.ancestor_name = normalize_text(value.to_string());
@@ -2636,7 +2601,9 @@ struct RowQuery {
     element_type: String,
     name: Option<String>,
     name_prefix: Option<String>,
+    name_contains: Option<String>,
     ancestor_name: Option<String>,
+    ancestor_name_contains: Option<String>,
     ancestor_type: Option<String>,
 }
 
@@ -2656,6 +2623,15 @@ struct TagQuery {
 }
 
 #[derive(Debug, Clone)]
+struct FieldQuery {
+    name: String,
+    query: NodeQuery,
+    attr: String,
+    pick: String,
+    join_delimiter: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 struct SplitConfig {
     delimiter: String,
     ignore_prefixes: Vec<String>,
@@ -2669,6 +2645,7 @@ struct RowMatch {
     y: f64,
     raw_label: String,
     fields: Vec<(String, String)>,
+    extra_fields: Vec<(String, String)>,
     tag_field: Option<String>,
     tag_value: Option<String>,
 }
@@ -2695,8 +2672,16 @@ fn parse_row_query(value: Option<&Value>) -> Result<RowQuery> {
             .get("namePrefix")
             .and_then(Value::as_str)
             .and_then(|value| normalize_text(value.to_string())),
+        name_contains: obj
+            .get("nameContains")
+            .and_then(Value::as_str)
+            .and_then(|value| normalize_text(value.to_string())),
         ancestor_name: obj
             .get("ancestorName")
+            .and_then(Value::as_str)
+            .and_then(|value| normalize_text(value.to_string())),
+        ancestor_name_contains: obj
+            .get("ancestorNameContains")
             .and_then(Value::as_str)
             .and_then(|value| normalize_text(value.to_string())),
         ancestor_type: obj
@@ -2769,6 +2754,57 @@ fn parse_tag_query(value: Option<&Value>) -> Option<TagQuery> {
         strip_prefix,
         field,
     })
+}
+
+fn parse_field_queries(value: Option<&Value>) -> Result<Vec<FieldQuery>> {
+    let Some(values) = value.and_then(Value::as_array) else {
+        return Ok(Vec::new());
+    };
+
+    let mut out = Vec::new();
+    for (idx, item) in values.iter().enumerate() {
+        let Some(obj) = item.as_object() else {
+            bail!("fields[{idx}] must be an object");
+        };
+        let name = obj
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow!("fields[{idx}].name is required"))?;
+        let query_value = obj.get("query").ok_or_else(|| anyhow!("fields[{idx}].query is required"))?;
+        let query = parse_node_query(Some(query_value));
+        let attr = obj
+            .get("attr")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("label")
+            .to_string();
+        let pick = obj
+            .get("pick")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("first")
+            .to_string();
+        let join_delimiter = obj
+            .get("joinDelimiter")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string);
+
+        out.push(FieldQuery {
+            name: name.to_string(),
+            query,
+            attr,
+            pick,
+            join_delimiter,
+        });
+    }
+
+    Ok(out)
 }
 
 fn parse_split_config(value: Option<&Value>) -> SplitConfig {
@@ -3007,8 +3043,20 @@ fn node_matches(
             return false;
         }
     }
+    if let Some(contains) = &query.name_contains {
+        let name = attr_text(elem, "name").unwrap_or_default().to_lowercase();
+        if !name.contains(&contains.to_lowercase()) {
+            return false;
+        }
+    }
     if let Some(label) = &query.label {
         if attr_text(elem, "label").as_deref() != Some(label.as_str()) {
+            return false;
+        }
+    }
+    if let Some(contains) = &query.label_contains {
+        let label = attr_text(elem, "label").unwrap_or_default().to_lowercase();
+        if !label.contains(&contains.to_lowercase()) {
             return false;
         }
     }
@@ -3037,6 +3085,7 @@ fn extract_rows_from_source(
     row_query: &RowQuery,
     primary_query: &PrimaryQuery,
     tag_query: Option<&TagQuery>,
+    field_queries: &[FieldQuery],
     split_cfg: &SplitConfig,
 ) -> Vec<RowMatch> {
     let mut reader = Reader::from_str(source);
@@ -3044,7 +3093,7 @@ fn extract_rows_from_source(
     reader.config_mut().check_end_names = false;
     let mut buf = Vec::new();
     let mut stack: Vec<(String, Option<String>)> = Vec::new();
-    let mut current: Option<(usize, f64, f64, Vec<String>, Vec<String>)> = None;
+    let mut current: Option<(usize, f64, f64, Vec<String>, Vec<String>, Vec<Vec<String>>)> = None;
     let mut out = Vec::new();
 
     let mut depth = 0usize;
@@ -3058,18 +3107,22 @@ fn extract_rows_from_source(
                 if current.is_none()
                     && element_matches_row(&e, &elem_type, row_query, &stack)
                 {
+                    let mut field_matches = Vec::new();
+                    field_matches.resize_with(field_queries.len(), Vec::new);
                     current = Some((
                         depth,
                         attr_f64(&e, "x").unwrap_or(0.0),
                         attr_f64(&e, "y").unwrap_or(0.0),
                         Vec::new(),
                         Vec::new(),
+                        field_matches,
                     ));
                 }
 
-                if let Some((_row_depth, _x, _y, labels, tags)) = current.as_mut() {
+                if let Some((_row_depth, _x, _y, labels, tags, field_matches)) = current.as_mut() {
                     collect_primary_label(&elem_type, &e, primary_query, labels);
                     collect_tag_value(&e, tag_query, tags);
+                    collect_field_matches(&elem_type, &e, field_queries, field_matches, &stack);
                 }
 
                 stack.push((elem_type, name));
@@ -3084,26 +3137,41 @@ fn extract_rows_from_source(
                         attr_f64(&e, "y").unwrap_or(0.0),
                         Vec::new(),
                         Vec::new(),
+                        Vec::new(),
                         primary_query,
                         tag_query,
+                        field_queries,
                         split_cfg,
                     );
                     if let Some(row) = row {
                         out.push(row);
                     }
-                } else if let Some((_row_depth, _x, _y, labels, tags)) = current.as_mut() {
+                } else if let Some((_row_depth, _x, _y, labels, tags, field_matches)) =
+                    current.as_mut()
+                {
                     collect_primary_label(&elem_type, &e, primary_query, labels);
                     collect_tag_value(&e, tag_query, tags);
+                    collect_field_matches(&elem_type, &e, field_queries, field_matches, &stack);
                 }
             }
             Ok(Event::End(_)) => {
-                if let Some((row_depth, x, y, labels, tags)) = current.take() {
+                if let Some((row_depth, x, y, labels, tags, field_matches)) = current.take() {
                     if row_depth == depth {
-                        if let Some(row) = finalize_row(x, y, labels, tags, primary_query, tag_query, split_cfg) {
+                        if let Some(row) = finalize_row(
+                            x,
+                            y,
+                            labels,
+                            tags,
+                            field_matches,
+                            primary_query,
+                            tag_query,
+                            field_queries,
+                            split_cfg,
+                        ) {
                             out.push(row);
                         }
                     } else {
-                        current = Some((row_depth, x, y, labels, tags));
+                        current = Some((row_depth, x, y, labels, tags, field_matches));
                     }
                 }
                 stack.pop();
@@ -3139,12 +3207,24 @@ fn element_matches_row(
             return false;
         }
     }
+    if let Some(contains) = &query.name_contains {
+        let name = attr_text(elem, "name").unwrap_or_default().to_lowercase();
+        if !name.contains(&contains.to_lowercase()) {
+            return false;
+        }
+    }
     if query.ancestor_name.is_none() && query.ancestor_type.is_none() {
         return true;
     }
     ancestors.iter().any(|(ancestor_type, ancestor_name)| {
         if let Some(want_name) = &query.ancestor_name {
             if ancestor_name.as_deref() != Some(want_name.as_str()) {
+                return false;
+            }
+        }
+        if let Some(want_contains) = &query.ancestor_name_contains {
+            let name = ancestor_name.clone().unwrap_or_default().to_lowercase();
+            if !name.contains(&want_contains.to_lowercase()) {
                 return false;
             }
         }
@@ -3190,13 +3270,38 @@ fn collect_tag_value(
     }
 }
 
+fn collect_field_matches(
+    elem_type: &str,
+    elem: &quick_xml::events::BytesStart<'_>,
+    field_queries: &[FieldQuery],
+    field_matches: &mut [Vec<String>],
+    ancestors: &[(String, Option<String>)],
+) {
+    if field_queries.is_empty() {
+        return;
+    }
+    for (idx, field) in field_queries.iter().enumerate() {
+        if !node_matches(elem, elem_type, &field.query, ancestors) {
+            continue;
+        }
+        let value = attr_text(elem, &field.attr).or_else(|| extract_preferred_text(elem));
+        if let Some(value) = value {
+            if let Some(bucket) = field_matches.get_mut(idx) {
+                bucket.push(value);
+            }
+        }
+    }
+}
+
 fn finalize_row(
     x: f64,
     y: f64,
     labels: Vec<String>,
     tags: Vec<String>,
+    field_matches: Vec<Vec<String>>,
     primary_query: &PrimaryQuery,
     tag_query: Option<&TagQuery>,
+    field_queries: &[FieldQuery],
     split_cfg: &SplitConfig,
 ) -> Option<RowMatch> {
     let raw_label = if primary_query.pick == "first" {
@@ -3234,6 +3339,26 @@ fn finalize_row(
         fields.push((field_name.clone(), value));
     }
 
+    let mut extra_fields = Vec::new();
+    for (idx, field) in field_queries.iter().enumerate() {
+        let values = field_matches.get(idx).cloned().unwrap_or_default();
+        if values.is_empty() {
+            continue;
+        }
+        let value = match field.pick.as_str() {
+            "last" => values.last().cloned(),
+            "longest" => values.into_iter().max_by_key(|v| v.len()),
+            "all" => {
+                let joiner = field.join_delimiter.clone().unwrap_or_else(|| " | ".to_string());
+                Some(values.join(&joiner))
+            }
+            _ => values.first().cloned(),
+        };
+        if let Some(value) = value {
+            extra_fields.push((field.name.clone(), value));
+        }
+    }
+
     let (tag_field, tag_value) = if let Some(tag_query) = tag_query {
         let selected = if tag_query.pick == "first" {
             tags.first().cloned()
@@ -3257,6 +3382,7 @@ fn finalize_row(
         y,
         raw_label,
         fields,
+        extra_fields,
         tag_field,
         tag_value,
     })
@@ -3298,139 +3424,6 @@ fn extract_preferred_text(elem: &quick_xml::events::BytesStart<'_>) -> Option<St
     attr_text(elem, "label")
         .or_else(|| attr_text(elem, "name"))
         .or_else(|| attr_text(elem, "value"))
-}
-
-async fn reddit_extract_post(state: &AppState, arguments: &Value) -> Result<Value> {
-    let session_id = resolve_session_id(state, arguments).await?;
-    let max_comments = arguments
-        .get("maxComments")
-        .and_then(Value::as_u64)
-        .unwrap_or(3)
-        .clamp(0, 10) as usize;
-    let max_raw_lines = arguments
-        .get("maxRawLines")
-        .and_then(Value::as_u64)
-        .unwrap_or(80)
-        .clamp(10, 300) as usize;
-
-    let driver = driver_from_state(state).await?;
-    let source = driver.page_source(&session_id).await?;
-    let nodes = parse_reddit_nodes(&source)?;
-
-    let mut raw_lines: Vec<String> = Vec::new();
-    let mut seen = HashSet::<String>::new();
-    for node in &nodes {
-        let text = node
-            .label
-            .clone()
-            .or_else(|| node.value.clone())
-            .unwrap_or_default();
-        if text.is_empty() {
-            continue;
-        }
-        if seen.insert(text.clone()) {
-            raw_lines.push(text);
-            if raw_lines.len() >= max_raw_lines {
-                break;
-            }
-        }
-    }
-
-    let title = nodes
-        .iter()
-        .find(|n| {
-            n.name.as_deref() == Some("reddit_feed__post__title_text")
-                || n.name
-                    .as_deref()
-                    .map(|name| name.contains("title_text"))
-                    .unwrap_or(false)
-        })
-        .and_then(|n| n.label.clone().or_else(|| n.value.clone()));
-
-    let subreddit = nodes
-        .iter()
-        .find(|n| {
-            n.label
-                .as_deref()
-                .map(|t| t.starts_with("r/"))
-                .unwrap_or(false)
-                || n.name
-                    .as_deref()
-                    .map(|name| name.contains("subreddit"))
-                    .unwrap_or(false)
-        })
-        .and_then(|n| n.label.clone().or_else(|| n.value.clone()));
-
-    let author = nodes
-        .iter()
-        .find(|n| {
-            n.label
-                .as_deref()
-                .map(|t| t.starts_with("u/"))
-                .unwrap_or(false)
-                || n.name
-                    .as_deref()
-                    .map(|name| name.contains("author"))
-                    .unwrap_or(false)
-        })
-        .and_then(|n| n.label.clone().or_else(|| n.value.clone()));
-
-    let body = nodes
-        .iter()
-        .find(|n| {
-            n.name
-                .as_deref()
-                .map(|name| {
-                    name.contains("post_body")
-                        || name.contains("selftext")
-                        || (name.contains("body") && !name.contains("comment"))
-                })
-                .unwrap_or(false)
-                || n.element.ends_with("TextView")
-        })
-        .and_then(|n| n.label.clone().or_else(|| n.value.clone()))
-        .filter(|text| title.as_ref().map(|t| t != text).unwrap_or(true));
-
-    let mut comments: Vec<String> = Vec::new();
-    let mut comment_seen = HashSet::<String>::new();
-    if max_comments > 0 {
-        for node in &nodes {
-            let Some(name) = node.name.as_deref() else {
-                continue;
-            };
-            if !name.contains("comment") || name.contains("composer") {
-                continue;
-            }
-            let text = node
-                .label
-                .clone()
-                .or_else(|| node.value.clone())
-                .unwrap_or_default();
-            if text.is_empty() {
-                continue;
-            }
-            if comment_seen.insert(text.clone()) {
-                comments.push(text);
-                if comments.len() >= max_comments {
-                    break;
-                }
-            }
-        }
-    }
-
-    Ok(tool_success(
-        json!({
-            "ok": true,
-            "sessionId": session_id,
-            "title": title,
-            "subreddit": subreddit,
-            "author": author,
-            "body": body,
-            "topComments": comments,
-            "rawLines": raw_lines
-        }),
-        "reddit post extracted",
-    ))
 }
 
 async fn session_delete(state: &AppState, arguments: &Value) -> Result<Value> {
@@ -3996,6 +3989,22 @@ async fn run_steps(
             .filter(|v| !v.is_empty())
             .ok_or_else(|| anyhow!("step {idx} missing tool"))?;
 
+        if let Some(when_value) = obj.get("when") {
+            let rendered_when = substitute_vars(when_value.clone(), &vars);
+            if !eval_when(&rendered_when, &vars)? {
+                trace.push(json!({
+                    "step": idx + 1,
+                    "stepId": step_id.clone(),
+                    "tool": tool,
+                    "attempt": 0,
+                    "ok": true,
+                    "skipped": true,
+                    "durationMs": 0
+                }));
+                continue;
+            }
+        }
+
         if tool == "ios.script.run" || tool == "ios.workflow.run" {
             bail!("step {idx} tool '{tool}' is not allowed");
         }
@@ -4233,6 +4242,61 @@ async fn util_list_length(arguments: &Value) -> Result<Value> {
     ))
 }
 
+async fn util_list_first(arguments: &Value) -> Result<Value> {
+    let list = arguments
+        .get("list")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("list must be an array"))?;
+    let field = arguments.get("field").and_then(Value::as_str).map(str::trim);
+
+    let value = list.first().cloned().unwrap_or(Value::Null);
+    let extracted = if let Some(field) = field.filter(|f| !f.is_empty()) {
+        value
+            .get(field)
+            .cloned()
+            .unwrap_or(Value::Null)
+    } else {
+        value
+    };
+
+    Ok(tool_success(
+        json!({ "ok": true, "found": !list.is_empty(), "value": extracted }),
+        "first item selected",
+    ))
+}
+
+async fn util_list_nth(arguments: &Value) -> Result<Value> {
+    let list = arguments
+        .get("list")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("list must be an array"))?;
+    let index = arguments
+        .get("index")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("index must be an integer >= 1"))? as usize;
+    let field = arguments.get("field").and_then(Value::as_str).map(str::trim);
+
+    let found = index > 0 && index <= list.len();
+    let value = if found {
+        list.get(index - 1).cloned().unwrap_or(Value::Null)
+    } else {
+        Value::Null
+    };
+    let extracted = if let Some(field) = field.filter(|f| !f.is_empty()) {
+        value
+            .get(field)
+            .cloned()
+            .unwrap_or(Value::Null)
+    } else {
+        value
+    };
+
+    Ok(tool_success(
+        json!({ "ok": true, "index": index, "found": found, "value": extracted }),
+        "nth item selected",
+    ))
+}
+
 fn substitute_vars(value: Value, vars: &Value) -> Value {
     match value {
         Value::String(s) => {
@@ -4339,6 +4403,88 @@ fn substitute_string(input: &str, vars: &Value) -> String {
 
     out.push_str(rest);
     out
+}
+
+fn eval_when(when: &Value, vars: &Value) -> Result<bool> {
+    match when {
+        Value::Bool(value) => Ok(*value),
+        Value::String(path) => Ok(value_truthy(
+            lookup_var_value(vars, path).unwrap_or(Value::Null),
+        )),
+        Value::Object(map) => {
+            let var = map
+                .get("var")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| anyhow!("when.var is required"))?;
+            let value = lookup_var_value(vars, var).unwrap_or(Value::Null);
+
+            if let Some(eq) = map.get("equals") {
+                return Ok(value_matches(&value, eq));
+            }
+            if let Some(ne) = map.get("notEquals") {
+                return Ok(!value_matches(&value, ne));
+            }
+            if let Some(exists) = map.get("exists").and_then(Value::as_bool) {
+                let has_value = !matches!(value, Value::Null);
+                return Ok(if exists { has_value } else { !has_value });
+            }
+            if let Some(truthy) = map.get("truthy").and_then(Value::as_bool) {
+                let is_truthy = value_truthy(value);
+                return Ok(if truthy { is_truthy } else { !is_truthy });
+            }
+
+            Err(anyhow!(
+                "when object requires equals, notEquals, exists, or truthy"
+            ))
+        }
+        _ => Err(anyhow!("when must be a boolean, string, or object")),
+    }
+}
+
+fn value_truthy(value: Value) -> bool {
+    match value {
+        Value::Bool(b) => b,
+        Value::Number(n) => n.as_i64().map(|v| v != 0).unwrap_or(true),
+        Value::String(s) => {
+            let trimmed = s.trim().to_lowercase();
+            !trimmed.is_empty() && trimmed != "false" && trimmed != "0"
+        }
+        Value::Array(items) => !items.is_empty(),
+        Value::Object(map) => !map.is_empty(),
+        Value::Null => false,
+    }
+}
+
+fn value_matches(value: &Value, candidate: &Value) -> bool {
+    match candidate {
+        Value::Array(list) => list.iter().any(|item| value_matches(value, item)),
+        _ => value_equals(value, candidate),
+    }
+}
+
+fn value_equals(value: &Value, candidate: &Value) -> bool {
+    match (value, candidate) {
+        (Value::String(a), Value::String(b)) => a.eq_ignore_ascii_case(b),
+        (Value::Bool(a), Value::Bool(b)) => a == b,
+        (Value::Number(a), Value::Number(b)) => a == b,
+        (Value::Null, Value::Null) => true,
+        (Value::String(a), Value::Bool(b)) => {
+            let normalized = a.trim().to_lowercase();
+            if normalized == "true" {
+                *b
+            } else if normalized == "false" {
+                !*b
+            } else {
+                false
+            }
+        }
+        (Value::String(a), Value::Number(b)) => a.trim().parse::<f64>().ok().map_or(false, |v| {
+            b.as_f64().map(|bv| (bv - v).abs() < f64::EPSILON).unwrap_or(false)
+        }),
+        _ => value == candidate,
+    }
 }
 
 fn lookup_var_value(vars: &Value, key: &str) -> Option<Value> {

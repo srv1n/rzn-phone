@@ -1,22 +1,19 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
-  "name": "appstore.search_results",
-  "version": "1.1.0",
-  "description": "Submit an App Store search query, capture ordered result rows, and compute optional observed rank (read-only).",
+  "name": "appstore.screenshots",
+  "version": "1.0.0",
+  "description": "Capture a sequence of on-screen screenshots from the App Store product media carousel (best-effort).",
   "inputs": {
     "query": { "type": "string", "required": true },
-    "target_app_name": { "type": "string" },
-    "limit": { "type": "integer", "default": 10, "min": 1, "max": 50 },
-    "maxScrolls": { "type": "integer", "default": 5, "min": 0, "max": 12 },
-    "submit_mode": { "type": "string", "default": "suggestion" },
-    "typing_mode": { "type": "string", "default": "full" },
+    "result_index": { "type": "integer", "default": 0, "min": 0, "max": 50 },
+    "submit_mode": { "type": "string", "default": "keyboard" },
     "country": { "type": "string" },
     "locale": { "type": "string" }
   },
   "notes": [
-    "Read-only workflow: opens App Store Search and scrapes visible rows.",
-    "Includes compact snapshot + screenshot of the top fold for debugging.",
-    "Uses bounded scrolling for top-N extraction."
+    "Captures full-screen screenshots after swiping the product media carousel.",
+    "Result contains up to 5 screen captures (not cropped to the media frame).",
+    "result_index is 0-based (0 = first search result)."
   ],
   "steps": [
     { "tool": "ios.appium.ensure", "arguments": {} },
@@ -103,52 +100,32 @@
       "retries": 1
     },
     {
-      "tool": "ios.ui.observe_compact",
-      "arguments": { "nodeFilter": "all", "maxNodes": 220 },
-      "saveAs": "compactSnapshot"
-    },
-    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "screenshot" },
-    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "uiSource" },
-    {
-      "tool": "ios.ui.extract_rows",
-      "saveAs": "results",
+      "tool": "ios.action.tap",
       "arguments": {
-        "row": {
-          "type": "XCUIElementTypeCell",
-          "namePrefix": "AppStore.shelfItem.searchResult"
-        },
-        "primary": {
-          "type": "XCUIElementTypeButton",
-          "attr": "label",
-          "pick": "longest"
-        },
-        "split": {
-          "delimiter": ",",
-          "fields": ["name", "subtitle", "developer"],
-          "skipMetricLike": true
-        },
-        "limit": "{{limit}}",
-        "maxScrolls": "{{maxScrolls}}",
-        "scroll": { "direction": "down", "distance": 0.6, "settleMs": 350 }
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.searchResult')]", "index": "{{result_index}}" }
       }
     },
     {
-      "tool": "util.rank_by_name",
-      "saveAs": "rank",
+      "tool": "ios.action.wait",
       "arguments": {
-        "items": "{{steps.results.rows}}",
-        "field": "name",
-        "target": "{{target_app_name}}"
-      }
-    }
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.productTopLockup')]" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "shot1" },
+    { "tool": "ios.action.scroll", "arguments": { "direction": "left", "distance": 0.6 } },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "shot2" },
+    { "tool": "ios.action.scroll", "arguments": { "direction": "left", "distance": 0.6 } },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "shot3" },
+    { "tool": "ios.action.scroll", "arguments": { "direction": "left", "distance": 0.6 } },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "shot4" },
+    { "tool": "ios.action.scroll", "arguments": { "direction": "left", "distance": 0.6 } },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "shot5" }
   ],
   "output": {
     "query": "{{query}}",
-    "results": "{{steps.results.rows}}",
-    "resultCount": "{{steps.results.rowCount}}",
-    "observed_rank": "{{steps.rank.rank}}",
-    "screenshot": "{{steps.screenshot}}",
-    "uiSource": "{{steps.uiSource}}",
-    "compactSnapshot": "{{steps.compactSnapshot}}"
+    "result_index": "{{result_index}}",
+    "shots": ["{{steps.shot1}}", "{{steps.shot2}}", "{{steps.shot3}}", "{{steps.shot4}}", "{{steps.shot5}}"]
   }
 }

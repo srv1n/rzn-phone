@@ -4,6 +4,10 @@ This repo now includes read-only, data-only App Store workflows for iOS real dev
 
 - `appstore.typeahead`
 - `appstore.search_results`
+- `appstore.app_details`
+- `appstore.reviews`
+- `appstore.version_history`
+- `appstore.screenshots`
 
 The implementation is intentionally best-effort and tolerant of minor App Store UI variance. All App Store-specific selectors live in the workflow JSON, not the core runner.
 
@@ -17,6 +21,20 @@ Primary selectors observed on real devices:
 - Typeahead rows: `XCUIElementTypeCell` text from `label/name` inside `AppStore.searchHints`
 - Results container: `name = AppStore.searchResults` (`XCUIElementTypeCollectionView`)
 - Result rows: `name BEGINSWITH AppStore.shelfItem.searchResult[`
+- Product page top lockup: `name CONTAINS AppStore.shelfItem.productTopLockup`
+- Ratings badge: `accessibility id = AppStore.productPage.badge.rating`
+- Ratings header (reviews view): `name CONTAINS parentId=productRatings`
+- Review rows: `name BEGINSWITH AppStore.shelfItem.productReview`
+- What's New header: `name CONTAINS parentId=mostRecentVersion`
+- Version rows: `name BEGINSWITH AppStore.shelfItem.titledParagraph`
+- Screenshot cells: `name BEGINSWITH AppStore.shelfItem.productMediaItem`
+
+Submission behavior:
+- `appstore.search_results` supports `submit_mode` (`suggestion` default, `keyboard` to press Enter/return).
+
+Reviews workflow behavior:
+- `appstore.reviews` opens the Ratings & Reviews view by tapping the rating badge.
+- Sorting is best-effort: non-default modes attempt to select from the UI if available.
 
 Fallback policy:
 
@@ -24,7 +42,8 @@ Fallback policy:
 2. Accessibility id locators.
 3. `-ios predicate string` fallbacks for structural variants.
 
-No XPath is required for the current App Store flows.
+Notes:
+- XPath is currently used to target the search hint cell and result rows in `appstore.search_results`.
 
 ## Output Contract
 
@@ -44,6 +63,29 @@ No XPath is required for the current App Store flows.
 - `compactSnapshot` of top fold (from `ios.ui.observe_compact`)
 - `screenshot` (base64 PNG)
 - `uiSource.source` (full XML)
+
+`appstore.app_details` returns:
+
+- `title`, `tagline`, `subtitle`, `developer`, `offer`, `offerSubtitle`
+- `badges`: raw badge labels (ratings, age, category, etc.)
+- `screenshotItems`: raw media cell identifiers + `screenshotCount`
+- `screenshot` + `uiSource.source`
+
+`appstore.reviews` returns:
+
+- `ratingSummary`: raw summary label(s)
+- `reviewSummary`: best-effort LLM/summary text if present
+- `reviews`: extracted review rows (title/body/rating/author/response fields)
+- `reviewCount` + `screenshot` + `uiSource.source`
+
+`appstore.version_history` returns:
+
+- `versions`: extracted update rows (best-effort split)
+- `versionCount` + `screenshot` + `uiSource.source`
+
+`appstore.screenshots` returns:
+
+- `shots`: list of full-screen captures after swiping the media carousel
 
 ## Safety + Prereqs
 

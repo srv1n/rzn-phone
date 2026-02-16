@@ -1,22 +1,21 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
-  "name": "appstore.search_results",
-  "version": "1.1.0",
-  "description": "Submit an App Store search query, capture ordered result rows, and compute optional observed rank (read-only).",
+  "name": "appstore.version_history",
+  "version": "1.0.0",
+  "description": "Open an App Store app and extract version history rows (best-effort).",
   "inputs": {
     "query": { "type": "string", "required": true },
-    "target_app_name": { "type": "string" },
-    "limit": { "type": "integer", "default": 10, "min": 1, "max": 50 },
-    "maxScrolls": { "type": "integer", "default": 5, "min": 0, "max": 12 },
-    "submit_mode": { "type": "string", "default": "suggestion" },
-    "typing_mode": { "type": "string", "default": "full" },
+    "result_index": { "type": "integer", "default": 0, "min": 0, "max": 50 },
+    "submit_mode": { "type": "string", "default": "keyboard" },
+    "limit": { "type": "integer", "default": 15, "min": 1, "max": 50 },
+    "maxScrolls": { "type": "integer", "default": 10, "min": 0, "max": 30 },
     "country": { "type": "string" },
     "locale": { "type": "string" }
   },
   "notes": [
-    "Read-only workflow: opens App Store Search and scrapes visible rows.",
-    "Includes compact snapshot + screenshot of the top fold for debugging.",
-    "Uses bounded scrolling for top-N extraction."
+    "Read-only workflow.",
+    "Uses a best-effort scroll to the What's New / Version History section.",
+    "result_index is 0-based (0 = first search result)."
   ],
   "steps": [
     { "tool": "ios.appium.ensure", "arguments": {} },
@@ -103,52 +102,77 @@
       "retries": 1
     },
     {
-      "tool": "ios.ui.observe_compact",
-      "arguments": { "nodeFilter": "all", "maxNodes": 220 },
-      "saveAs": "compactSnapshot"
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.searchResult')]", "index": "{{result_index}}" }
+      }
     },
-    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "screenshot" },
-    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "uiSource" },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.productTopLockup')]" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.scroll_until",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "name CONTAINS 'parentId=mostRecentVersion'" },
+        "direction": "down",
+        "distance": 0.6,
+        "maxScrolls": "{{maxScrolls}}",
+        "timeoutMs": 60000,
+        "settleMs": 450
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "name CONTAINS 'parentId=mostRecentVersion'" }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.titledParagraph')]" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
     {
       "tool": "ios.ui.extract_rows",
-      "saveAs": "results",
+      "saveAs": "versions",
       "arguments": {
         "row": {
           "type": "XCUIElementTypeCell",
-          "namePrefix": "AppStore.shelfItem.searchResult"
+          "namePrefix": "AppStore.shelfItem.titledParagraph"
         },
         "primary": {
-          "type": "XCUIElementTypeButton",
-          "attr": "label",
-          "pick": "longest"
+          "type": "XCUIElementTypeCell",
+          "attr": "name",
+          "pick": "first"
         },
         "split": {
           "delimiter": ",",
-          "fields": ["name", "subtitle", "developer"],
-          "skipMetricLike": true
+          "fields": ["version", "date", "notes"],
+          "skipMetricLike": false
         },
         "limit": "{{limit}}",
         "maxScrolls": "{{maxScrolls}}",
-        "scroll": { "direction": "down", "distance": 0.6, "settleMs": 350 }
+        "scroll": { "direction": "down", "distance": 0.6, "settleMs": 350 },
+        "order": "y"
       }
     },
-    {
-      "tool": "util.rank_by_name",
-      "saveAs": "rank",
-      "arguments": {
-        "items": "{{steps.results.rows}}",
-        "field": "name",
-        "target": "{{target_app_name}}"
-      }
-    }
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "uiSource" },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "screenshot" }
   ],
   "output": {
     "query": "{{query}}",
-    "results": "{{steps.results.rows}}",
-    "resultCount": "{{steps.results.rowCount}}",
-    "observed_rank": "{{steps.rank.rank}}",
-    "screenshot": "{{steps.screenshot}}",
+    "result_index": "{{result_index}}",
+    "versions": "{{steps.versions.rows}}",
+    "versionCount": "{{steps.versions.rowCount}}",
     "uiSource": "{{steps.uiSource}}",
-    "compactSnapshot": "{{steps.compactSnapshot}}"
+    "screenshot": "{{steps.screenshot}}"
   }
 }

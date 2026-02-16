@@ -24,8 +24,7 @@ App Store locator/output notes are documented in `docs/appstore_workflows.md`.
 - Alerts: `ios.alert.text`, `ios.alert.wait`, `ios.alert.accept`, `ios.alert.dismiss`
 - Deterministic runner: `ios.script.run`
 - Safari primitives: `ios.web.goto`, `ios.web.wait_css`, `ios.web.click_css`, `ios.web.type_css`, `ios.web.press_key`, `ios.web.page_source`, `ios.web.screenshot`, `ios.web.eval_js`
-- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `appstore.typeahead`, `appstore.search_results`)
-- Reddit helpers: `ios.reddit.open_first_post`, `ios.reddit.extract_post`
+- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`)
 
 ## Safety notes
 
