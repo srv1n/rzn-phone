@@ -83,7 +83,9 @@ Runners MUST refuse to execute these steps unless `commit=true` is supplied at r
 - `platforms` (optional): `["ios"]`, `["android"]`, or both
 - `inputs` (optional): schema-like declarations for runtime args
 - `steps` (optional): executable steps
-  - `steps` can be omitted for “metadata-only” workflows (useful for workflows implemented in code)
+  - **Runnable workflows should include `steps`.** Metadata-only workflows may omit steps but are not executable by the runner.
+  - Code-implemented workflows are deprecated; keep app-specific logic inside JSON workflow packs.
+- `output` (optional): output template object rendered after steps (see §5.1)
 
 ---
 
@@ -105,7 +107,7 @@ All step kinds share:
 - `timeout_ms` (optional): overrides default timeouts
 - `retries` (optional): number of retries on transient failure
 - `requires_commit` (optional): safety gate
-- `save_as` (optional): store result into context under a variable name
+- `save_as` / `saveAs` (optional): store result into context under a variable name
 
 ### 3.2 Tool-call steps (supported today in this repo)
 
@@ -193,6 +195,18 @@ This allows clean parameterization:
 { "udid": "{{udid}}", "timeout_ms": "{{timeouts.session_create_ms}}" }
 ```
 
+### 5.1 Workflow outputs (runner)
+
+Runners MAY support an optional top-level `output` template. The template is rendered
+after all steps execute (or immediately before returning success), using the same
+`{{var}}` substitution rules.
+
+Conventions:
+
+- Any step with `save_as` / `saveAs` is available under `steps.<save_as>` in the template.
+- The runner should still include trace metadata even when `output` is provided.
+- If `output` is omitted, the runner returns a default `{ok, steps, trace}` envelope.
+
 ---
 
 ## 6) Safety and approvals
@@ -264,4 +278,3 @@ See `docs/DEEP_DIVE.md` for more detail.
   ]
 }
 ```
-

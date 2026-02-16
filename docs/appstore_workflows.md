@@ -1,11 +1,11 @@
 # App Store Workflow Notes (Real Device)
 
-This repo now includes read-only App Store workflows for iOS real devices:
+This repo now includes read-only, data-only App Store workflows for iOS real devices:
 
 - `appstore.typeahead`
 - `appstore.search_results`
 
-The implementation is intentionally best-effort and tolerant of minor App Store UI variance.
+The implementation is intentionally best-effort and tolerant of minor App Store UI variance. All App Store-specific selectors live in the workflow JSON, not the core runner.
 
 ## Locator Strategy
 
@@ -28,7 +28,7 @@ No XPath is required for the current App Store flows.
 
 ## Output Contract
 
-`appstore.typeahead` returns:
+`appstore.typeahead` returns (from workflow `output` templating):
 
 - `query`
 - `prefixes`: ordered `[{prefix, suggestionCount, suggestions:[{text, position}]}]`
@@ -36,12 +36,12 @@ No XPath is required for the current App Store flows.
 - `screenshot` (base64 PNG)
 - `uiSource.source` (full XML)
 
-`appstore.search_results` returns:
+`appstore.search_results` returns (from workflow `output` templating):
 
 - `query`
 - `results`: ordered `{position, name, subtitle, developer?}`
 - `observed_rank` when `target_app_name` is provided
-- `compactSnapshot` of top fold
+- `compactSnapshot` of top fold (from `ios.ui.observe_compact`)
 - `screenshot` (base64 PNG)
 - `uiSource.source` (full XML)
 

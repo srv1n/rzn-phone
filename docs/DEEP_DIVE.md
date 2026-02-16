@@ -115,6 +115,7 @@ So we treat workflows as **data** (JSON) and execute them with a strict runner:
 
 - `ios.script.run`: execute an inline step array
 - `ios.workflow.run`: execute a named workflow loaded from disk/packs
+- App-specific logic lives in workflow JSONs; compiled app handlers are deprecated.
 
 ### 3.2 Workflow schema v1 (practical)
 
@@ -123,6 +124,7 @@ Workflows should be:
 - declarative, small steps
 - parameterized (`{{query}}`, etc.)
 - explicitly guarded for destructive steps (`commit` gating)
+- able to compose an `output` object from saved step results (`save_as` / `saveAs`)
 
 Keep the schema close to the browser-native actions taxonomy to reduce team cognitive load.
 
@@ -206,6 +208,16 @@ Use a combination of:
 3. Tighten selectors (prefer accessibility id)
 4. Add commit gates for destructive steps
 5. Publish as workflow pack (or bundle into plugin for now)
+
+### 5.3 Migrating compiled workflows (legacy → data-only)
+
+If a workflow is still implemented in Rust, migrate it into JSON so app-specific logic lives in workflow packs:
+
+1. **Inventory selectors**: extract app-specific locators (accessibility ids, predicates, CSS) from the code path.
+2. **Map to primitives**: replace each action with the closest `ios.action.*` / `ios.web.*` tool call.
+3. **Add `saveAs` + `output`**: capture intermediate results and compose the final output in the workflow JSON.
+4. **Delete the handler**: remove the compiled workflow function and keep only generic primitives in the worker.
+5. **Validate**: run `scripts/ios_tools.sh workflow-smoke` or a device-specific smoke, then publish the JSON pack.
 
 ---
 

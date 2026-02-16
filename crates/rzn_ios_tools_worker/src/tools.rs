@@ -165,6 +165,70 @@ pub fn list_tool_definitions() -> Vec<Value> {
             }),
         ),
         tool(
+            "ios.ui.extract_rows",
+            "Extract ordered rows from a UI source XML using generic selectors and splitting rules.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string" },
+                    "source": { "type": "string" },
+                    "row": {
+                        "type": "object",
+                        "properties": {
+                            "type": { "type": "string", "default": "XCUIElementTypeCell" },
+                            "name": { "type": "string" },
+                            "namePrefix": { "type": "string" },
+                            "ancestorName": { "type": "string" },
+                            "ancestorType": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                    },
+                    "primary": {
+                        "type": "object",
+                        "properties": {
+                            "type": { "type": "string", "default": "XCUIElementTypeButton" },
+                            "attr": { "type": "string", "enum": ["label", "name", "value"], "default": "label" },
+                            "pick": { "type": "string", "enum": ["first", "longest"], "default": "longest" }
+                        },
+                        "additionalProperties": false
+                    },
+                    "tag": {
+                        "type": "object",
+                        "properties": {
+                            "namePrefix": { "type": "string" },
+                            "pick": { "type": "string", "enum": ["first", "last"], "default": "last" },
+                            "stripPrefix": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                    },
+                    "split": {
+                        "type": "object",
+                        "properties": {
+                            "delimiter": { "type": "string", "default": "," },
+                            "ignorePrefixes": { "type": "array", "items": { "type": "string" } },
+                            "fields": { "type": "array", "items": { "type": "string" } },
+                            "skipMetricLike": { "type": "boolean", "default": true }
+                        },
+                        "additionalProperties": false
+                    },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+                    "maxScrolls": { "type": "integer", "minimum": 0, "maximum": 50, "default": 0 },
+                    "scroll": {
+                        "type": "object",
+                        "properties": {
+                            "direction": { "type": "string", "enum": ["down", "up", "left", "right"], "default": "down" },
+                            "distance": { "type": "number", "minimum": 0.1, "maximum": 0.95, "default": 0.6 },
+                            "settleMs": { "type": "integer", "minimum": 0, "maximum": 10000, "default": 350 }
+                        },
+                        "additionalProperties": false
+                    },
+                    "order": { "type": "string", "enum": ["y", "x"], "default": "y" }
+                },
+                "required": ["row", "primary"],
+                "additionalProperties": false
+            }),
+        ),
+        tool(
             "ios.target.resolve",
             "Resolve an encoded id from the latest compact snapshot into a WebDriver locator.",
             json!({
@@ -232,6 +296,47 @@ pub fn list_tool_definitions() -> Vec<Value> {
                     "clearFirst": { "type": "boolean", "default": true }
                 },
                 "required": ["text"],
+                "additionalProperties": false
+            }),
+        ),
+        tool(
+            "ios.action.typeahead",
+            "Type a query or prefixes into a field and capture ordered typeahead suggestions (generic).",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string" },
+                    "field": {
+                        "type": "object",
+                        "properties": {
+                            "encodedId": { "type": "string" },
+                            "snapshotId": { "type": "string" },
+                            "using": { "type": "string" },
+                            "value": { "type": "string" },
+                            "index": { "type": "integer", "minimum": 0, "default": 0 },
+                            "requireUnique": { "type": "boolean", "default": false }
+                        },
+                        "additionalProperties": false
+                    },
+                    "query": { "type": "string" },
+                    "prefixes": { "type": "array", "items": { "type": "string" } },
+                    "limit": { "type": "integer", "default": 10, "minimum": 1, "maximum": 20 },
+                    "typingMode": { "type": "string", "default": "full" },
+                    "suggestionQuery": {
+                        "type": "object",
+                        "properties": {
+                            "type": { "type": "string", "default": "XCUIElementTypeCell" },
+                            "name": { "type": "string" },
+                            "namePrefix": { "type": "string" },
+                            "label": { "type": "string" },
+                            "ancestorName": { "type": "string" },
+                            "ancestorType": { "type": "string" },
+                            "max": { "type": "integer", "minimum": 1, "maximum": 50 }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "required": ["field"],
                 "additionalProperties": false
             }),
         ),
@@ -585,10 +690,10 @@ pub fn list_tool_definitions() -> Vec<Value> {
             "List prebuilt iOS workflows.",
             json!({ "type": "object", "properties": {}, "additionalProperties": false }),
         ),
-	        tool(
-	            "ios.workflow.run",
-	            "Run a named workflow.",
-	            json!({
+        tool(
+            "ios.workflow.run",
+            "Run a named workflow.",
+            json!({
 	                "type": "object",
 	                "properties": {
 	                    "name": { "type": "string" },
@@ -600,12 +705,38 @@ pub fn list_tool_definitions() -> Vec<Value> {
 	                },
 	                "required": ["name"],
 	                "additionalProperties": false
-	            }),
+            }),
         ),
-	        tool(
-	            "ios.script.run",
-	            "Execute a deterministic step list (each step calls an existing tool).",
-	            json!({
+        tool(
+            "util.rank_by_name",
+            "Compute a 1-based rank for a target string in a list of items (generic helper).",
+            json!({
+                "type": "object",
+                "properties": {
+                    "items": { "type": "array" },
+                    "field": { "type": "string", "default": "name" },
+                    "target": { "type": "string" }
+                },
+                "required": ["items", "target"],
+                "additionalProperties": false
+            }),
+        ),
+        tool(
+            "util.list.length",
+            "Return the length of an array.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "list": { "type": "array" }
+                },
+                "required": ["list"],
+                "additionalProperties": false
+            }),
+        ),
+        tool(
+            "ios.script.run",
+            "Execute a deterministic step list (each step calls an existing tool).",
+            json!({
 	                "type": "object",
 	                "properties": {
                     "steps": {
@@ -617,7 +748,9 @@ pub fn list_tool_definitions() -> Vec<Value> {
                                 "arguments": { "type": "object" },
                                 "timeoutMs": { "type": "integer" },
                                 "retries": { "type": "integer", "default": 0 },
-                                "requiresCommit": { "type": "boolean", "default": false }
+                                "requiresCommit": { "type": "boolean", "default": false },
+                                "saveAs": { "type": "string" },
+                                "save_as": { "type": "string" }
                             },
                             "required": ["tool"],
                             "additionalProperties": false
@@ -653,9 +786,11 @@ pub async fn handle_tool_call(
         "ios.ui.source" => ui_source(state, &arguments).await,
         "ios.ui.screenshot" => ui_screenshot(state, &arguments).await,
         "ios.ui.observe_compact" => ui_observe_compact(state, &arguments).await,
+        "ios.ui.extract_rows" => ui_extract_rows(state, &arguments).await,
         "ios.target.resolve" => target_resolve(state, &arguments).await,
         "ios.action.tap" => action_tap(state, &arguments).await,
         "ios.action.type" => action_type(state, &arguments).await,
+        "ios.action.typeahead" => action_typeahead(state, &arguments).await,
         "ios.action.wait" => action_wait(state, &arguments).await,
         "ios.action.scroll" => action_scroll(state, &arguments).await,
         "ios.action.swipe" => action_swipe(state, &arguments).await,
@@ -681,6 +816,8 @@ pub async fn handle_tool_call(
         "ios.workflow.list" => workflow_list().await,
         "ios.workflow.run" => workflow_run(state, &arguments).await,
         "ios.script.run" => script_run(state, &arguments).await,
+        "util.rank_by_name" => util_rank_by_name(&arguments).await,
+        "util.list.length" => util_list_length(&arguments).await,
         _ => bail!("unknown tool '{tool_name}'"),
     }
 }
@@ -1263,7 +1400,8 @@ async fn ui_screenshot(state: &AppState, arguments: &Value) -> Result<Value> {
             "ok": true,
             "sessionId": session_id,
             "mimeType": "image/png",
-            "bytesBase64": data.len()
+            "bytesBase64": data.len(),
+            "data": data
         }),
         vec![
             json!({"type": "text", "text": "screenshot captured"}),
@@ -1321,6 +1459,142 @@ async fn ui_observe_compact(state: &AppState, arguments: &Value) -> Result<Value
             "stats": snapshot.stats
         }),
         "compact snapshot captured",
+    ))
+}
+
+async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
+    let session_id = resolve_session_id(state, arguments).await?;
+    let driver = driver_from_state(state).await?;
+
+    let source_override = arguments.get("source").and_then(Value::as_str).map(|raw| raw.to_string());
+
+    let row_query = parse_row_query(arguments.get("row"))?;
+    let primary_query = parse_primary_query(arguments.get("primary"))?;
+    let tag_query = parse_tag_query(arguments.get("tag"));
+    let split_cfg = parse_split_config(arguments.get("split"));
+    let limit = arguments
+        .get("limit")
+        .and_then(Value::as_u64)
+        .map(|value| value as usize)
+        .filter(|value| *value > 0);
+    let order = arguments
+        .get("order")
+        .and_then(Value::as_str)
+        .unwrap_or("y")
+        .to_lowercase();
+    let max_scrolls = arguments
+        .get("maxScrolls")
+        .and_then(Value::as_u64)
+        .or_else(|| arguments.get("max_scrolls").and_then(Value::as_u64))
+        .unwrap_or(0)
+        .clamp(0, 50) as u32;
+    if source_override.is_some() && max_scrolls > 0 {
+        bail!("source cannot be combined with maxScrolls");
+    }
+
+    let (scroll_direction, scroll_distance, settle_ms) = if let Some(scroll) =
+        arguments.get("scroll").and_then(Value::as_object)
+    {
+        let direction = scroll
+            .get("direction")
+            .and_then(Value::as_str)
+            .unwrap_or("down")
+            .to_lowercase();
+        let distance = scroll
+            .get("distance")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.6)
+            .clamp(0.1, 0.95);
+        let settle_ms = scroll
+            .get("settleMs")
+            .and_then(Value::as_u64)
+            .unwrap_or(350)
+            .clamp(0, 10_000);
+        (direction, distance, settle_ms)
+    } else {
+        ("down".to_string(), 0.6, 350)
+    };
+
+    let mut rows_out: Vec<RowMatch> = Vec::new();
+    let mut seen = HashSet::<String>::new();
+    let mut scrolls_done: u32 = 0;
+
+    for pass in 0..=max_scrolls {
+        let source = if let Some(raw) = source_override.as_ref() {
+            raw.clone()
+        } else {
+            driver.page_source(&session_id).await?
+        };
+        let mut rows = extract_rows_from_source(
+            &source,
+            &row_query,
+            &primary_query,
+            tag_query.as_ref(),
+            &split_cfg,
+        );
+
+        if order == "x" {
+            rows.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
+        } else {
+            rows.sort_by(|a, b| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal));
+        }
+
+        for row in rows {
+            let key = normalize_match_key(&row.raw_label);
+            if key.is_empty() || !seen.insert(key) {
+                continue;
+            }
+            rows_out.push(row);
+            if let Some(max) = limit {
+                if rows_out.len() >= max {
+                    break;
+                }
+            }
+        }
+
+        if let Some(max) = limit {
+            if rows_out.len() >= max {
+                break;
+            }
+        }
+        if source_override.is_some() {
+            break;
+        }
+        if pass < max_scrolls {
+            perform_scroll_gesture(&driver, &session_id, &scroll_direction, scroll_distance).await?;
+            scrolls_done += 1;
+            if settle_ms > 0 {
+                tokio::time::sleep(Duration::from_millis(settle_ms)).await;
+            }
+        }
+    }
+
+    let output_rows: Vec<Value> = rows_out
+        .into_iter()
+        .enumerate()
+        .map(|(idx, row)| {
+            let mut obj = serde_json::Map::new();
+            obj.insert("position".to_string(), json!(idx + 1));
+            for (k, v) in row.fields {
+                obj.insert(k, json!(v));
+            }
+            if let Some(tag_field) = row.tag_field {
+                obj.insert(tag_field, json!(row.tag_value.unwrap_or_default()));
+            }
+            obj.insert("rawLabel".to_string(), json!(row.raw_label));
+            Value::Object(obj)
+        })
+        .collect();
+
+    Ok(tool_success(
+        json!({
+            "ok": true,
+            "sessionId": session_id,
+            "rowCount": output_rows.len(),
+            "rows": output_rows,
+            "scrolls": scrolls_done
+        }),
+        "rows extracted",
     ))
 }
 
@@ -1591,6 +1865,60 @@ async fn action_type(state: &AppState, arguments: &Value) -> Result<Value> {
             "targetSpec": {"using": &resolved.using, "value": &resolved.value, "index": resolved.index}
         }),
         "type complete",
+    ))
+}
+
+async fn action_typeahead(state: &AppState, arguments: &Value) -> Result<Value> {
+    let session_id = resolve_session_id(state, arguments).await?;
+    let field = arguments
+        .get("field")
+        .cloned()
+        .ok_or_else(|| ToolCallError::new(ToolErrorCode::InvalidParams, "field is required", json!({})))?;
+    let typing_mode = arguments
+        .get("typingMode")
+        .and_then(Value::as_str)
+        .unwrap_or("full")
+        .to_lowercase();
+    let limit = arguments
+        .get("limit")
+        .and_then(Value::as_u64)
+        .unwrap_or(10)
+        .clamp(1, 20) as usize;
+
+    let prefixes = resolve_prefixes_for_typeahead(arguments)?;
+    let suggestion_query = parse_node_query(arguments.get("suggestionQuery"));
+
+    let driver = driver_from_state(state).await?;
+
+    let mut prefixes_out = Vec::new();
+    let mut final_suggestions = Vec::new();
+
+    for prefix in &prefixes {
+        type_into_field(state, &driver, &session_id, &field, prefix, &typing_mode).await?;
+        tokio::time::sleep(Duration::from_millis(900)).await;
+
+        let source = driver.page_source(&session_id).await?;
+        let suggestions = extract_suggestion_texts(&source, &suggestion_query, limit);
+        final_suggestions = suggestions.clone();
+        prefixes_out.push(json!({
+            "prefix": prefix,
+            "suggestions": suggestions,
+            "suggestionCount": suggestions.len()
+        }));
+    }
+
+    Ok(tool_success(
+        json!({
+            "ok": true,
+            "sessionId": session_id,
+            "prefixes": prefixes_out,
+            "prefixCount": prefixes.len(),
+            "activePrefix": prefixes.last().cloned(),
+            "suggestions": final_suggestions,
+            "suggestionCount": final_suggestions.len(),
+            "limit": limit
+        }),
+        "typeahead captured",
     ))
 }
 
@@ -2242,6 +2570,736 @@ fn parse_bool(value: &str, default: bool) -> bool {
     }
 }
 
+fn normalize_match_key(value: &str) -> String {
+    value
+        .to_lowercase()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect()
+}
+
+#[derive(Debug, Clone)]
+struct NodeQuery {
+    element_type: Option<String>,
+    name: Option<String>,
+    name_prefix: Option<String>,
+    label: Option<String>,
+    ancestor_name: Option<String>,
+    ancestor_type: Option<String>,
+    max: Option<usize>,
+}
+
+fn parse_node_query(value: Option<&Value>) -> NodeQuery {
+    let mut query = NodeQuery {
+        element_type: Some("XCUIElementTypeCell".to_string()),
+        name: None,
+        name_prefix: None,
+        label: None,
+        ancestor_name: None,
+        ancestor_type: None,
+        max: None,
+    };
+
+    let Some(obj) = value.and_then(Value::as_object) else {
+        return query;
+    };
+
+    if let Some(value) = obj.get("type").and_then(Value::as_str) {
+        if !value.trim().is_empty() {
+            query.element_type = Some(value.trim().to_string());
+        }
+    }
+    if let Some(value) = obj.get("name").and_then(Value::as_str) {
+        query.name = normalize_text(value.to_string());
+    }
+    if let Some(value) = obj.get("namePrefix").and_then(Value::as_str) {
+        query.name_prefix = normalize_text(value.to_string());
+    }
+    if let Some(value) = obj.get("label").and_then(Value::as_str) {
+        query.label = normalize_text(value.to_string());
+    }
+    if let Some(value) = obj.get("ancestorName").and_then(Value::as_str) {
+        query.ancestor_name = normalize_text(value.to_string());
+    }
+    if let Some(value) = obj.get("ancestorType").and_then(Value::as_str) {
+        query.ancestor_type = normalize_text(value.to_string());
+    }
+    if let Some(value) = obj.get("max").and_then(Value::as_u64) {
+        query.max = Some(value.clamp(1, 100) as usize);
+    }
+
+    query
+}
+
+#[derive(Debug, Clone)]
+struct RowQuery {
+    element_type: String,
+    name: Option<String>,
+    name_prefix: Option<String>,
+    ancestor_name: Option<String>,
+    ancestor_type: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct PrimaryQuery {
+    element_type: String,
+    attr: String,
+    pick: String,
+}
+
+#[derive(Debug, Clone)]
+struct TagQuery {
+    name_prefix: String,
+    pick: String,
+    strip_prefix: Option<String>,
+    field: String,
+}
+
+#[derive(Debug, Clone)]
+struct SplitConfig {
+    delimiter: String,
+    ignore_prefixes: Vec<String>,
+    fields: Vec<String>,
+    skip_metric_like: bool,
+}
+
+#[derive(Debug, Clone)]
+struct RowMatch {
+    x: f64,
+    y: f64,
+    raw_label: String,
+    fields: Vec<(String, String)>,
+    tag_field: Option<String>,
+    tag_value: Option<String>,
+}
+
+fn parse_row_query(value: Option<&Value>) -> Result<RowQuery> {
+    let Some(obj) = value.and_then(Value::as_object) else {
+        return Err(anyhow!("row query is required"));
+    };
+    let element_type = obj
+        .get("type")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("XCUIElementTypeCell")
+        .to_string();
+
+    Ok(RowQuery {
+        element_type,
+        name: obj
+            .get("name")
+            .and_then(Value::as_str)
+            .and_then(|value| normalize_text(value.to_string())),
+        name_prefix: obj
+            .get("namePrefix")
+            .and_then(Value::as_str)
+            .and_then(|value| normalize_text(value.to_string())),
+        ancestor_name: obj
+            .get("ancestorName")
+            .and_then(Value::as_str)
+            .and_then(|value| normalize_text(value.to_string())),
+        ancestor_type: obj
+            .get("ancestorType")
+            .and_then(Value::as_str)
+            .and_then(|value| normalize_text(value.to_string())),
+    })
+}
+
+fn parse_primary_query(value: Option<&Value>) -> Result<PrimaryQuery> {
+    let Some(obj) = value.and_then(Value::as_object) else {
+        return Err(anyhow!("primary query is required"));
+    };
+    let element_type = obj
+        .get("type")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("XCUIElementTypeButton")
+        .to_string();
+    let attr = obj
+        .get("attr")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("label")
+        .to_string();
+    let pick = obj
+        .get("pick")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("longest")
+        .to_string();
+
+    Ok(PrimaryQuery {
+        element_type,
+        attr,
+        pick,
+    })
+}
+
+fn parse_tag_query(value: Option<&Value>) -> Option<TagQuery> {
+    let obj = value.and_then(Value::as_object)?;
+    let name_prefix = obj
+        .get("namePrefix")
+        .and_then(Value::as_str)
+        .and_then(|value| normalize_text(value.to_string()))?;
+    let pick = obj
+        .get("pick")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("last")
+        .to_string();
+    let strip_prefix = obj
+        .get("stripPrefix")
+        .and_then(Value::as_str)
+        .and_then(|value| normalize_text(value.to_string()));
+    let field = obj
+        .get("field")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("tag")
+        .to_string();
+    Some(TagQuery {
+        name_prefix,
+        pick,
+        strip_prefix,
+        field,
+    })
+}
+
+fn parse_split_config(value: Option<&Value>) -> SplitConfig {
+    let mut cfg = SplitConfig {
+        delimiter: ",".to_string(),
+        ignore_prefixes: Vec::new(),
+        fields: vec!["name".to_string(), "subtitle".to_string()],
+        skip_metric_like: true,
+    };
+
+    let Some(obj) = value.and_then(Value::as_object) else {
+        return cfg;
+    };
+
+    if let Some(delim) = obj.get("delimiter").and_then(Value::as_str) {
+        if !delim.trim().is_empty() {
+            cfg.delimiter = delim.to_string();
+        }
+    }
+    if let Some(values) = obj.get("ignorePrefixes").and_then(Value::as_array) {
+        cfg.ignore_prefixes = values
+            .iter()
+            .filter_map(Value::as_str)
+            .filter_map(|value| normalize_text(value.to_string()))
+            .collect();
+    }
+    if let Some(values) = obj.get("fields").and_then(Value::as_array) {
+        let fields: Vec<String> = values
+            .iter()
+            .filter_map(Value::as_str)
+            .filter_map(|value| normalize_text(value.to_string()))
+            .collect();
+        if !fields.is_empty() {
+            cfg.fields = fields;
+        }
+    }
+    if let Some(value) = obj.get("skipMetricLike").and_then(Value::as_bool) {
+        cfg.skip_metric_like = value;
+    }
+
+    cfg
+}
+
+fn resolve_prefixes_for_typeahead(arguments: &Value) -> Result<Vec<String>> {
+    if let Some(values) = arguments.get("prefixes").and_then(Value::as_array) {
+        let mut out: Vec<String> = values
+            .iter()
+            .filter_map(Value::as_str)
+            .filter_map(|value| normalize_text(value.to_string()))
+            .collect();
+        out.retain(|value| !value.is_empty());
+        if !out.is_empty() {
+            return Ok(out);
+        }
+    }
+
+    let Some(query) = arguments.get("query").and_then(Value::as_str) else {
+        return Err(anyhow!("query or prefixes[] is required"));
+    };
+    let query = query.trim();
+    if query.is_empty() {
+        return Err(anyhow!("query or prefixes[] is required"));
+    }
+
+    let mut prefixes = Vec::new();
+    let mut cur = String::new();
+    for ch in query.chars() {
+        cur.push(ch);
+        if let Some(normalized) = normalize_text(cur.clone()) {
+            prefixes.push(normalized);
+        }
+    }
+    if prefixes.is_empty() {
+        prefixes.push(query.to_string());
+    }
+    prefixes.dedup();
+    Ok(prefixes)
+}
+
+async fn type_into_field(
+    state: &AppState,
+    driver: &WebDriverClient,
+    session_id: &str,
+    field: &Value,
+    prefix: &str,
+    typing_mode: &str,
+) -> Result<()> {
+    let resolved = resolve_target(
+        state,
+        &json!({
+            "sessionId": session_id,
+            "target": field
+        }),
+    )
+    .await?
+    .ok_or_else(|| anyhow!("unable to resolve field target"))?;
+    let ids = driver
+        .find_elements(session_id, &resolved.using, &resolved.value)
+        .await?;
+    let element_id = ids
+        .get(resolved.index)
+        .ok_or_else(|| anyhow!("no field element found for typeahead"))?;
+    let _ = driver.click_element(session_id, element_id).await;
+    let _ = driver.clear_element(session_id, element_id).await;
+    if let Ok(clear_ids) = driver
+        .find_elements(session_id, "accessibility id", "Clear text")
+        .await
+    {
+        if let Some(clear_id) = clear_ids.first() {
+            let _ = driver.click_element(session_id, clear_id).await;
+        }
+    }
+
+    if typing_mode == "char-by-char" {
+        for ch in prefix.chars() {
+            let text = ch.to_string();
+            driver.type_element(session_id, element_id, &text).await?;
+            tokio::time::sleep(Duration::from_millis(80)).await;
+        }
+    } else {
+        driver.type_element(session_id, element_id, prefix).await?;
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct TextNodeMatch {
+    text: String,
+    x: f64,
+    y: f64,
+}
+
+fn extract_suggestion_texts(
+    source: &str,
+    query: &NodeQuery,
+    limit: usize,
+) -> Vec<Value> {
+    let mut nodes = extract_nodes_from_source(source, query);
+    nodes.sort_by(|a, b| {
+        a.y.partial_cmp(&b.y)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal))
+    });
+
+    let mut seen = HashSet::<String>::new();
+    let mut out = Vec::new();
+    for node in nodes {
+        let key = normalize_match_key(&node.text);
+        if key.is_empty() || !seen.insert(key) {
+            continue;
+        }
+        out.push(json!({"text": node.text, "position": out.len() + 1}));
+        if out.len() >= limit {
+            break;
+        }
+    }
+    out
+}
+
+fn extract_nodes_from_source(source: &str, query: &NodeQuery) -> Vec<TextNodeMatch> {
+    let mut reader = Reader::from_str(source);
+    reader.config_mut().trim_text(true);
+    reader.config_mut().check_end_names = false;
+    let mut buf = Vec::new();
+    let mut stack: Vec<(String, Option<String>)> = Vec::new();
+    let mut out = Vec::new();
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) => {
+                let elem_type = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                let name = attr_text(&e, "name");
+                if node_matches(&e, &elem_type, query, &stack) {
+                    if let Some(text) = extract_preferred_text(&e) {
+                        let (x, y) = (attr_f64(&e, "x").unwrap_or(0.0), attr_f64(&e, "y").unwrap_or(0.0));
+                        out.push(TextNodeMatch { text, x, y });
+                        if let Some(max) = query.max {
+                            if out.len() >= max {
+                                buf.clear();
+                                break;
+                            }
+                        }
+                    }
+                }
+                stack.push((elem_type, name));
+            }
+            Ok(Event::Empty(e)) => {
+                let elem_type = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                if node_matches(&e, &elem_type, query, &stack) {
+                    if let Some(text) = extract_preferred_text(&e) {
+                        let (x, y) = (attr_f64(&e, "x").unwrap_or(0.0), attr_f64(&e, "y").unwrap_or(0.0));
+                        out.push(TextNodeMatch { text, x, y });
+                        if let Some(max) = query.max {
+                            if out.len() >= max {
+                                buf.clear();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(Event::End(_)) => {
+                stack.pop();
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    out
+}
+
+fn node_matches(
+    elem: &quick_xml::events::BytesStart<'_>,
+    elem_type: &str,
+    query: &NodeQuery,
+    ancestors: &[(String, Option<String>)],
+) -> bool {
+    if let Some(want_type) = &query.element_type {
+        if elem_type != want_type {
+            return false;
+        }
+    }
+
+    if let Some(want_name) = &query.name {
+        if attr_text(elem, "name").as_deref() != Some(want_name.as_str()) {
+            return false;
+        }
+    }
+    if let Some(prefix) = &query.name_prefix {
+        let name = attr_text(elem, "name").unwrap_or_default();
+        if !name.starts_with(prefix) {
+            return false;
+        }
+    }
+    if let Some(label) = &query.label {
+        if attr_text(elem, "label").as_deref() != Some(label.as_str()) {
+            return false;
+        }
+    }
+
+    if query.ancestor_name.is_none() && query.ancestor_type.is_none() {
+        return true;
+    }
+
+    ancestors.iter().any(|(ancestor_type, ancestor_name)| {
+        if let Some(want_name) = &query.ancestor_name {
+            if ancestor_name.as_deref() != Some(want_name.as_str()) {
+                return false;
+            }
+        }
+        if let Some(want_type) = &query.ancestor_type {
+            if ancestor_type != want_type {
+                return false;
+            }
+        }
+        true
+    })
+}
+
+fn extract_rows_from_source(
+    source: &str,
+    row_query: &RowQuery,
+    primary_query: &PrimaryQuery,
+    tag_query: Option<&TagQuery>,
+    split_cfg: &SplitConfig,
+) -> Vec<RowMatch> {
+    let mut reader = Reader::from_str(source);
+    reader.config_mut().trim_text(true);
+    reader.config_mut().check_end_names = false;
+    let mut buf = Vec::new();
+    let mut stack: Vec<(String, Option<String>)> = Vec::new();
+    let mut current: Option<(usize, f64, f64, Vec<String>, Vec<String>)> = None;
+    let mut out = Vec::new();
+
+    let mut depth = 0usize;
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) => {
+                depth += 1;
+                let elem_type = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                let name = attr_text(&e, "name");
+
+                if current.is_none()
+                    && element_matches_row(&e, &elem_type, row_query, &stack)
+                {
+                    current = Some((
+                        depth,
+                        attr_f64(&e, "x").unwrap_or(0.0),
+                        attr_f64(&e, "y").unwrap_or(0.0),
+                        Vec::new(),
+                        Vec::new(),
+                    ));
+                }
+
+                if let Some((_row_depth, _x, _y, labels, tags)) = current.as_mut() {
+                    collect_primary_label(&elem_type, &e, primary_query, labels);
+                    collect_tag_value(&e, tag_query, tags);
+                }
+
+                stack.push((elem_type, name));
+            }
+            Ok(Event::Empty(e)) => {
+                let elem_type = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                if current.is_none()
+                    && element_matches_row(&e, &elem_type, row_query, &stack)
+                {
+                    let row = finalize_row(
+                        attr_f64(&e, "x").unwrap_or(0.0),
+                        attr_f64(&e, "y").unwrap_or(0.0),
+                        Vec::new(),
+                        Vec::new(),
+                        primary_query,
+                        tag_query,
+                        split_cfg,
+                    );
+                    if let Some(row) = row {
+                        out.push(row);
+                    }
+                } else if let Some((_row_depth, _x, _y, labels, tags)) = current.as_mut() {
+                    collect_primary_label(&elem_type, &e, primary_query, labels);
+                    collect_tag_value(&e, tag_query, tags);
+                }
+            }
+            Ok(Event::End(_)) => {
+                if let Some((row_depth, x, y, labels, tags)) = current.take() {
+                    if row_depth == depth {
+                        if let Some(row) = finalize_row(x, y, labels, tags, primary_query, tag_query, split_cfg) {
+                            out.push(row);
+                        }
+                    } else {
+                        current = Some((row_depth, x, y, labels, tags));
+                    }
+                }
+                stack.pop();
+                depth = depth.saturating_sub(1);
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+
+    out
+}
+
+fn element_matches_row(
+    elem: &quick_xml::events::BytesStart<'_>,
+    elem_type: &str,
+    query: &RowQuery,
+    ancestors: &[(String, Option<String>)],
+) -> bool {
+    if elem_type != query.element_type {
+        return false;
+    }
+    if let Some(want) = &query.name {
+        if attr_text(elem, "name").as_deref() != Some(want.as_str()) {
+            return false;
+        }
+    }
+    if let Some(prefix) = &query.name_prefix {
+        let name = attr_text(elem, "name").unwrap_or_default();
+        if !name.starts_with(prefix) {
+            return false;
+        }
+    }
+    if query.ancestor_name.is_none() && query.ancestor_type.is_none() {
+        return true;
+    }
+    ancestors.iter().any(|(ancestor_type, ancestor_name)| {
+        if let Some(want_name) = &query.ancestor_name {
+            if ancestor_name.as_deref() != Some(want_name.as_str()) {
+                return false;
+            }
+        }
+        if let Some(want_type) = &query.ancestor_type {
+            if ancestor_type != want_type {
+                return false;
+            }
+        }
+        true
+    })
+}
+
+fn collect_primary_label(
+    elem_type: &str,
+    elem: &quick_xml::events::BytesStart<'_>,
+    query: &PrimaryQuery,
+    labels: &mut Vec<String>,
+) {
+    if elem_type != query.element_type {
+        return;
+    }
+    if let Some(value) = attr_text(elem, &query.attr) {
+        labels.push(value);
+    }
+}
+
+fn collect_tag_value(
+    elem: &quick_xml::events::BytesStart<'_>,
+    query: Option<&TagQuery>,
+    tags: &mut Vec<String>,
+) {
+    let Some(query) = query else {
+        return;
+    };
+    let Some(name) = attr_text(elem, "name") else {
+        return;
+    };
+    if let Some(stripped) = name.strip_prefix(&query.name_prefix) {
+        let cleaned = stripped.trim();
+        if !cleaned.is_empty() {
+            tags.push(cleaned.to_string());
+        }
+    }
+}
+
+fn finalize_row(
+    x: f64,
+    y: f64,
+    labels: Vec<String>,
+    tags: Vec<String>,
+    primary_query: &PrimaryQuery,
+    tag_query: Option<&TagQuery>,
+    split_cfg: &SplitConfig,
+) -> Option<RowMatch> {
+    let raw_label = if primary_query.pick == "first" {
+        labels.first().cloned().unwrap_or_default()
+    } else {
+        labels
+            .into_iter()
+            .max_by_key(|value| value.len())
+            .unwrap_or_default()
+    };
+    if raw_label.is_empty() {
+        return None;
+    }
+
+    let mut parts: Vec<String> = raw_label
+        .split(&split_cfg.delimiter)
+        .filter_map(|value| normalize_text(value.to_string()))
+        .collect();
+    if let Some(first) = parts.first() {
+        if split_cfg
+            .ignore_prefixes
+            .iter()
+            .any(|prefix| prefix.eq_ignore_ascii_case(first))
+        {
+            parts.remove(0);
+        }
+    }
+    if split_cfg.skip_metric_like {
+        parts.retain(|part| !metric_like(part));
+    }
+
+    let mut fields = Vec::new();
+    for (idx, field_name) in split_cfg.fields.iter().enumerate() {
+        let value = parts.get(idx).cloned().unwrap_or_default();
+        fields.push((field_name.clone(), value));
+    }
+
+    let (tag_field, tag_value) = if let Some(tag_query) = tag_query {
+        let selected = if tag_query.pick == "first" {
+            tags.first().cloned()
+        } else {
+            tags.last().cloned()
+        };
+        let cleaned = selected.map(|value| {
+            if let Some(prefix) = &tag_query.strip_prefix {
+                value.strip_prefix(prefix).unwrap_or(&value).trim().to_string()
+            } else {
+                value
+            }
+        });
+        (Some(tag_query.field.clone()), cleaned)
+    } else {
+        (None, None)
+    };
+
+    Some(RowMatch {
+        x,
+        y,
+        raw_label,
+        fields,
+        tag_field,
+        tag_value,
+    })
+}
+
+fn metric_like(value: &str) -> bool {
+    let lower = value.to_lowercase();
+    lower.contains("star")
+        || lower.contains("rating")
+        || lower.ends_with("ratings")
+        || lower.ends_with("rating")
+        || lower.ends_with("reviews")
+}
+
+fn attr_text(elem: &quick_xml::events::BytesStart<'_>, key: &str) -> Option<String> {
+    for attr in elem.attributes().with_checks(false) {
+        let Ok(attr) = attr else {
+            continue;
+        };
+        let Ok(name) = std::str::from_utf8(attr.key.as_ref()) else {
+            continue;
+        };
+        if name != key {
+            continue;
+        }
+        let Ok(raw) = attr.unescape_value() else {
+            continue;
+        };
+        return normalize_text(raw.into_owned());
+    }
+    None
+}
+
+fn attr_f64(elem: &quick_xml::events::BytesStart<'_>, key: &str) -> Option<f64> {
+    attr_text(elem, key).and_then(|value| value.parse::<f64>().ok())
+}
+
+fn extract_preferred_text(elem: &quick_xml::events::BytesStart<'_>) -> Option<String> {
+    attr_text(elem, "label")
+        .or_else(|| attr_text(elem, "name"))
+        .or_else(|| attr_text(elem, "value"))
+}
+
 async fn reddit_extract_post(state: &AppState, arguments: &Value) -> Result<Value> {
     let session_id = resolve_session_id(state, arguments).await?;
     let max_comments = arguments
@@ -2686,7 +3744,8 @@ async fn web_screenshot(state: &AppState, arguments: &Value) -> Result<Value> {
             "ok": true,
             "sessionId": session_id,
             "mimeType": "image/png",
-            "bytesBase64": data.len()
+            "bytesBase64": data.len(),
+            "data": data
         }),
         vec![
             json!({"type": "text", "text": "screenshot captured"}),
@@ -2738,12 +3797,12 @@ async fn workflow_run(state: &AppState, arguments: &Value) -> Result<Value> {
     let output_result = if let Some(def) = workflows::load_file_workflow(name) {
         if let Some(steps) = def.steps {
             let vars = build_workflow_vars(arguments);
-            run_steps(state, &steps, commit, &vars).await
+            run_steps(state, &steps, commit, &vars, def.output.as_ref()).await
         } else {
-            workflows::run_workflow(state, name, arguments).await
+            bail!("workflow '{name}' has no executable steps")
         }
     } else {
-        workflows::run_workflow(state, name, arguments).await
+        bail!("unknown workflow '{name}' (no JSON workflow found)")
     };
 
     let output = match output_result {
@@ -2896,7 +3955,7 @@ async fn script_run(state: &AppState, arguments: &Value) -> Result<Value> {
         .and_then(Value::as_bool)
         .unwrap_or(false);
 
-    let result = run_steps(state, steps, commit, &vars).await?;
+    let result = run_steps(state, steps, commit, &vars, None).await?;
 
     if stop_appium_on_finish {
         let _ = worker_shutdown(state, &json!({"stopAppium": true})).await;
@@ -2912,8 +3971,11 @@ async fn run_steps(
     steps: &[Value],
     commit: bool,
     vars: &Value,
+    output_template: Option<&Value>,
 ) -> Result<Value> {
     let mut trace: Vec<Value> = Vec::with_capacity(steps.len());
+    let mut vars = vars.clone();
+    ensure_workflow_steps_var(&mut vars);
 
     for (idx, step) in steps.iter().enumerate() {
         let Some(obj) = step.as_object() else {
@@ -2982,7 +4044,7 @@ async fn run_steps(
             .cloned()
             .or_else(|| obj.get("args").cloned())
             .unwrap_or_else(|| json!({}));
-        let args = substitute_vars(raw_args, vars);
+        let args = substitute_vars(raw_args, &vars);
 
         let started = tokio::time::Instant::now();
         let mut last_err: Option<anyhow::Error> = None;
@@ -2996,6 +4058,13 @@ async fn run_steps(
 
             match call {
                 Ok(Ok(result)) => {
+                    if let Some(save_as) = step_save_as(obj) {
+                        let stored = result
+                            .get("structuredContent")
+                            .cloned()
+                            .unwrap_or_else(|| result.clone());
+                        store_step_output(&mut vars, &save_as, stored);
+                    }
                     trace.push(json!({
                         "step": idx + 1,
                         "stepId": step_id.clone(),
@@ -3062,11 +4131,21 @@ async fn run_steps(
         }
     }
 
-    Ok(json!({
-        "ok": true,
-        "steps": steps.len(),
-        "trace": trace
-    }))
+    let mut output = if let Some(template) = output_template {
+        render_workflow_output(template, &vars, steps.len(), trace.clone())
+    } else {
+        json!({
+            "ok": true,
+            "steps": steps.len(),
+            "trace": trace
+        })
+    };
+
+    if let Some(obj) = output.as_object_mut() {
+        obj.entry("ok".to_string()).or_insert_with(|| json!(true));
+    }
+
+    Ok(output)
 }
 
 async fn capture_failure_artifacts(state: &AppState) -> Result<Value> {
@@ -3100,6 +4179,60 @@ async fn capture_failure_artifacts(state: &AppState) -> Result<Value> {
     Ok(Value::Object(out))
 }
 
+async fn util_rank_by_name(arguments: &Value) -> Result<Value> {
+    let items = arguments
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("items must be an array"))?;
+    let field = arguments
+        .get("field")
+        .and_then(Value::as_str)
+        .unwrap_or("name");
+    let target = required_str(arguments, "target")?;
+    let want = normalize_match_key(target);
+
+    let mut rank: Option<usize> = None;
+    for (idx, item) in items.iter().enumerate() {
+        let Some(value) = item.get(field).and_then(Value::as_str) else {
+            continue;
+        };
+        let candidate = normalize_match_key(value);
+        if candidate == want {
+            rank = Some(idx + 1);
+            break;
+        }
+    }
+    if rank.is_none() && !want.is_empty() {
+        for (idx, item) in items.iter().enumerate() {
+            let Some(value) = item.get(field).and_then(Value::as_str) else {
+                continue;
+            };
+            let candidate = normalize_match_key(value);
+            if candidate.contains(&want) || want.contains(&candidate) {
+                rank = Some(idx + 1);
+                break;
+            }
+        }
+    }
+
+    Ok(tool_success(
+        json!({ "ok": true, "rank": rank }),
+        "rank computed",
+    ))
+}
+
+async fn util_list_length(arguments: &Value) -> Result<Value> {
+    let list = arguments
+        .get("list")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("list must be an array"))?;
+
+    Ok(tool_success(
+        json!({ "ok": true, "count": list.len() }),
+        "length computed",
+    ))
+}
+
 fn substitute_vars(value: Value, vars: &Value) -> Value {
     match value {
         Value::String(s) => {
@@ -3118,6 +4251,58 @@ fn substitute_vars(value: Value, vars: &Value) -> Value {
             Value::Object(out)
         }
         other => other,
+    }
+}
+
+fn ensure_workflow_steps_var(vars: &mut Value) {
+    let Some(map) = vars.as_object_mut() else {
+        *vars = json!({ "steps": {} });
+        return;
+    };
+    match map.get_mut("steps") {
+        Some(Value::Object(_)) => {}
+        _ => {
+            map.insert("steps".to_string(), json!({}));
+        }
+    }
+}
+
+fn step_save_as(step: &serde_json::Map<String, Value>) -> Option<String> {
+    step.get("saveAs")
+        .and_then(Value::as_str)
+        .or_else(|| step.get("save_as").and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+}
+
+fn store_step_output(vars: &mut Value, save_as: &str, value: Value) {
+    ensure_workflow_steps_var(vars);
+    if let Some(map) = vars.as_object_mut() {
+        if let Some(Value::Object(steps)) = map.get_mut("steps") {
+            steps.insert(save_as.to_string(), value);
+        }
+    }
+}
+
+fn render_workflow_output(
+    template: &Value,
+    vars: &Value,
+    step_count: usize,
+    trace: Vec<Value>,
+) -> Value {
+    let rendered = substitute_vars(template.clone(), vars);
+    match rendered {
+        Value::Object(mut obj) => {
+            obj.insert("steps".to_string(), json!(step_count));
+            obj.insert("trace".to_string(), json!(trace));
+            Value::Object(obj)
+        }
+        other => json!({
+            "output": other,
+            "steps": step_count,
+            "trace": trace
+        }),
     }
 }
 
@@ -3307,6 +4492,7 @@ mod tests {
             &[json!({"tool": "ios.web.goto", "requiresCommit": true, "arguments": {"url": "https://example.com"}})],
             false,
             &json!({}),
+            None,
         )
         .await
         .expect("result");
@@ -3332,6 +4518,7 @@ mod tests {
             &[json!({"tool": "ios.ui.source", "arguments": {}})],
             false,
             &json!({}),
+            None,
         )
         .await
         .expect("result");
