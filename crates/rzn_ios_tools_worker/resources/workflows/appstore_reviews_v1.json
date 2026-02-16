@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "appstore.reviews",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Open Ratings & Reviews for a search result and extract review rows (read-only).",
   "inputs": {
     "query": { "type": "string", "required": true },
@@ -127,7 +127,7 @@
     {
       "tool": "ios.action.tap",
       "arguments": {
-        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.searchResult')]//XCUIElementTypeButton[1]", "index": "{{result_index}}" }
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.searchResult')]", "index": "{{result_index}}" }
       }
     },
     {
@@ -154,7 +154,7 @@
       "tool": "ios.action.tap",
       "when": { "var": "steps.dismissFirst.found", "truthy": true },
       "arguments": {
-        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.searchResult')]//XCUIElementTypeButton[1]", "index": "{{result_index}}" }
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.searchResult')]", "index": "{{result_index}}" }
       }
     },
     {
