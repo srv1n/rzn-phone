@@ -1,0 +1,20 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "appstore.search_results",
+  "version": "1.0.0",
+  "description": "Submit an App Store search query, capture ordered result rows, and compute optional observed rank (read-only).",
+  "inputs": {
+    "query": { "type": "string", "required": true },
+    "target_app_name": { "type": "string" },
+    "limit": { "type": "integer", "default": 10, "min": 1, "max": 50 },
+    "maxScrolls": { "type": "integer", "default": 5, "min": 0, "max": 12 },
+    "typing_mode": { "type": "string", "default": "full" },
+    "country": { "type": "string" },
+    "locale": { "type": "string" }
+  },
+  "notes": [
+    "Read-only workflow: opens App Store Search and scrapes visible rows.",
+    "Includes compact snapshot + screenshot of the top fold for debugging.",
+    "Uses bounded scrolling for top-N extraction."
+  ]
+}

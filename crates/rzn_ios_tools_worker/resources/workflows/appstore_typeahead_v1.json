@@ -1,0 +1,19 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "appstore.typeahead",
+  "version": "1.0.0",
+  "description": "Open App Store Search, type a query, and capture ordered typeahead suggestions (read-only).",
+  "inputs": {
+    "query": { "type": "string", "required": true },
+    "prefixes": { "type": "array" },
+    "limit": { "type": "integer", "default": 10, "min": 1, "max": 20 },
+    "typing_mode": { "type": "string", "default": "full" },
+    "country": { "type": "string" },
+    "locale": { "type": "string" }
+  },
+  "notes": [
+    "Read-only workflow: no destructive actions.",
+    "Best-effort popup dismiss is built in.",
+    "Captures screenshot and full UI source for downstream artifact export."
+  ]
+}

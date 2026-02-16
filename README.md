@@ -4,6 +4,7 @@
 
 For the next-phase design (compact snapshots, encoded ids, deterministic runner, and workflow packs), see `docs/DEEP_DIVE.md`.
 Workflow format standardization is described in `docs/specs/rzn_mobile_workflow_v1.md`.
+App Store locator/output notes are documented in `docs/appstore_workflows.md`.
 
 ## What this repo contains
 
@@ -23,7 +24,7 @@ Workflow format standardization is described in `docs/specs/rzn_mobile_workflow_
 - Alerts: `ios.alert.text`, `ios.alert.wait`, `ios.alert.accept`, `ios.alert.dismiss`
 - Deterministic runner: `ios.script.run`
 - Safari primitives: `ios.web.goto`, `ios.web.wait_css`, `ios.web.click_css`, `ios.web.type_css`, `ios.web.press_key`, `ios.web.page_source`, `ios.web.screenshot`, `ios.web.eval_js`
-- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`)
+- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `appstore.typeahead`, `appstore.search_results`)
 - Reddit helpers: `ios.reddit.open_first_post`, `ios.reddit.extract_post`
 
 ## Safety notes
@@ -32,10 +33,12 @@ Workflow format standardization is described in `docs/specs/rzn_mobile_workflow_
 - Use host approval controls for `mcp:plugin.ios-tools.ios:*` when running in autonomous flows.
 - `ios.workflow.run` supports a `commit` argument for future destructive workflows; current MVP workflow is read-only.
 - `reddit.comment_first_post` requires `commit=true` to tap the submit button (`requiresCommit=true` step).
+- App Store workflows in this repo are read-only (no purchase/install/review actions).
 
 ## Prerequisites
 
 - macOS with Xcode installed and a trusted/unlocked iPhone connected
+- App Store signed in on device (for stable search/result rendering)
 - Xcode command line tools (`xcodebuild`, `xcrun`, `xctrace`)
 - Node.js available to the runtime environment
 - Rust toolchain (`cargo`, `rustup`)
@@ -183,6 +186,24 @@ Run workflow:
 
 ```bash
 ./scripts/ios_tools.sh workflow-smoke <udid> "best headphones 2026" 5
+```
+
+App Store typeahead + artifact export:
+
+```bash
+./scripts/ios_tools.sh appstore-typeahead <udid> "voice notes" --out /tmp/appstore-typeahead
+```
+
+App Store search results + rank spot-check:
+
+```bash
+./scripts/ios_tools.sh appstore-search-results <udid> "voice notes" --target-app-name "Voicenotes AI Notes & Meetings" --out /tmp/appstore-results
+```
+
+App Store smoke (asserts at least 1 suggestion + 1 result row):
+
+```bash
+./scripts/ios_tools.sh appstore-smoke <udid> "voice notes"
 ```
 
 Reddit (read-only):
