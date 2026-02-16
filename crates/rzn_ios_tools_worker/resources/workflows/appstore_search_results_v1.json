@@ -71,7 +71,19 @@
     {
       "tool": "ios.action.wait",
       "arguments": {
-        "target": { "using": "accessibility id", "value": "AppStore.searchResults" },
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCollectionView[@name='AppStore.searchHints']//XCUIElementTypeCell[1]" },
+        "timeoutMs": 10000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "xpath", "value": "//XCUIElementTypeCollectionView[@name='AppStore.searchHints']//XCUIElementTypeCell[1]" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.searchResult')]" },
         "timeoutMs": 30000
       },
       "retries": 1
@@ -89,8 +101,7 @@
       "arguments": {
         "row": {
           "type": "XCUIElementTypeCell",
-          "namePrefix": "AppStore.shelfItem.searchResult",
-          "ancestorName": "AppStore.searchResults"
+          "namePrefix": "AppStore.shelfItem.searchResult"
         },
         "primary": {
           "type": "XCUIElementTypeButton",
