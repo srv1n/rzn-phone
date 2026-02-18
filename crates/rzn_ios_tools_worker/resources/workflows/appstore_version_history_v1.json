@@ -188,7 +188,7 @@
       "arguments": {
         "row": {
           "type": "XCUIElementTypeCell",
-          "namePrefix": "AppStore.shelfItem.titledParagraph"
+          "ancestorName": "AppStore.versionHistory"
         },
         "primary": {
           "type": "XCUIElementTypeCell",
