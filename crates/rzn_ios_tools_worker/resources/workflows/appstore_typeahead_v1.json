@@ -29,6 +29,7 @@
         "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
         "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
         "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
         "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
         "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
         "signing": {
