@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "appstore.version_history",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Open an App Store app and extract version history rows (best-effort).",
   "inputs": {
     "query": { "type": "string", "required": true },
@@ -180,14 +180,6 @@
       "arguments": {
         "target": { "using": "-ios predicate string", "value": "name CONTAINS 'parentId=mostRecentVersion'" }
       }
-    },
-    {
-      "tool": "ios.action.wait",
-      "arguments": {
-        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.titledParagraph')]" },
-        "timeoutMs": 30000
-      },
-      "retries": 1
     },
     {
       "tool": "ios.ui.extract_rows",
