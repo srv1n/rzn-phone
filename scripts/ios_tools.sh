@@ -40,6 +40,8 @@ Commands:
                         Run reddit.comment_post. Default is dry-run draft (execute=0).
   reddit-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]
                         Run reddit.reply_to_comment. Default is dry-run draft (execute=0).
+  reddit-engage-seq <udid> <comment> [--reply <text>] [--out <dir>] [--execute-like 0|1] [--execute-comment 0|1] [--execute-reply 0|1] [--commit 0|1] [--post-index <n>]
+                        Run reddit open/like/comment/reply as a single operation reusing one iOS session.
   appstore-typeahead <udid> <query> [--out <dir>] [--limit <n>] [--typing-mode <full|char-by-char>] [--country <cc>] [--locale <locale>]
                         Run appstore.typeahead and write result.json + screenshot.png + ui_source.xml.
   appstore-search-results <udid> <query> [--out <dir>] [--limit <n>] [--target-app-name <name>] [--max-scrolls <n>] [--country <cc>] [--locale <locale>]
@@ -74,7 +76,21 @@ EOF
 
 worker_bin() {
   local bin="$ROOT/target/release/rzn_ios_tools_worker"
-  cargo build -p rzn_ios_tools_worker --release >/dev/null
+  local force_build="${IOS_TOOLS_FORCE_BUILD:-0}"
+  local skip_build="${IOS_TOOLS_SKIP_BUILD:-0}"
+
+  if [[ "$skip_build" == "1" ]]; then
+    if [[ ! -x "$bin" ]]; then
+      echo "missing worker binary at $bin (run scripts/ios_tools.sh build or unset IOS_TOOLS_SKIP_BUILD)" >&2
+      exit 1
+    fi
+    echo "$bin"
+    return 0
+  fi
+
+  if [[ "$force_build" == "1" || ! -x "$bin" ]]; then
+    cargo build -p rzn_ios_tools_worker --release >/dev/null
+  fi
   echo "$bin"
 }
 
@@ -1048,6 +1064,213 @@ JSON
     ensure_workflow_success "$RAW_OUT" "reddit-reply-comment failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "reddit reply_to_comment saved artifacts to: $OUT_DIR"
+    ;;
+  reddit-engage-seq)
+    UDID="${1:-}"
+    COMMENT_TEXT="${2:-}"
+    if [[ "$#" -ge 2 ]]; then
+      shift 2
+    else
+      shift "$#"
+    fi
+    REPLY_TEXT=""
+    EXECUTE_LIKE=0
+    EXECUTE_COMMENT=0
+    EXECUTE_REPLY=0
+    COMMIT=0
+    POST_INDEX=0
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --reply)
+          REPLY_TEXT="${2:-}"
+          shift 2
+          ;;
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute-like)
+          EXECUTE_LIKE="${2:-0}"
+          shift 2
+          ;;
+        --execute-comment)
+          EXECUTE_COMMENT="${2:-0}"
+          shift 2
+          ;;
+        --execute-reply)
+          EXECUTE_REPLY="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --post-index)
+          POST_INDEX="${2:-0}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for reddit-engage-seq: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" || -z "$COMMENT_TEXT" ]]; then
+      echo "usage: scripts/ios_tools.sh reddit-engage-seq <udid> <comment> [--reply <text>] [--out <dir>] [--execute-like 0|1] [--execute-comment 0|1] [--execute-reply 0|1] [--commit 0|1] [--post-index <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/reddit-engage-seq.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_LIKE_JSON="$(bool_json "$EXECUTE_LIKE")"
+    EXECUTE_COMMENT_JSON="$(bool_json "$EXECUTE_COMMENT")"
+    EXECUTE_REPLY_JSON="$(bool_json "$EXECUTE_REPLY")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+
+    SESSION_JSON="$(jq -nc \
+      --arg udid "$UDID" \
+      --argjson showXcodeLog "$SHOW_XCODE_LOG_JSON" \
+      --argjson allowProvisioningUpdates "$ALLOW_PROVISIONING_UPDATES_JSON" \
+      --argjson allowProvisioningDeviceRegistration "$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON" \
+      --argjson sessionCreateTimeoutMs "$IOS_SESSION_CREATE_TIMEOUT_MS" \
+      --argjson wdaLaunchTimeoutMs "$IOS_WDA_LAUNCH_TIMEOUT_MS" \
+      --argjson wdaConnectionTimeoutMs "$IOS_WDA_CONNECTION_TIMEOUT_MS" \
+      --argjson signing "$SIGNING_JSON" \
+      --argjson replaceExisting "false" \
+      --argjson reuseActiveSession "true" \
+      '{udid:$udid,showXcodeLog:$showXcodeLog,allowProvisioningUpdates:$allowProvisioningUpdates,allowProvisioningDeviceRegistration:$allowProvisioningDeviceRegistration,sessionCreateTimeoutMs:$sessionCreateTimeoutMs,wdaLaunchTimeoutMs:$wdaLaunchTimeoutMs,wdaConnectionTimeoutMs:$wdaConnectionTimeoutMs,signing:$signing,replaceExisting:$replaceExisting,reuseActiveSession:$reuseActiveSession}')"
+
+    OPEN_ARGS_JSON="$(jq -nc \
+      --argjson post_index "$POST_INDEX" \
+      --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_open_predicate "${REDDIT_POST_OPEN_PREDICATE:-}" \
+      --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
+      '{post_index:$post_index}
+       + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_open_predicate == "" then {} else {post_open_predicate:$post_open_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)')"
+    LIKE_ARGS_JSON="$(jq -nc \
+      --argjson execute_like "$EXECUTE_LIKE_JSON" \
+      --argjson post_index "$POST_INDEX" \
+      --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_open_predicate "${REDDIT_POST_OPEN_PREDICATE:-}" \
+      --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
+      --arg like_button_predicate "${REDDIT_LIKE_BUTTON_PREDICATE:-}" \
+      '{execute_like:$execute_like,post_index:$post_index}
+       + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_open_predicate == "" then {} else {post_open_predicate:$post_open_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
+       + (if $like_button_predicate == "" then {} else {like_button_predicate:$like_button_predicate} end)')"
+    COMMENT_ARGS_JSON="$(jq -nc \
+      --arg comment_text "$COMMENT_TEXT" \
+      --argjson execute_comment "$EXECUTE_COMMENT_JSON" \
+      --argjson post_index "$POST_INDEX" \
+      --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_open_predicate "${REDDIT_POST_OPEN_PREDICATE:-}" \
+      --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
+      --arg comment_field_predicate "${REDDIT_COMMENT_FIELD_PREDICATE:-}" \
+      --arg comment_submit_predicate "${REDDIT_COMMENT_SUBMIT_PREDICATE:-}" \
+      '{comment_text:$comment_text,execute_comment:$execute_comment,post_index:$post_index}
+       + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_open_predicate == "" then {} else {post_open_predicate:$post_open_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
+       + (if $comment_field_predicate == "" then {} else {comment_field_predicate:$comment_field_predicate} end)
+       + (if $comment_submit_predicate == "" then {} else {comment_submit_predicate:$comment_submit_predicate} end)')"
+    REPLY_ARGS_JSON="$(jq -nc \
+      --arg reply_text "$REPLY_TEXT" \
+      --argjson execute_reply "$EXECUTE_REPLY_JSON" \
+      --argjson post_index "$POST_INDEX" \
+      --argjson reply_index "0" \
+      --argjson max_comment_scrolls "2" \
+      --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_open_predicate "${REDDIT_POST_OPEN_PREDICATE:-}" \
+      --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
+      --arg reply_button_predicate "${REDDIT_REPLY_BUTTON_PREDICATE:-}" \
+      --arg reply_field_predicate "${REDDIT_REPLY_FIELD_PREDICATE:-}" \
+      --arg reply_submit_predicate "${REDDIT_REPLY_SUBMIT_PREDICATE:-}" \
+      '{reply_text:$reply_text,execute_reply:$execute_reply,post_index:$post_index,reply_index:$reply_index,max_comment_scrolls:$max_comment_scrolls}
+       + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_open_predicate == "" then {} else {post_open_predicate:$post_open_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
+       + (if $reply_button_predicate == "" then {} else {reply_button_predicate:$reply_button_predicate} end)
+       + (if $reply_field_predicate == "" then {} else {reply_field_predicate:$reply_field_predicate} end)
+       + (if $reply_submit_predicate == "" then {} else {reply_submit_predicate:$reply_submit_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    RUN_REPLY_JSON="false"
+    if [[ -n "$REPLY_TEXT" || "$EXECUTE_REPLY" == "1" ]]; then
+      RUN_REPLY_JSON="true"
+      if [[ -z "$REPLY_TEXT" ]]; then
+        REPLY_TEXT="$COMMENT_TEXT"
+        REPLY_ARGS_JSON="$(jq -nc \
+          --arg reply_text "$REPLY_TEXT" \
+          --argjson execute_reply "$EXECUTE_REPLY_JSON" \
+          --argjson post_index "$POST_INDEX" \
+          --argjson reply_index "0" \
+          --argjson max_comment_scrolls "2" \
+          --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+          --arg post_open_predicate "${REDDIT_POST_OPEN_PREDICATE:-}" \
+          --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
+          --arg reply_button_predicate "${REDDIT_REPLY_BUTTON_PREDICATE:-}" \
+          --arg reply_field_predicate "${REDDIT_REPLY_FIELD_PREDICATE:-}" \
+          --arg reply_submit_predicate "${REDDIT_REPLY_SUBMIT_PREDICATE:-}" \
+          '{reply_text:$reply_text,execute_reply:$execute_reply,post_index:$post_index,reply_index:$reply_index,max_comment_scrolls:$max_comment_scrolls}
+           + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+           + (if $post_open_predicate == "" then {} else {post_open_predicate:$post_open_predicate} end)
+           + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
+           + (if $reply_button_predicate == "" then {} else {reply_button_predicate:$reply_button_predicate} end)
+           + (if $reply_field_predicate == "" then {} else {reply_field_predicate:$reply_field_predicate} end)
+           + (if $reply_submit_predicate == "" then {} else {reply_submit_predicate:$reply_submit_predicate} end)')"
+      fi
+    fi
+
+    REQ_FILE="$OUT_DIR/.requests.jsonl"
+    cat <<JSON > "$REQ_FILE"
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+{"jsonrpc":"2.0","id":"wf-open","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.open_post","session":$SESSION_JSON,"args":$OPEN_ARGS_JSON,"commit":false,"closeOnFinish":false,"stopAppiumOnFinish":false}}}
+{"jsonrpc":"2.0","id":"wf-like","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.like_post","session":$SESSION_JSON,"args":$LIKE_ARGS_JSON,"commit":$COMMIT_JSON,"closeOnFinish":false,"stopAppiumOnFinish":false}}}
+{"jsonrpc":"2.0","id":"wf-comment","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.comment_post","session":$SESSION_JSON,"args":$COMMENT_ARGS_JSON,"commit":$COMMIT_JSON,"closeOnFinish":false,"stopAppiumOnFinish":false}}}
+JSON
+
+    RUN_IDS=(wf-open wf-like wf-comment)
+    if [[ "$RUN_REPLY_JSON" == "true" ]]; then
+      cat <<JSON >> "$REQ_FILE"
+{"jsonrpc":"2.0","id":"wf-reply","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.reply_to_comment","session":$SESSION_JSON,"args":$REPLY_ARGS_JSON,"commit":$COMMIT_JSON,"closeOnFinish":false,"stopAppiumOnFinish":false}}}
+JSON
+      RUN_IDS+=(wf-reply)
+    fi
+
+    cat <<JSON >> "$REQ_FILE"
+{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":{"stopAppium":$STOP_APPIUM_ON_EXIT_JSON}}}
+JSON
+
+    RZN_IOS_REUSE_ACTIVE_SESSION=1 "$BIN" < "$REQ_FILE" > "$RAW_OUT"
+
+    for rid in "${RUN_IDS[@]}"; do
+      if jq -e --arg rid "$rid" 'select(.id==$rid) | .result.isError == true' "$RAW_OUT" >/dev/null; then
+        jq -r --arg rid "$rid" 'select(.id==$rid) | .result.content[]?.text // empty' "$RAW_OUT" >&2
+        exit 1
+      fi
+      if jq -e --arg rid "$rid" 'select(.id==$rid) | .result.structuredContent.ok == false' "$RAW_OUT" >/dev/null; then
+        jq -r --arg rid "$rid" 'select(.id==$rid) | .result.structuredContent.error // empty' "$RAW_OUT" >&2
+        exit 1
+      fi
+      jq -c --arg rid "$rid" 'select(.id==$rid) | .result.structuredContent' "$RAW_OUT" | jq . > "$OUT_DIR/${rid}.json"
+    done
+
+    echo "reddit engage sequence complete (single session) artifacts: $OUT_DIR"
     ;;
   appstore-typeahead)
     UDID="${1:-}"

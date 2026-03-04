@@ -35,6 +35,14 @@ Interaction targeting (dry-run first):
 ./scripts/ios_tools.sh reddit-reply-comment <udid> "Good point." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/reddit-reply-dry
 ```
 
+Single-session operation (reduces repeated session bootstrap between actions):
+
+```bash
+IOS_TOOLS_SKIP_BUILD=1 \
+./scripts/ios_tools.sh reddit-engage-seq <udid> "Test dry-run comment" \
+  --execute-like 0 --execute-comment 0 --commit 0 --out /tmp/reddit-engage-seq
+```
+
 Each command writes `result.json` and best-effort screenshot/UI-source artifacts.
 Mutations execute only when both `--execute 1` and `--commit 1` are provided.
 

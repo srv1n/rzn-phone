@@ -1344,6 +1344,16 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
         bail!("unsupported session kind '{kind}'");
     }
 
+    let reuse_active_session = arguments
+        .get("reuseActiveSession")
+        .and_then(Value::as_bool)
+        .or_else(|| {
+            std::env::var("RZN_IOS_REUSE_ACTIVE_SESSION")
+                .ok()
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        })
+        .unwrap_or(false);
+
     let replace_existing = arguments
         .get("replaceExisting")
         .and_then(Value::as_bool)
@@ -1359,6 +1369,23 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
     .await?;
 
     let driver = WebDriverClient::new(&ensure_result.base_url)?;
+
+    if reuse_active_session {
+        if let Some(existing) = state.active_session().await {
+            if existing.udid == udid && existing.kind == kind {
+                return Ok(tool_success(
+                    json!({
+                        "ok": true,
+                        "sessionId": existing.session_id,
+                        "kind": existing.kind,
+                        "appiumBaseUrl": ensure_result.base_url,
+                        "reused": true
+                    }),
+                    "session reused",
+                ));
+            }
+        }
+    }
 
     if replace_existing {
         if let Some(existing) = state.active_session().await {

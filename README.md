@@ -93,6 +93,12 @@ Unified local CLI:
 ./scripts/ios_tools.sh devices
 ```
 
+Binary build behavior:
+
+- Default: reuse existing `target/release/rzn_ios_tools_worker`; build only if missing.
+- `IOS_TOOLS_FORCE_BUILD=1`: force rebuild before command.
+- `IOS_TOOLS_SKIP_BUILD=1`: never build (fails if binary is missing).
+
 ## Smoke test (stdin/stdout MCP)
 
 ```bash
@@ -232,6 +238,14 @@ Reddit interaction flows (LM-safe dry-run first):
 ./scripts/ios_tools.sh reddit-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-like-dry
 ./scripts/ios_tools.sh reddit-comment-post <udid> "Thanks for sharing this." --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-comment-dry
 ./scripts/ios_tools.sh reddit-reply-comment <udid> "Great callout." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/reddit-reply-dry
+```
+
+Single-session Reddit operation (open + like + comment + optional reply in one worker run):
+
+```bash
+IOS_TOOLS_SKIP_BUILD=1 \
+./scripts/ios_tools.sh reddit-engage-seq <udid> "Draft comment text" \
+  --execute-like 0 --execute-comment 0 --commit 0 --out /tmp/reddit-engage-seq
 ```
 
 LinkedIn read/create/update/delete:
