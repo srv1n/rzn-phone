@@ -1,0 +1,87 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "reddit.daily_scroll_digest",
+  "version": "1.0.0",
+  "description": "Scroll Reddit Home feed, collect post cards, and return artifacts for daily digest generation (read-only).",
+  "inputs": {
+    "max_posts": { "type": "integer", "default": 30, "min": 1, "max": 90 },
+    "max_scrolls": { "type": "integer", "default": 8, "min": 0, "max": 25 },
+    "min_dwell_ms": { "type": "integer", "default": 650, "min": 0, "max": 60000 },
+    "max_dwell_ms": { "type": "integer", "default": 1800, "min": 0, "max": 60000 },
+    "maxNodes": { "type": "integer", "default": 260, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Read-only workflow for daily feed sweeps.",
+    "Rows contain raw Reddit post card labels; parsing into thread-ready fields is handled by scripts/ios_tools.sh.",
+    "Pacing uses util.sleep with bounded jitter to avoid fixed interaction cadence."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.reddit.Reddit",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "reddit_feed__post__post_cell" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "util.sleep",
+      "arguments": {
+        "minMs": "{{min_dwell_ms}}",
+        "maxMs": "{{max_dwell_ms}}"
+      }
+    },
+    {
+      "tool": "ios.ui.extract_rows",
+      "saveAs": "feedRows",
+      "arguments": {
+        "row": {
+          "type": "XCUIElementTypeCell",
+          "namePrefix": "reddit_feed__post__post_cell"
+        },
+        "primary": {
+          "type": "XCUIElementTypeCell",
+          "attr": "label",
+          "pick": "first"
+        },
+        "limit": "{{max_posts}}",
+        "maxScrolls": "{{max_scrolls}}",
+        "scroll": { "direction": "down", "distance": 0.62, "settleMs": 450 }
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "screenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "uiSource" },
+    { "tool": "ios.ui.observe_compact", "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" }, "saveAs": "compactSnapshot" }
+  ],
+  "output": {
+    "rows": "{{steps.feedRows.rows}}",
+    "rowCount": "{{steps.feedRows.rowCount}}",
+    "scrolls": "{{steps.feedRows.scrolls}}",
+    "screenshot": "{{steps.screenshot}}",
+    "uiSource": "{{steps.uiSource}}",
+    "compactSnapshot": "{{steps.compactSnapshot}}"
+  }
+}

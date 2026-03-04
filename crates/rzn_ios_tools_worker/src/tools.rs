@@ -804,6 +804,18 @@ pub fn list_tool_definitions() -> Vec<Value> {
             }),
         ),
         tool(
+            "util.sleep",
+            "Sleep for a bounded random duration (milliseconds). Useful for human-like dwell windows.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "minMs": { "type": "integer", "minimum": 0, "maximum": 600000, "default": 400 },
+                    "maxMs": { "type": "integer", "minimum": 0, "maximum": 600000, "default": 900 }
+                },
+                "additionalProperties": false
+            }),
+        ),
+        tool(
             "util.date.bucket_counts",
             "Parse date-like strings and compute counts within day windows (generic helper).",
             json!({
@@ -905,6 +917,7 @@ pub async fn handle_tool_call(
         "util.list.length" => util_list_length(&arguments).await,
         "util.list.first" => util_list_first(&arguments).await,
         "util.list.nth" => util_list_nth(&arguments).await,
+        "util.sleep" => util_sleep(&arguments).await,
         "util.date.bucket_counts" => util_date_bucket_counts(&arguments).await,
         _ => bail!("unknown tool '{tool_name}'"),
     }
@@ -4344,6 +4357,50 @@ async fn util_list_nth(arguments: &Value) -> Result<Value> {
     ))
 }
 
+async fn util_sleep(arguments: &Value) -> Result<Value> {
+    let min_ms = arguments
+        .get("minMs")
+        .and_then(Value::as_u64)
+        .unwrap_or(400)
+        .min(600_000);
+    let max_ms = arguments
+        .get("maxMs")
+        .and_then(Value::as_u64)
+        .unwrap_or(900)
+        .min(600_000);
+
+    if max_ms < min_ms {
+        bail!("maxMs must be >= minMs");
+    }
+
+    let spread = max_ms - min_ms;
+    let jitter = if spread == 0 {
+        0
+    } else {
+        let now_nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_secs(0))
+            .as_nanos() as u64;
+        let seed = now_nanos
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(u64::from(std::process::id()));
+        seed % (spread + 1)
+    };
+    let slept_ms = min_ms + jitter;
+
+    tokio::time::sleep(Duration::from_millis(slept_ms)).await;
+
+    Ok(tool_success(
+        json!({
+            "ok": true,
+            "minMs": min_ms,
+            "maxMs": max_ms,
+            "sleptMs": slept_ms
+        }),
+        "sleep complete",
+    ))
+}
+
 async fn util_date_bucket_counts(arguments: &Value) -> Result<Value> {
     let items = arguments
         .get("items")
@@ -4905,5 +4962,18 @@ mod tests {
         assert!(!trace.is_empty());
         let last = trace.last().unwrap();
         assert_eq!(last.get("errorCode").and_then(Value::as_str), Some("NO_SESSION"));
+    }
+
+    #[tokio::test]
+    async fn util_sleep_zero_window_returns_zero() {
+        let result = util_sleep(&json!({"minMs": 0, "maxMs": 0}))
+            .await
+            .expect("sleep result");
+        let structured = result
+            .get("structuredContent")
+            .cloned()
+            .unwrap_or_else(|| json!({}));
+        assert_eq!(structured.get("ok").and_then(Value::as_bool), Some(true));
+        assert_eq!(structured.get("sleptMs").and_then(Value::as_u64), Some(0));
     }
 }

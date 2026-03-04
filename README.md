@@ -4,8 +4,10 @@
 
 For the next-phase design (compact snapshots, encoded ids, deterministic runner, and workflow packs), see `docs/DEEP_DIVE.md`.
 Workflow format standardization is described in `docs/specs/rzn_mobile_workflow_v1.md`.
+Social card standardization is described in `docs/specs/rzn_social_card_v1.md`.
 App Store locator/output notes are documented in `docs/appstore_workflows.md`.
 LinkedIn workflow notes are documented in `docs/linkedin_workflows.md`.
+Reddit workflow notes are documented in `docs/reddit_workflows.md`.
 
 ## What this repo contains
 
@@ -24,17 +26,19 @@ LinkedIn workflow notes are documented in `docs/linkedin_workflows.md`.
 - Element getters (read-only): `ios.element.text`, `ios.element.attribute`, `ios.element.rect`
 - Alerts: `ios.alert.text`, `ios.alert.wait`, `ios.alert.accept`, `ios.alert.dismiss`
 - Deterministic runner: `ios.script.run`
+- Utilities: `util.list.length`, `util.list.first`, `util.list.nth`, `util.rank_by_name`, `util.date.bucket_counts`, `util.sleep`
 - Safari primitives: `ios.web.goto`, `ios.web.wait_css`, `ios.web.click_css`, `ios.web.type_css`, `ios.web.press_key`, `ios.web.page_source`, `ios.web.screenshot`, `ios.web.eval_js`
-- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `linkedin.read_feed`, `linkedin.open_post`, `linkedin.daily_scroll_digest`, `linkedin.like_post`, `linkedin.comment_post`, `linkedin.reply_to_comment`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
+- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `reddit.open_post`, `reddit.daily_scroll_digest`, `reddit.like_post`, `reddit.comment_post`, `reddit.reply_to_comment`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `linkedin.read_feed`, `linkedin.open_post`, `linkedin.daily_scroll_digest`, `linkedin.like_post`, `linkedin.comment_post`, `linkedin.reply_to_comment`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
 
 ## Safety notes
 
 - `ios.web.eval_js` is intentionally exposed and high-risk. It can mutate page state.
 - Use host approval controls for `mcp:plugin.ios-tools.ios:*` when running in autonomous flows.
-- `ios.workflow.run` supports a `commit` argument for future destructive workflows; current MVP workflow is read-only.
-- `reddit.comment_first_post` requires `commit=true` to tap the submit button (`requiresCommit=true` step).
+- `ios.workflow.run` supports `commit`; mutating workflows enforce `requiresCommit` at step level.
+- Reddit and LinkedIn engagement workflows use a dual gate: action arg (`execute_*`/`submit`) plus `commit=true`.
 - App Store workflows in this repo are read-only (no purchase/install/review actions).
 - LinkedIn write/delete/interaction workflows use `requiresCommit` on mutating taps; run dry with `--commit 0` first.
+- Reddit write/interaction workflows use `requiresCommit` on mutating taps; run dry with `--commit 0` first.
 
 ## Prerequisites
 
@@ -220,6 +224,16 @@ Reddit (comment submit requires commit=1):
 ./scripts/ios_tools.sh reddit-comment-smoke <udid> "Nice post — thanks for sharing." 1  # commit
 ```
 
+Reddit interaction flows (LM-safe dry-run first):
+
+```bash
+./scripts/ios_tools.sh reddit-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/reddit-daily
+./scripts/ios_tools.sh reddit-open-post <udid> --post-index 0 --out /tmp/reddit-open
+./scripts/ios_tools.sh reddit-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-like-dry
+./scripts/ios_tools.sh reddit-comment-post <udid> "Thanks for sharing this." --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-comment-dry
+./scripts/ios_tools.sh reddit-reply-comment <udid> "Great callout." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/reddit-reply-dry
+```
+
 LinkedIn read/create/update/delete:
 
 ```bash
@@ -242,6 +256,15 @@ LinkedIn daily scroll digest (thread-ready output):
 
 ```bash
 ./scripts/ios_tools.sh linkedin-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/linkedin-daily
+```
+
+Card-based social workflows (catalog-backed):
+
+```bash
+./scripts/ios_tools.sh social-card-list
+./scripts/ios_tools.sh social-card-list --app linkedin
+./scripts/ios_tools.sh social-card-run linkedin.daily_scroll <udid> --set max_posts=20
+./scripts/ios_tools.sh social-card-run reddit.comment_post <udid> --text "Nice breakdown." --execute 0 --commit 0
 ```
 
 With explicit WDA signing + xcodebuild logs:

@@ -1,0 +1,73 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "reddit.open_post",
+  "version": "1.0.0",
+  "description": "Open a Reddit feed post by index for read-only inspection.",
+  "inputs": {
+    "post_index": { "type": "integer", "default": 0, "min": 0, "max": 40 },
+    "post_cell_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__post_cell' OR label CONTAINS 'reddit_feed__post__post_cell'" },
+    "post_ready_predicate": { "type": "string", "default": "name CONTAINS 'reddit__comment_composer__comment_text_view' OR label CONTAINS 'Comment'" },
+    "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Read-only workflow.",
+    "Use this as a deterministic targeting step before mutating engagement actions."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.reddit.Reddit",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_cell_predicate}}" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 450, "maxMs": 1250 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_cell_predicate}}", "index": "{{post_index}}" }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_ready_predicate}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 700, "maxMs": 1800 } },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "postScreenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "postUiSource" },
+    { "tool": "ios.ui.observe_compact", "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" }, "saveAs": "postCompactSnapshot" }
+  ],
+  "output": {
+    "postScreenshot": "{{steps.postScreenshot}}",
+    "postUiSource": "{{steps.postUiSource}}",
+    "postCompactSnapshot": "{{steps.postCompactSnapshot}}"
+  }
+}

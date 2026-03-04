@@ -30,6 +30,16 @@ Commands:
                         Run reddit.read_first_post workflow (read-only) and return compact snapshot.
   reddit-comment-smoke <udid> <commentText> [commit=0|1]
                         Run reddit.comment_first_post workflow. commit must be 1 to actually submit.
+  reddit-daily-scroll <udid> [--out <dir>] [--max-posts <n>] [--max-scrolls <n>] [--min-engagement-score <n>]
+                        Run reddit.daily_scroll_digest and emit digest.json + thread.md from structured feed rows.
+  reddit-open-post <udid> [--out <dir>] [--post-index <n>]
+                        Run reddit.open_post for deterministic post targeting (read-only).
+  reddit-like-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>]
+                        Run reddit.like_post. Default is dry-run (execute=0).
+  reddit-comment-post <udid> <comment> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>]
+                        Run reddit.comment_post. Default is dry-run draft (execute=0).
+  reddit-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]
+                        Run reddit.reply_to_comment. Default is dry-run draft (execute=0).
   appstore-typeahead <udid> <query> [--out <dir>] [--limit <n>] [--typing-mode <full|char-by-char>] [--country <cc>] [--locale <locale>]
                         Run appstore.typeahead and write result.json + screenshot.png + ui_source.xml.
   appstore-search-results <udid> <query> [--out <dir>] [--limit <n>] [--target-app-name <name>] [--max-scrolls <n>] [--country <cc>] [--locale <locale>]
@@ -55,6 +65,10 @@ Commands:
                         Run linkedin.delete_latest_post. Default is dry-run delete preparation (execute=0).
   linkedin-daily-scroll <udid> [--out <dir>] [--max-posts <n>] [--max-scrolls <n>] [--min-engagement-score <n>]
                         Run linkedin.daily_scroll_digest and emit digest.json + thread.md from structured feed rows.
+  social-card-list [--app <name>] [--json]
+                        List card-based workflows from cards/social catalogs.
+  social-card-run <card-id> <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--text <value>] [--set key=value ...]
+                        Run a card workflow by id from cards/social catalogs.
 EOF
 }
 
@@ -306,6 +320,141 @@ build_linkedin_digest() {
   ' "$digest_json" > "$thread_md"
 }
 
+build_reddit_digest() {
+  local raw_out="$1"
+  local out_dir="$2"
+  local min_score="$3"
+
+  local digest_json="$out_dir/digest.json"
+  local thread_md="$out_dir/thread.md"
+
+  jq --argjson minScore "$min_score" '
+    def trim: gsub("^\\s+|\\s+$"; "");
+    def to_int:
+      if . == null then 0
+      else (tostring | gsub(","; "") | tonumber? // 0)
+      end;
+    def lines_from($raw):
+      ($raw | tostring | split("\n") | map(trim) | map(select(length > 0)));
+    def first_match($lines; $re):
+      ($lines | map(select(test($re; "i"))) | first // "");
+    def clean_lines($lines):
+      (
+        $lines
+        | map(select(test("^(join|share|save|award)$"; "i") | not))
+        | map(select(test("^(promoted|ad)$"; "i") | not))
+      );
+    def author_from($lines):
+      (
+        first_match($lines; "(u/|r/)")
+        | if . == "" then ($lines[0] // "") else . end
+      );
+    def title_from($lines):
+      (
+        $lines
+        | map(select(test("u/|r/|\\b(upvotes?|comments?|shares?)\\b"; "i") | not))
+        | .[0] // ""
+      );
+    def body_from($lines; $title):
+      (
+        $lines
+        | map(select(. != $title))
+        | map(select(test("\\b(upvotes?|comments?|shares?)\\b"; "i") | not))
+        | join("\n")
+      );
+    def engagement_line($lines):
+      first_match($lines; "(upvotes?|comments?|shares?)");
+    def post_from_row:
+      . as $row
+      | ($row.rawLabel // "") as $raw
+      | lines_from($raw) as $lines_raw
+      | clean_lines($lines_raw) as $lines
+      | author_from($lines) as $author
+      | title_from($lines) as $title
+      | body_from($lines; $title) as $body
+      | engagement_line($lines) as $eng
+      | (($eng | capture("(?<n>[0-9][0-9,]*)\\s+upvotes?"; "i").n?) | to_int) as $upvotes
+      | (($eng | capture("(?<n>[0-9][0-9,]*)\\s+comments?"; "i").n?) | to_int) as $comments
+      | (($eng | capture("(?<n>[0-9][0-9,]*)\\s+shares?"; "i").n?) | to_int) as $shares
+      | {
+          position: ($row.position // 0),
+          author: $author,
+          title: $title,
+          body: $body,
+          engagement: {
+            upvotes: $upvotes,
+            comments: $comments,
+            shares: $shares,
+            score: ($upvotes + ($comments * 2) + ($shares * 2)),
+            raw: $eng
+          },
+          rawLabel: $raw
+        };
+
+    select(.id == "wf-1")
+    | .result.structuredContent
+    | {
+        generatedAt: (now | todateiso8601),
+        workflow: "reddit.daily_scroll_digest",
+        scannedPosts: (.rowCount // ((.rows // []) | length)),
+        scrolls: (.scrolls // 0),
+        thresholdScore: $minScore,
+        posts: ((.rows // []) | map(post_from_row))
+      }
+    | .engagingPosts = (.posts | map(select(.engagement.score >= $minScore)) | sort_by(.engagement.score) | reverse)
+  ' "$raw_out" > "$digest_json"
+
+  jq -r '
+    "# Reddit Daily Scroll Digest\n\n"
+    + "Generated: \(.generatedAt)\n"
+    + "Scanned posts: \(.scannedPosts)\n"
+    + "Scrolls: \(.scrolls)\n"
+    + "Threshold score: \(.thresholdScore)\n\n"
+    + "## Engaging Posts\n\n"
+    + (
+        if (.engagingPosts | length) == 0 then
+          "No posts met the engagement threshold.\n"
+        else
+          (
+            .engagingPosts
+            | to_entries
+            | map(
+                "### \(.key + 1). \((.value.author // \"\") | if . == \"\" then \"(unknown)\" else . end)\n"
+                + "Score: \(.value.engagement.score) | Upvotes: \(.value.engagement.upvotes) | Comments: \(.value.engagement.comments) | Shares: \(.value.engagement.shares)\n"
+                + "Title: \((.value.title // \"\") | if . == \"\" then \"(none)\" else . end)\n"
+                + "Body:\n\((.value.body // \"\") | if . == \"\" then \"(none)\" else . end)\n"
+              )
+            | join("\n")
+          )
+        end
+      )
+  ' "$digest_json" > "$thread_md"
+}
+
+social_cards_json() {
+  local app_filter="${1:-}"
+  local cards_glob=("$ROOT"/cards/social/*.json)
+  if [[ ! -e "${cards_glob[0]}" ]]; then
+    echo "[]"
+    return 0
+  fi
+
+  jq -sc --arg app "$app_filter" '
+    [ .[] | (.cards // [])[] | select($app == "" or .app == $app) ]
+    | sort_by(.app, .id)
+  ' "${cards_glob[@]}"
+}
+
+merge_arg_override() {
+  local args_json="$1"
+  local key="$2"
+  local raw="$3"
+  local parsed
+  parsed="$(jq -cn --arg raw "$raw" '$raw | (fromjson? // .)')"
+  jq -cn --argjson base "$args_json" --arg key "$key" --argjson value "$parsed" \
+    '$base + {($key): $value}'
+}
+
 cmd="${1:-help}"
 shift || true
 
@@ -508,6 +657,385 @@ JSON
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.comment_first_post","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{"commentText":"$COMMENT_TEXT"},"commit":$COMMIT_JSON}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":{"stopAppium":$STOP_APPIUM_ON_EXIT_JSON}}}
 JSON
+    ;;
+  reddit-daily-scroll)
+    UDID="${1:-}"
+    if [[ "$#" -ge 1 ]]; then
+      shift 1
+    else
+      shift "$#"
+    fi
+    MAX_POSTS=30
+    MAX_SCROLLS=8
+    MIN_ENGAGEMENT_SCORE=20
+    MIN_DWELL_MS=650
+    MAX_DWELL_MS=1800
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --max-posts)
+          MAX_POSTS="${2:-30}"
+          shift 2
+          ;;
+        --max-scrolls)
+          MAX_SCROLLS="${2:-8}"
+          shift 2
+          ;;
+        --min-engagement-score)
+          MIN_ENGAGEMENT_SCORE="${2:-20}"
+          shift 2
+          ;;
+        --min-dwell-ms)
+          MIN_DWELL_MS="${2:-650}"
+          shift 2
+          ;;
+        --max-dwell-ms)
+          MAX_DWELL_MS="${2:-1800}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for reddit-daily-scroll: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh reddit-daily-scroll <udid> [--out <dir>] [--max-posts <n>] [--max-scrolls <n>] [--min-engagement-score <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/reddit-daily-scroll.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --argjson max_posts "$MAX_POSTS" \
+      --argjson max_scrolls "$MAX_SCROLLS" \
+      --argjson min_dwell_ms "$MIN_DWELL_MS" \
+      --argjson max_dwell_ms "$MAX_DWELL_MS" \
+      '{max_posts:$max_posts,max_scrolls:$max_scrolls,min_dwell_ms:$min_dwell_ms,max_dwell_ms:$max_dwell_ms}')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "reddit.daily_scroll_digest" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "reddit-daily-scroll failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    build_reddit_digest "$RAW_OUT" "$OUT_DIR" "$MIN_ENGAGEMENT_SCORE"
+    echo "reddit daily_scroll_digest saved artifacts to: $OUT_DIR"
+    ;;
+  reddit-open-post)
+    UDID="${1:-}"
+    if [[ "$#" -ge 1 ]]; then
+      shift 1
+    else
+      shift "$#"
+    fi
+    POST_INDEX=0
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --post-index)
+          POST_INDEX="${2:-0}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for reddit-open-post: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh reddit-open-post <udid> [--out <dir>] [--post-index <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/reddit-open-post.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --argjson post_index "$POST_INDEX" \
+      --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
+      '{post_index:$post_index}
+       + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "reddit.open_post" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "reddit-open-post failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "reddit open_post saved artifacts to: $OUT_DIR"
+    ;;
+  reddit-like-post)
+    UDID="${1:-}"
+    if [[ "$#" -ge 1 ]]; then
+      shift 1
+    else
+      shift "$#"
+    fi
+    EXECUTE=0
+    COMMIT=0
+    POST_INDEX=0
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --post-index)
+          POST_INDEX="${2:-0}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for reddit-like-post: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh reddit-like-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/reddit-like-post.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_JSON="$(bool_json "$EXECUTE")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --argjson execute_like "$EXECUTE_JSON" \
+      --argjson post_index "$POST_INDEX" \
+      --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
+      --arg like_button_predicate "${REDDIT_LIKE_BUTTON_PREDICATE:-}" \
+      '{execute_like:$execute_like,post_index:$post_index}
+       + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
+       + (if $like_button_predicate == "" then {} else {like_button_predicate:$like_button_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "reddit.like_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "reddit-like-post failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "reddit like_post saved artifacts to: $OUT_DIR"
+    ;;
+  reddit-comment-post)
+    UDID="${1:-}"
+    COMMENT_TEXT="${2:-}"
+    if [[ "$#" -ge 2 ]]; then
+      shift 2
+    else
+      shift "$#"
+    fi
+    EXECUTE=0
+    COMMIT=0
+    POST_INDEX=0
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --post-index)
+          POST_INDEX="${2:-0}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for reddit-comment-post: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" || -z "$COMMENT_TEXT" ]]; then
+      echo "usage: scripts/ios_tools.sh reddit-comment-post <udid> <comment> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/reddit-comment-post.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_JSON="$(bool_json "$EXECUTE")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --arg comment_text "$COMMENT_TEXT" \
+      --argjson execute_comment "$EXECUTE_JSON" \
+      --argjson post_index "$POST_INDEX" \
+      --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
+      --arg comment_field_predicate "${REDDIT_COMMENT_FIELD_PREDICATE:-}" \
+      --arg comment_submit_predicate "${REDDIT_COMMENT_SUBMIT_PREDICATE:-}" \
+      '{comment_text:$comment_text,execute_comment:$execute_comment,post_index:$post_index}
+       + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
+       + (if $comment_field_predicate == "" then {} else {comment_field_predicate:$comment_field_predicate} end)
+       + (if $comment_submit_predicate == "" then {} else {comment_submit_predicate:$comment_submit_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "reddit.comment_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "reddit-comment-post failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "reddit comment_post saved artifacts to: $OUT_DIR"
+    ;;
+  reddit-reply-comment)
+    UDID="${1:-}"
+    REPLY_TEXT="${2:-}"
+    if [[ "$#" -ge 2 ]]; then
+      shift 2
+    else
+      shift "$#"
+    fi
+    EXECUTE=0
+    COMMIT=0
+    POST_INDEX=0
+    REPLY_INDEX=0
+    MAX_COMMENT_SCROLLS=6
+    TARGET_COMMENT_CONTAINS=""
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --post-index)
+          POST_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --reply-index)
+          REPLY_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --max-comment-scrolls)
+          MAX_COMMENT_SCROLLS="${2:-6}"
+          shift 2
+          ;;
+        --target-comment-contains)
+          TARGET_COMMENT_CONTAINS="${2:-}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for reddit-reply-comment: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" || -z "$REPLY_TEXT" ]]; then
+      echo "usage: scripts/ios_tools.sh reddit-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/reddit-reply-comment.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_JSON="$(bool_json "$EXECUTE")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --arg reply_text "$REPLY_TEXT" \
+      --argjson execute_reply "$EXECUTE_JSON" \
+      --argjson post_index "$POST_INDEX" \
+      --argjson reply_index "$REPLY_INDEX" \
+      --argjson max_comment_scrolls "$MAX_COMMENT_SCROLLS" \
+      --arg target_comment_contains "$TARGET_COMMENT_CONTAINS" \
+      --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
+      --arg reply_button_predicate "${REDDIT_REPLY_BUTTON_PREDICATE:-}" \
+      --arg reply_field_predicate "${REDDIT_REPLY_FIELD_PREDICATE:-}" \
+      --arg reply_submit_predicate "${REDDIT_REPLY_SUBMIT_PREDICATE:-}" \
+      '{reply_text:$reply_text,execute_reply:$execute_reply,post_index:$post_index,reply_index:$reply_index,max_comment_scrolls:$max_comment_scrolls}
+       + (if $target_comment_contains == "" then {} else {target_comment_contains:$target_comment_contains} end)
+       + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
+       + (if $reply_button_predicate == "" then {} else {reply_button_predicate:$reply_button_predicate} end)
+       + (if $reply_field_predicate == "" then {} else {reply_field_predicate:$reply_field_predicate} end)
+       + (if $reply_submit_predicate == "" then {} else {reply_submit_predicate:$reply_submit_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "reddit.reply_to_comment" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "reddit-reply-comment failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "reddit reply_to_comment saved artifacts to: $OUT_DIR"
     ;;
   appstore-typeahead)
     UDID="${1:-}"
@@ -1439,6 +1967,176 @@ JSON
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     build_linkedin_digest "$RAW_OUT" "$OUT_DIR" "$MIN_ENGAGEMENT_SCORE"
     echo "linkedin daily scroll digest saved artifacts to: $OUT_DIR"
+    ;;
+  social-card-list)
+    APP_FILTER=""
+    OUTPUT_JSON=0
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --app)
+          APP_FILTER="${2:-}"
+          shift 2
+          ;;
+        --json)
+          OUTPUT_JSON=1
+          shift 1
+          ;;
+        *)
+          echo "unknown option for social-card-list: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+
+    CARDS_JSON="$(social_cards_json "$APP_FILTER")"
+    if [[ "$OUTPUT_JSON" == "1" ]]; then
+      jq . <<<"$CARDS_JSON"
+      exit 0
+    fi
+
+    if [[ "$(jq 'length' <<<"$CARDS_JSON")" -eq 0 ]]; then
+      echo "no social cards found"
+      exit 0
+    fi
+
+    printf '%-28s %-10s %-10s %-32s %s\n' "card_id" "app" "mode" "workflow" "mutating"
+    jq -r '.[] | "\(.id)\t\(.app)\t\(.mode)\t\(.workflow)\t\(.mutating)"' <<<"$CARDS_JSON" \
+      | while IFS=$'\t' read -r cid app mode wf mutating; do
+          printf '%-28s %-10s %-10s %-32s %s\n' "$cid" "$app" "$mode" "$wf" "$mutating"
+        done
+    ;;
+  social-card-run)
+    CARD_ID="${1:-}"
+    UDID="${2:-}"
+    if [[ "$#" -ge 2 ]]; then
+      shift 2
+    else
+      shift "$#"
+    fi
+    if [[ -z "$CARD_ID" || -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh social-card-run <card-id> <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--text <value>] [--set key=value ...]" >&2
+      exit 1
+    fi
+
+    OUT_DIR=""
+    EXECUTE_SET=0
+    EXECUTE_VALUE=0
+    COMMIT=0
+    TEXT_VALUE=""
+    SET_OVERRIDES=()
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE_SET=1
+          EXECUTE_VALUE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --text)
+          TEXT_VALUE="${2:-}"
+          shift 2
+          ;;
+        --set)
+          SET_OVERRIDES+=("${2:-}")
+          shift 2
+          ;;
+        *)
+          echo "unknown option for social-card-run: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+
+    CARDS_JSON="$(social_cards_json "")"
+    CARD_JSON="$(jq -c --arg id "$CARD_ID" '[ .[] | select(.id == $id) ][0]' <<<"$CARDS_JSON")"
+    if [[ "$CARD_JSON" == "null" || -z "$CARD_JSON" ]]; then
+      echo "unknown card id: $CARD_ID" >&2
+      exit 1
+    fi
+
+    WORKFLOW_NAME="$(jq -r '.workflow // empty' <<<"$CARD_JSON")"
+    EXECUTE_ARG="$(jq -r '.executeArg // empty' <<<"$CARD_JSON")"
+    TEXT_ARG="$(jq -r '.textArg // empty' <<<"$CARD_JSON")"
+    ARGS_JSON="$(jq -c '.defaults // {}' <<<"$CARD_JSON")"
+
+    if [[ "$EXECUTE_SET" == "1" ]]; then
+      if [[ -z "$EXECUTE_ARG" ]]; then
+        echo "card '$CARD_ID' does not define executeArg; --execute is not supported" >&2
+        exit 1
+      fi
+      EXECUTE_JSON="$(bool_json "$EXECUTE_VALUE")"
+      ARGS_JSON="$(jq -cn --argjson base "$ARGS_JSON" --arg key "$EXECUTE_ARG" --argjson value "$EXECUTE_JSON" '$base + {($key): $value}')"
+    fi
+
+    if [[ -n "$TEXT_VALUE" ]]; then
+      if [[ -z "$TEXT_ARG" ]]; then
+        echo "card '$CARD_ID' does not define textArg; --text is not supported" >&2
+        exit 1
+      fi
+      ARGS_JSON="$(jq -cn --argjson base "$ARGS_JSON" --arg key "$TEXT_ARG" --arg value "$TEXT_VALUE" '$base + {($key): $value}')"
+    fi
+
+    for kv in "${SET_OVERRIDES[@]}"; do
+      if [[ "$kv" != *=* ]]; then
+        echo "--set expects key=value, got: $kv" >&2
+        exit 1
+      fi
+      key="${kv%%=*}"
+      value="${kv#*=}"
+      if [[ -z "$key" ]]; then
+        echo "--set key must not be empty" >&2
+        exit 1
+      fi
+      ARGS_JSON="$(merge_arg_override "$ARGS_JSON" "$key" "$value")"
+    done
+
+    MISSING_REQUIRED="$(jq -r --argjson args "$ARGS_JSON" '
+      (.requiredArgs // [])
+      | map(select(($args[.] // null) == null or (($args[.] | type) == "string" and ($args[.] | length) == 0)))
+      | join(",")
+    ' <<<"$CARD_JSON")"
+    if [[ -n "$MISSING_REQUIRED" ]]; then
+      echo "card '$CARD_ID' missing required args: $MISSING_REQUIRED" >&2
+      exit 1
+    fi
+
+    if [[ -z "$OUT_DIR" ]]; then
+      SAFE_ID="$(printf '%s' "$CARD_ID" | tr '/: ' '---')"
+      OUT_DIR="$(mktemp -d "/tmp/${SAFE_ID}.XXXXXX")"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "$WORKFLOW_NAME" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "social-card-run failed ($CARD_ID)" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+
+    if [[ "$WORKFLOW_NAME" == "linkedin.daily_scroll_digest" ]]; then
+      MIN_SCORE="$(jq -r '.min_engagement_score // 20' <<<"$ARGS_JSON")"
+      build_linkedin_digest "$RAW_OUT" "$OUT_DIR" "$MIN_SCORE"
+    elif [[ "$WORKFLOW_NAME" == "reddit.daily_scroll_digest" ]]; then
+      MIN_SCORE="$(jq -r '.min_engagement_score // 20' <<<"$ARGS_JSON")"
+      build_reddit_digest "$RAW_OUT" "$OUT_DIR" "$MIN_SCORE"
+    fi
+
+    echo "social card run complete: card=$CARD_ID workflow=$WORKFLOW_NAME artifacts=$OUT_DIR"
     ;;
   help|-h|--help)
     usage

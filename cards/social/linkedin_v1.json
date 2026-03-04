@@ -1,0 +1,95 @@
+{
+  "schema_version": "rzn.social.card.v1",
+  "catalog": "linkedin",
+  "version": "1.0.0",
+  "cards": [
+    {
+      "id": "linkedin.daily_scroll",
+      "title": "Daily feed digest",
+      "description": "Scroll LinkedIn feed and extract digest-ready rows.",
+      "app": "linkedin",
+      "mode": "browse",
+      "workflow": "linkedin.daily_scroll_digest",
+      "mutating": false,
+      "commitRequired": false,
+      "defaults": {
+        "max_posts": 30,
+        "max_scrolls": 8,
+        "min_engagement_score": 20
+      },
+      "artifacts": ["result.json", "digest.json", "thread.md", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "linkedin.open_post",
+      "title": "Open feed post",
+      "description": "Open a target feed post for read-only inspection.",
+      "app": "linkedin",
+      "mode": "read",
+      "workflow": "linkedin.open_post",
+      "mutating": false,
+      "commitRequired": false,
+      "defaults": {
+        "post_index": 0,
+        "max_feed_scrolls": 6
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "linkedin.like_post",
+      "title": "Like post",
+      "description": "Optionally like a target post with dual execute+commit gates.",
+      "app": "linkedin",
+      "mode": "engage",
+      "workflow": "linkedin.like_post",
+      "mutating": true,
+      "commitRequired": true,
+      "executeArg": "execute_like",
+      "defaults": {
+        "post_index": 0,
+        "max_feed_scrolls": 6,
+        "execute_like": false
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "linkedin.comment_post",
+      "title": "Comment on post",
+      "description": "Draft and optionally submit a comment on a post.",
+      "app": "linkedin",
+      "mode": "engage",
+      "workflow": "linkedin.comment_post",
+      "mutating": true,
+      "commitRequired": true,
+      "executeArg": "execute_comment",
+      "textArg": "comment_text",
+      "requiredArgs": ["comment_text"],
+      "defaults": {
+        "post_index": 0,
+        "max_feed_scrolls": 6,
+        "execute_comment": false
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "linkedin.reply_comment",
+      "title": "Reply to comment",
+      "description": "Draft and optionally submit a comment reply.",
+      "app": "linkedin",
+      "mode": "engage",
+      "workflow": "linkedin.reply_to_comment",
+      "mutating": true,
+      "commitRequired": true,
+      "executeArg": "execute_reply",
+      "textArg": "reply_text",
+      "requiredArgs": ["reply_text"],
+      "defaults": {
+        "post_index": 0,
+        "reply_index": 0,
+        "max_feed_scrolls": 6,
+        "max_comment_scrolls": 6,
+        "execute_reply": false
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    }
+  ]
+}
