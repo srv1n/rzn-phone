@@ -5,6 +5,7 @@
 For the next-phase design (compact snapshots, encoded ids, deterministic runner, and workflow packs), see `docs/DEEP_DIVE.md`.
 Workflow format standardization is described in `docs/specs/rzn_mobile_workflow_v1.md`.
 App Store locator/output notes are documented in `docs/appstore_workflows.md`.
+LinkedIn workflow notes are documented in `docs/linkedin_workflows.md`.
 
 ## What this repo contains
 
@@ -24,7 +25,7 @@ App Store locator/output notes are documented in `docs/appstore_workflows.md`.
 - Alerts: `ios.alert.text`, `ios.alert.wait`, `ios.alert.accept`, `ios.alert.dismiss`
 - Deterministic runner: `ios.script.run`
 - Safari primitives: `ios.web.goto`, `ios.web.wait_css`, `ios.web.click_css`, `ios.web.type_css`, `ios.web.press_key`, `ios.web.page_source`, `ios.web.screenshot`, `ios.web.eval_js`
-- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`)
+- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `linkedin.read_feed`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
 
 ## Safety notes
 
@@ -33,6 +34,7 @@ App Store locator/output notes are documented in `docs/appstore_workflows.md`.
 - `ios.workflow.run` supports a `commit` argument for future destructive workflows; current MVP workflow is read-only.
 - `reddit.comment_first_post` requires `commit=true` to tap the submit button (`requiresCommit=true` step).
 - App Store workflows in this repo are read-only (no purchase/install/review actions).
+- LinkedIn write/delete workflows use `requiresCommit` on submit/save/delete steps; run dry with `--commit 0` first.
 
 ## Prerequisites
 
@@ -216,6 +218,15 @@ Reddit (comment submit requires commit=1):
 ```bash
 ./scripts/ios_tools.sh reddit-comment-smoke <udid> "Nice post — thanks for sharing." 0  # dry run
 ./scripts/ios_tools.sh reddit-comment-smoke <udid> "Nice post — thanks for sharing." 1  # commit
+```
+
+LinkedIn read/create/update/delete:
+
+```bash
+./scripts/ios_tools.sh linkedin-read-feed <udid> --limit 5 --out /tmp/linkedin-read
+./scripts/ios_tools.sh linkedin-create-post <udid> "Testing workflow draft" --submit 0 --commit 0 --out /tmp/linkedin-create-dry
+./scripts/ios_tools.sh linkedin-update-post <udid> "Updated text from workflow" --execute 0 --commit 0 --out /tmp/linkedin-update-dry
+./scripts/ios_tools.sh linkedin-delete-post <udid> --execute 0 --commit 0 --out /tmp/linkedin-delete-dry
 ```
 
 With explicit WDA signing + xcodebuild logs:

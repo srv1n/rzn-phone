@@ -1,0 +1,256 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "linkedin.update_latest_post",
+  "version": "1.0.0",
+  "description": "Navigate to your LinkedIn posts, open the latest post editor, and optionally save edits (commit-gated).",
+  "inputs": {
+    "updated_text": { "type": "string", "required": true },
+    "execute_update": { "type": "boolean", "default": false },
+    "post_index": { "type": "integer", "default": 0, "min": 0, "max": 20 },
+    "max_profile_scrolls": { "type": "integer", "default": 6, "min": 0, "max": 20 },
+    "menu_button_id": { "type": "string", "default": "5600" },
+    "profile_button_id": { "type": "string", "default": "NavPanelIdentityViewProfileImageViewA11yID" },
+    "show_all_posts_label_contains": { "type": "string", "default": "Show all posts" },
+    "show_all_posts_predicate": { "type": "string", "default": "label CONTAINS 'Show all posts' OR label CONTAINS 'Show all activity'" },
+    "post_card_predicate": { "type": "string", "default": "name CONTAINS 'feedUpdateCardA11yIDurn:li:fsd_update'" },
+    "post_menu_predicate": { "type": "string", "default": "label CONTAINS 'More' OR name CONTAINS 'more' OR name CONTAINS 'overflow'" },
+    "edit_action_predicate": { "type": "string", "default": "label CONTAINS 'Edit post' OR label == 'Edit'" },
+    "save_action_predicate": { "type": "string", "default": "label == 'Save' OR label == 'Done' OR label == 'Post' OR name == '13602'" },
+    "editor_field_id": { "type": "string", "default": "13617" },
+    "maxNodes": { "type": "integer", "default": 240, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "This workflow is parameterized because post menu/edit selectors vary by account, locale, and app build.",
+    "By default it prepares and captures artifacts before saving.",
+    "Set args.execute_update=true and run with commit=true to apply edits."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.linkedin.LinkedIn",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "menuOverlay",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "NavPanelViewControllerScrimViewA11yID", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "menuOverlayCount",
+      "arguments": { "list": "{{steps.menuOverlay.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.menuOverlayCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "NavPanelViewControllerScrimViewA11yID" } }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "composeCancel",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "13603", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "composeCancelCount",
+      "arguments": { "list": "{{steps.composeCancel.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.composeCancelCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "13603" } }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "discardButtons",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "labelContains": "Discard", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "discardButtonsCount",
+      "arguments": { "list": "{{steps.discardButtons.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.discardButtonsCount.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "label CONTAINS 'Discard' OR label CONTAINS 'Delete draft' OR label CONTAINS 'Discard post'"
+        }
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "accessibility id", "value": "12000" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "{{menu_button_id}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "accessibility id", "value": "{{menu_button_id}}" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "{{profile_button_id}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "accessibility id", "value": "{{profile_button_id}}" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "label CONTAINS 'followers' OR label CONTAINS 'connections' OR label CONTAINS 'posts' OR label CONTAINS 'activity'"
+        },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "showAllPostsButtons",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "labelContains": "{{show_all_posts_label_contains}}", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "showAllPostsCount",
+      "arguments": { "list": "{{steps.showAllPostsButtons.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.showAllPostsCount.count", "truthy": true },
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{show_all_posts_predicate}}" }
+      }
+    },
+    {
+      "tool": "ios.action.scroll_until",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_card_predicate}}" },
+        "direction": "down",
+        "distance": 0.55,
+        "maxScrolls": "{{max_profile_scrolls}}",
+        "timeoutMs": 60000,
+        "settleMs": 350
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_card_predicate}}", "index": "{{post_index}}" }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_menu_predicate}}" },
+        "timeoutMs": 15000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_menu_predicate}}" }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{edit_action_predicate}}" },
+        "timeoutMs": 15000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{edit_action_predicate}}" }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "{{editor_field_id}}" },
+        "timeoutMs": 25000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.type",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "{{editor_field_id}}" },
+        "text": "{{updated_text}}",
+        "clearFirst": true
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "draftScreenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "draftUiSource" },
+    { "tool": "ios.ui.observe_compact", "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" }, "saveAs": "draftCompactSnapshot" },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "execute_update", "truthy": true },
+      "requiresCommit": true,
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{save_action_predicate}}" }
+      }
+    }
+  ],
+  "output": {
+    "requestedUpdate": "{{execute_update}}",
+    "draftScreenshot": "{{steps.draftScreenshot}}",
+    "draftUiSource": "{{steps.draftUiSource}}",
+    "draftCompactSnapshot": "{{steps.draftCompactSnapshot}}"
+  }
+}

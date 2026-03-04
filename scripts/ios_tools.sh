@@ -37,6 +37,14 @@ Commands:
                         Run appstore.search_results and write result.json + screenshot.png + ui_source.xml.
   appstore-smoke <udid> [query]
                         Real-device smoke test; asserts at least 1 suggestion and 1 result row.
+  linkedin-read-feed <udid> [--out <dir>] [--limit <n>]
+                        Run linkedin.read_feed and write result.json + screenshot/ui source artifacts when present.
+  linkedin-create-post <udid> <text> [--out <dir>] [--submit 0|1] [--commit 0|1]
+                        Run linkedin.create_post. Default is dry-run draft capture (submit=0).
+  linkedin-update-post <udid> <text> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]
+                        Run linkedin.update_latest_post. Default is dry-run edit preparation (execute=0).
+  linkedin-delete-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]
+                        Run linkedin.delete_latest_post. Default is dry-run delete preparation (execute=0).
 EOF
 }
 
@@ -78,6 +86,74 @@ build_signing_json() {
   else
     echo '{}'
   fi
+}
+
+build_session_json() {
+  local udid="$1"
+  jq -nc \
+    --arg udid "$udid" \
+    --argjson showXcodeLog "$SHOW_XCODE_LOG_JSON" \
+    --argjson allowProvisioningUpdates "$ALLOW_PROVISIONING_UPDATES_JSON" \
+    --argjson allowProvisioningDeviceRegistration "$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON" \
+    --argjson sessionCreateTimeoutMs "$IOS_SESSION_CREATE_TIMEOUT_MS" \
+    --argjson wdaLaunchTimeoutMs "$IOS_WDA_LAUNCH_TIMEOUT_MS" \
+    --argjson wdaConnectionTimeoutMs "$IOS_WDA_CONNECTION_TIMEOUT_MS" \
+    --argjson signing "$SIGNING_JSON" \
+    '{udid:$udid,showXcodeLog:$showXcodeLog,allowProvisioningUpdates:$allowProvisioningUpdates,allowProvisioningDeviceRegistration:$allowProvisioningDeviceRegistration,sessionCreateTimeoutMs:$sessionCreateTimeoutMs,wdaLaunchTimeoutMs:$wdaLaunchTimeoutMs,wdaConnectionTimeoutMs:$wdaConnectionTimeoutMs,signing:$signing}'
+}
+
+run_workflow_rpc() {
+  local bin="$1"
+  local workflow_name="$2"
+  local session_json="$3"
+  local args_json="$4"
+  local commit_json="$5"
+  local stop_appium_json="$6"
+  local raw_out="$7"
+
+  cat <<JSON | "$bin" > "$raw_out"
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"$workflow_name","session":$session_json,"args":$args_json,"commit":$commit_json}}}
+{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":{"stopAppium":$stop_appium_json}}}
+JSON
+}
+
+extract_workflow_artifacts() {
+  local raw_out="$1"
+  local out_dir="$2"
+  mkdir -p "$out_dir"
+
+  jq -c 'select(.id=="wf-1") | .result.structuredContent' "$raw_out" | jq . > "$out_dir/result.json"
+
+  local screenshot_b64
+  screenshot_b64="$(jq -r 'select(.id=="wf-1") | (.result.structuredContent.screenshot.data // .result.structuredContent.draftScreenshot.data // .result.structuredContent.readyScreenshot.data // empty)' "$raw_out")"
+  if [[ -n "$screenshot_b64" ]]; then
+    printf '%s' "$screenshot_b64" | base64 --decode > "$out_dir/screenshot.png"
+  fi
+
+  local ui_source
+  ui_source="$(jq -r 'select(.id=="wf-1") | (.result.structuredContent.uiSource.source // .result.structuredContent.draftUiSource.source // .result.structuredContent.readyUiSource.source // empty)' "$raw_out")"
+  if [[ -n "$ui_source" ]]; then
+    printf '%s' "$ui_source" > "$out_dir/ui_source.xml"
+  fi
+}
+
+ensure_workflow_success() {
+  local raw_out="$1"
+  local default_msg="$2"
+
+  if jq -e 'select(.id=="wf-1") | .result.isError == true' "$raw_out" >/dev/null; then
+    jq -r 'select(.id=="wf-1") | .result.content[]?.text // empty' "$raw_out" >&2
+    return 1
+  fi
+
+  if jq -e 'select(.id=="wf-1") | .result.structuredContent.ok == false' "$raw_out" >/dev/null; then
+    jq -r 'select(.id=="wf-1") | .result.structuredContent.error // .result.content[]?.text // "'"$default_msg"'"' "$raw_out" >&2
+    return 1
+  fi
+
+  return 0
 }
 
 cmd="${1:-help}"
@@ -535,6 +611,289 @@ JSON
 
     echo "appstore smoke failed: suggestions=$TYPEAHEAD_COUNT results=$RESULTS_COUNT artifacts=$OUT_ROOT" >&2
     exit 1
+    ;;
+  linkedin-read-feed)
+    UDID="${1:-}"
+    if [[ "$#" -ge 1 ]]; then
+      shift 1
+    else
+      shift "$#"
+    fi
+    LIMIT=5
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --limit)
+          LIMIT="${2:-5}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for linkedin-read-feed: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh linkedin-read-feed <udid> [--out <dir>] [--limit <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/linkedin-read-feed.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc --argjson limit "$LIMIT" '{limit:$limit}')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "linkedin.read_feed" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "linkedin-read-feed failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "linkedin read_feed saved artifacts to: $OUT_DIR"
+    ;;
+  linkedin-create-post)
+    UDID="${1:-}"
+    POST_TEXT="${2:-}"
+    if [[ "$#" -ge 2 ]]; then
+      shift 2
+    else
+      shift "$#"
+    fi
+    SUBMIT=0
+    COMMIT=0
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --submit)
+          SUBMIT="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for linkedin-create-post: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" || -z "$POST_TEXT" ]]; then
+      echo "usage: scripts/ios_tools.sh linkedin-create-post <udid> <text> [--out <dir>] [--submit 0|1] [--commit 0|1]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/linkedin-create-post.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    SUBMIT_JSON="$(bool_json "$SUBMIT")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --arg post_text "$POST_TEXT" \
+      --argjson submit "$SUBMIT_JSON" \
+      '{post_text:$post_text,submit:$submit}')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "linkedin.create_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "linkedin-create-post failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "linkedin create_post saved artifacts to: $OUT_DIR"
+    ;;
+  linkedin-update-post)
+    UDID="${1:-}"
+    UPDATED_TEXT="${2:-}"
+    if [[ "$#" -ge 2 ]]; then
+      shift 2
+    else
+      shift "$#"
+    fi
+    EXECUTE=0
+    COMMIT=0
+    POST_INDEX=0
+    MAX_PROFILE_SCROLLS=6
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --post-index)
+          POST_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --max-profile-scrolls)
+          MAX_PROFILE_SCROLLS="${2:-6}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for linkedin-update-post: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" || -z "$UPDATED_TEXT" ]]; then
+      echo "usage: scripts/ios_tools.sh linkedin-update-post <udid> <text> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/linkedin-update-post.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_JSON="$(bool_json "$EXECUTE")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --arg updated_text "$UPDATED_TEXT" \
+      --argjson execute_update "$EXECUTE_JSON" \
+      --argjson post_index "$POST_INDEX" \
+      --argjson max_profile_scrolls "$MAX_PROFILE_SCROLLS" \
+      --arg post_menu_predicate "${LINKEDIN_POST_MENU_PREDICATE:-}" \
+      --arg edit_action_predicate "${LINKEDIN_EDIT_ACTION_PREDICATE:-}" \
+      --arg save_action_predicate "${LINKEDIN_SAVE_ACTION_PREDICATE:-}" \
+      --arg post_card_predicate "${LINKEDIN_POST_CARD_PREDICATE:-}" \
+      --arg menu_button_id "${LINKEDIN_MENU_BUTTON_ID:-}" \
+      --arg profile_button_id "${LINKEDIN_PROFILE_BUTTON_ID:-}" \
+      '{updated_text:$updated_text,execute_update:$execute_update,post_index:$post_index,max_profile_scrolls:$max_profile_scrolls}
+       + (if $post_menu_predicate == "" then {} else {post_menu_predicate:$post_menu_predicate} end)
+       + (if $edit_action_predicate == "" then {} else {edit_action_predicate:$edit_action_predicate} end)
+       + (if $save_action_predicate == "" then {} else {save_action_predicate:$save_action_predicate} end)
+       + (if $post_card_predicate == "" then {} else {post_card_predicate:$post_card_predicate} end)
+       + (if $menu_button_id == "" then {} else {menu_button_id:$menu_button_id} end)
+       + (if $profile_button_id == "" then {} else {profile_button_id:$profile_button_id} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "linkedin.update_latest_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "linkedin-update-post failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "linkedin update_latest_post saved artifacts to: $OUT_DIR"
+    ;;
+  linkedin-delete-post)
+    UDID="${1:-}"
+    if [[ "$#" -ge 1 ]]; then
+      shift 1
+    else
+      shift "$#"
+    fi
+    EXECUTE=0
+    COMMIT=0
+    POST_INDEX=0
+    MAX_PROFILE_SCROLLS=6
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --post-index)
+          POST_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --max-profile-scrolls)
+          MAX_PROFILE_SCROLLS="${2:-6}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for linkedin-delete-post: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh linkedin-delete-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/linkedin-delete-post.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_JSON="$(bool_json "$EXECUTE")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --argjson execute_delete "$EXECUTE_JSON" \
+      --argjson post_index "$POST_INDEX" \
+      --argjson max_profile_scrolls "$MAX_PROFILE_SCROLLS" \
+      --arg post_menu_predicate "${LINKEDIN_POST_MENU_PREDICATE:-}" \
+      --arg delete_action_predicate "${LINKEDIN_DELETE_ACTION_PREDICATE:-}" \
+      --arg confirm_delete_predicate "${LINKEDIN_CONFIRM_DELETE_PREDICATE:-}" \
+      --arg post_card_predicate "${LINKEDIN_POST_CARD_PREDICATE:-}" \
+      --arg menu_button_id "${LINKEDIN_MENU_BUTTON_ID:-}" \
+      --arg profile_button_id "${LINKEDIN_PROFILE_BUTTON_ID:-}" \
+      '{execute_delete:$execute_delete,post_index:$post_index,max_profile_scrolls:$max_profile_scrolls}
+       + (if $post_menu_predicate == "" then {} else {post_menu_predicate:$post_menu_predicate} end)
+       + (if $delete_action_predicate == "" then {} else {delete_action_predicate:$delete_action_predicate} end)
+       + (if $confirm_delete_predicate == "" then {} else {confirm_delete_predicate:$confirm_delete_predicate} end)
+       + (if $post_card_predicate == "" then {} else {post_card_predicate:$post_card_predicate} end)
+       + (if $menu_button_id == "" then {} else {menu_button_id:$menu_button_id} end)
+       + (if $profile_button_id == "" then {} else {profile_button_id:$profile_button_id} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "linkedin.delete_latest_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "linkedin-delete-post failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "linkedin delete_latest_post saved artifacts to: $OUT_DIR"
     ;;
   help|-h|--help)
     usage
