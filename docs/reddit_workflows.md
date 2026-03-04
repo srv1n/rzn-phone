@@ -43,6 +43,13 @@ IOS_TOOLS_SKIP_BUILD=1 \
   --execute-like 0 --execute-comment 0 --commit 0 --out /tmp/reddit-engage-seq
 ```
 
+Optional completion controls (any workflow command):
+
+```bash
+./scripts/ios_tools.sh reddit-like-post <udid> --execute 1 --commit 1 \
+  --background-on-exit 1 --lock-device-on-exit 1
+```
+
 Each command writes `result.json` and best-effort screenshot/UI-source artifacts.
 Mutations execute only when both `--execute 1` and `--commit 1` are provided.
 

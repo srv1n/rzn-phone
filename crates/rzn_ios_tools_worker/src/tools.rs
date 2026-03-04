@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
+use once_cell::sync::Lazy;
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -34,7 +34,9 @@ pub fn list_tool_definitions() -> Vec<Value> {
                 "type": "object",
                 "properties": {
                     "stopAppium": { "type": "boolean", "default": true },
-                    "shutdownWDA": { "type": "boolean", "default": true }
+                    "shutdownWDA": { "type": "boolean", "default": true },
+                    "backgroundApp": { "type": "boolean", "default": false, "description": "Press Home before ending session (best-effort)." },
+                    "lockDevice": { "type": "boolean", "default": false, "description": "Lock device before ending session (best-effort)." }
                 },
                 "additionalProperties": false
             }),
@@ -743,8 +745,11 @@ pub fn list_tool_definitions() -> Vec<Value> {
 	                    "session": { "type": "object" },
 	                    "args": { "type": "object" },
 	                    "commit": { "type": "boolean", "default": false },
+	                    "disconnectOnFinish": { "type": "boolean", "default": true, "description": "Alias of closeOnFinish." },
 	                    "closeOnFinish": { "type": "boolean", "default": true },
-	                    "stopAppiumOnFinish": { "type": "boolean", "default": false }
+	                    "stopAppiumOnFinish": { "type": "boolean", "default": false },
+	                    "backgroundAppOnFinish": { "type": "boolean", "default": false },
+	                    "lockDeviceOnFinish": { "type": "boolean", "default": false }
 	                },
 	                "required": ["name"],
 	                "additionalProperties": false
@@ -831,9 +836,9 @@ pub fn list_tool_definitions() -> Vec<Value> {
             }),
         ),
         tool(
-            "ios.script.run",
-            "Execute a deterministic step list (each step calls an existing tool).",
-            json!({
+	            "ios.script.run",
+	            "Execute a deterministic step list (each step calls an existing tool).",
+	            json!({
 	                "type": "object",
 	                "properties": {
                     "steps": {
@@ -856,8 +861,11 @@ pub fn list_tool_definitions() -> Vec<Value> {
                     },
 	                    "vars": { "type": "object", "default": {} },
 	                    "commit": { "type": "boolean", "default": false },
+	                    "disconnectOnFinish": { "type": "boolean", "default": true, "description": "Alias of closeOnFinish." },
 	                    "closeOnFinish": { "type": "boolean", "default": true },
-	                    "stopAppiumOnFinish": { "type": "boolean", "default": false }
+	                    "stopAppiumOnFinish": { "type": "boolean", "default": false },
+	                    "backgroundAppOnFinish": { "type": "boolean", "default": false },
+	                    "lockDeviceOnFinish": { "type": "boolean", "default": false }
 	                },
 	                "required": ["steps"],
 	                "additionalProperties": false
@@ -954,7 +962,11 @@ pub fn tool_error_result(message: &str, details: Value) -> Value {
     tool_error_result_with_code(message, None, details)
 }
 
-pub fn tool_error_result_with_code(message: &str, error_code: Option<&str>, details: Value) -> Value {
+pub fn tool_error_result_with_code(
+    message: &str,
+    error_code: Option<&str>,
+    details: Value,
+) -> Value {
     json!({
         "isError": true,
         "content": [
@@ -1061,6 +1073,103 @@ async fn worker_health(state: &AppState) -> Result<Value> {
     ))
 }
 
+async fn perform_post_run_device_actions(
+    state: &AppState,
+    background_app: bool,
+    lock_device: bool,
+) -> Value {
+    let mut background_ok: Option<bool> = None;
+    let mut lock_ok: Option<bool> = None;
+    let mut errors: Vec<String> = Vec::new();
+
+    if !background_app && !lock_device {
+        return json!({
+            "backgroundAppRequested": false,
+            "backgroundAppOk": Value::Null,
+            "lockDeviceRequested": false,
+            "lockDeviceOk": Value::Null,
+            "errors": []
+        });
+    }
+
+    let Some(session) = state.active_session().await else {
+        if background_app {
+            background_ok = Some(false);
+        }
+        if lock_device {
+            lock_ok = Some(false);
+        }
+        errors.push("no active session for post-run device actions".to_string());
+        return json!({
+            "backgroundAppRequested": background_app,
+            "backgroundAppOk": background_ok,
+            "lockDeviceRequested": lock_device,
+            "lockDeviceOk": lock_ok,
+            "errors": errors
+        });
+    };
+
+    let driver = match driver_from_state(state).await {
+        Ok(driver) => driver,
+        Err(err) => {
+            if background_app {
+                background_ok = Some(false);
+            }
+            if lock_device {
+                lock_ok = Some(false);
+            }
+            errors.push(format!(
+                "driver unavailable for post-run device actions: {err:#}"
+            ));
+            return json!({
+                "backgroundAppRequested": background_app,
+                "backgroundAppOk": background_ok,
+                "lockDeviceRequested": lock_device,
+                "lockDeviceOk": lock_ok,
+                "errors": errors
+            });
+        }
+    };
+
+    if background_app {
+        match driver
+            .execute_script(
+                &session.session_id,
+                "mobile: pressButton",
+                json!([{ "name": "home" }]),
+            )
+            .await
+        {
+            Ok(_) => background_ok = Some(true),
+            Err(err) => {
+                background_ok = Some(false);
+                errors.push(format!("failed to background app via Home button: {err:#}"));
+            }
+        }
+    }
+
+    if lock_device {
+        match driver
+            .execute_script(&session.session_id, "mobile: lock", json!([]))
+            .await
+        {
+            Ok(_) => lock_ok = Some(true),
+            Err(err) => {
+                lock_ok = Some(false);
+                errors.push(format!("failed to lock device: {err:#}"));
+            }
+        }
+    }
+
+    json!({
+        "backgroundAppRequested": background_app,
+        "backgroundAppOk": background_ok,
+        "lockDeviceRequested": lock_device,
+        "lockDeviceOk": lock_ok,
+        "errors": errors
+    })
+}
+
 async fn worker_shutdown(state: &AppState, arguments: &Value) -> Result<Value> {
     let stop_appium = arguments
         .get("stopAppium")
@@ -1070,12 +1179,22 @@ async fn worker_shutdown(state: &AppState, arguments: &Value) -> Result<Value> {
         .get("shutdownWDA")
         .and_then(Value::as_bool)
         .unwrap_or(true);
+    let background_app = arguments
+        .get("backgroundApp")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let lock_device = arguments
+        .get("lockDevice")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
 
     let snapshot = state.snapshot().await;
     let wda_port = state
         .last_wda_local_port()
         .await
         .unwrap_or(DEFAULT_WDA_LOCAL_PORT);
+    let post_run_actions =
+        perform_post_run_device_actions(state, background_app, lock_device).await;
 
     let mut closed_session = false;
     let mut stopped_env_appium = false;
@@ -1119,7 +1238,8 @@ async fn worker_shutdown(state: &AppState, arguments: &Value) -> Result<Value> {
             "wdaLocalPort": wda_port,
             "wdaShutdownOk": wda_shutdown_ok,
             "closedSession": closed_session,
-            "stoppedEnvAppium": stopped_env_appium
+            "stoppedEnvAppium": stopped_env_appium,
+            "postRunActions": post_run_actions
         }),
         "shutdown complete",
     ))
@@ -1407,7 +1527,10 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
 
     let request = SessionCreateRequest {
         udid: udid.clone(),
-        no_reset: arguments.get("noReset").and_then(Value::as_bool).unwrap_or(true),
+        no_reset: arguments
+            .get("noReset")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
         new_command_timeout_sec: arguments
             .get("newCommandTimeoutSec")
             .and_then(Value::as_u64)
@@ -1594,7 +1717,10 @@ async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
     let session_id = resolve_session_id(state, arguments).await?;
     let driver = driver_from_state(state).await?;
 
-    let source_override = arguments.get("source").and_then(Value::as_str).map(|raw| raw.to_string());
+    let source_override = arguments
+        .get("source")
+        .and_then(Value::as_str)
+        .map(|raw| raw.to_string());
 
     let row_query = parse_row_query(arguments.get("row"))?;
     let primary_query = parse_primary_query(arguments.get("primary"))?;
@@ -1621,28 +1747,27 @@ async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
         bail!("source cannot be combined with maxScrolls");
     }
 
-    let (scroll_direction, scroll_distance, settle_ms) = if let Some(scroll) =
-        arguments.get("scroll").and_then(Value::as_object)
-    {
-        let direction = scroll
-            .get("direction")
-            .and_then(Value::as_str)
-            .unwrap_or("down")
-            .to_lowercase();
-        let distance = scroll
-            .get("distance")
-            .and_then(Value::as_f64)
-            .unwrap_or(0.6)
-            .clamp(0.1, 0.95);
-        let settle_ms = scroll
-            .get("settleMs")
-            .and_then(Value::as_u64)
-            .unwrap_or(350)
-            .clamp(0, 10_000);
-        (direction, distance, settle_ms)
-    } else {
-        ("down".to_string(), 0.6, 350)
-    };
+    let (scroll_direction, scroll_distance, settle_ms) =
+        if let Some(scroll) = arguments.get("scroll").and_then(Value::as_object) {
+            let direction = scroll
+                .get("direction")
+                .and_then(Value::as_str)
+                .unwrap_or("down")
+                .to_lowercase();
+            let distance = scroll
+                .get("distance")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.6)
+                .clamp(0.1, 0.95);
+            let settle_ms = scroll
+                .get("settleMs")
+                .and_then(Value::as_u64)
+                .unwrap_or(350)
+                .clamp(0, 10_000);
+            (direction, distance, settle_ms)
+        } else {
+            ("down".to_string(), 0.6, 350)
+        };
 
     let mut rows_out: Vec<RowMatch> = Vec::new();
     let mut seen = HashSet::<String>::new();
@@ -1654,14 +1779,14 @@ async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
         } else {
             driver.page_source(&session_id).await?
         };
-    let mut rows = extract_rows_from_source(
-        &source,
-        &row_query,
-        &primary_query,
-        tag_query.as_ref(),
-        &field_queries,
-        &split_cfg,
-    );
+        let mut rows = extract_rows_from_source(
+            &source,
+            &row_query,
+            &primary_query,
+            tag_query.as_ref(),
+            &field_queries,
+            &split_cfg,
+        );
 
         if order == "x" {
             rows.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
@@ -1691,7 +1816,8 @@ async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
             break;
         }
         if pass < max_scrolls {
-            perform_scroll_gesture(&driver, &session_id, &scroll_direction, scroll_distance).await?;
+            perform_scroll_gesture(&driver, &session_id, &scroll_direction, scroll_distance)
+                .await?;
             scrolls_done += 1;
             if settle_ms > 0 {
                 tokio::time::sleep(Duration::from_millis(settle_ms)).await;
@@ -1748,7 +1874,10 @@ async fn ui_extract_text(state: &AppState, arguments: &Value) -> Result<Value> {
         .map(|value| value as usize)
         .filter(|value| *value > 0)
         .unwrap_or(50);
-    let unique = arguments.get("unique").and_then(Value::as_bool).unwrap_or(true);
+    let unique = arguments
+        .get("unique")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
     let order = arguments
         .get("order")
         .and_then(Value::as_str)
@@ -1877,7 +2006,11 @@ async fn resolve_target(state: &AppState, arguments: &Value) -> Result<Option<Re
         .or_else(|| target.get("require_unique").and_then(Value::as_bool))
         .unwrap_or(false);
 
-    if let Some(encoded) = target.get("encodedId").and_then(Value::as_str).map(str::trim) {
+    if let Some(encoded) = target
+        .get("encodedId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+    {
         if !encoded.is_empty() {
             let snapshot_id = target.get("snapshotId").and_then(Value::as_str);
             let locator = state
@@ -1928,8 +2061,14 @@ async fn action_tap(state: &AppState, arguments: &Value) -> Result<Value> {
     let driver = driver_from_state(state).await?;
 
     if let Some(point) = arguments.get("point") {
-        let x = point.get("x").and_then(Value::as_f64).ok_or_else(|| anyhow!("point.x must be a number"))?;
-        let y = point.get("y").and_then(Value::as_f64).ok_or_else(|| anyhow!("point.y must be a number"))?;
+        let x = point
+            .get("x")
+            .and_then(Value::as_f64)
+            .ok_or_else(|| anyhow!("point.x must be a number"))?;
+        let y = point
+            .get("y")
+            .and_then(Value::as_f64)
+            .ok_or_else(|| anyhow!("point.y must be a number"))?;
         driver.tap_point(&session_id, x, y).await?;
         return Ok(tool_success(
             json!({"ok": true, "sessionId": session_id, "point": {"x": x, "y": y}}),
@@ -1937,9 +2076,13 @@ async fn action_tap(state: &AppState, arguments: &Value) -> Result<Value> {
         ));
     }
 
-    let resolved = resolve_target(state, arguments)
-        .await?
-        .ok_or_else(|| ToolCallError::new(ToolErrorCode::InvalidParams, "target is required", json!({})))?;
+    let resolved = resolve_target(state, arguments).await?.ok_or_else(|| {
+        ToolCallError::new(
+            ToolErrorCode::InvalidParams,
+            "target is required",
+            json!({}),
+        )
+    })?;
     let ids = driver
         .find_elements(&session_id, &resolved.using, &resolved.value)
         .await?;
@@ -1997,16 +2140,23 @@ async fn action_tap(state: &AppState, arguments: &Value) -> Result<Value> {
 async fn action_type(state: &AppState, arguments: &Value) -> Result<Value> {
     let session_id = resolve_session_id(state, arguments).await?;
     let text = required_str(arguments, "text")?;
-    let clear_first = arguments.get("clearFirst").and_then(Value::as_bool).unwrap_or(true);
+    let clear_first = arguments
+        .get("clearFirst")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
     let press_enter = arguments
         .get("pressEnter")
         .and_then(Value::as_bool)
         .or_else(|| arguments.get("press_enter").and_then(Value::as_bool))
         .unwrap_or(false);
 
-    let resolved = resolve_target(state, arguments)
-        .await?
-        .ok_or_else(|| ToolCallError::new(ToolErrorCode::InvalidParams, "target is required", json!({})))?;
+    let resolved = resolve_target(state, arguments).await?.ok_or_else(|| {
+        ToolCallError::new(
+            ToolErrorCode::InvalidParams,
+            "target is required",
+            json!({}),
+        )
+    })?;
     let driver = driver_from_state(state).await?;
     let ids = driver
         .find_elements(&session_id, &resolved.using, &resolved.value)
@@ -2074,10 +2224,9 @@ async fn action_type(state: &AppState, arguments: &Value) -> Result<Value> {
 
 async fn action_typeahead(state: &AppState, arguments: &Value) -> Result<Value> {
     let session_id = resolve_session_id(state, arguments).await?;
-    let field = arguments
-        .get("field")
-        .cloned()
-        .ok_or_else(|| ToolCallError::new(ToolErrorCode::InvalidParams, "field is required", json!({})))?;
+    let field = arguments.get("field").cloned().ok_or_else(|| {
+        ToolCallError::new(ToolErrorCode::InvalidParams, "field is required", json!({}))
+    })?;
     let typing_mode = arguments
         .get("typingMode")
         .and_then(Value::as_str)
@@ -2134,9 +2283,13 @@ async fn action_wait(state: &AppState, arguments: &Value) -> Result<Value> {
         .unwrap_or(10_000)
         .clamp(250, 180_000);
 
-    let resolved = resolve_target(state, arguments)
-        .await?
-        .ok_or_else(|| ToolCallError::new(ToolErrorCode::InvalidParams, "target is required", json!({})))?;
+    let resolved = resolve_target(state, arguments).await?.ok_or_else(|| {
+        ToolCallError::new(
+            ToolErrorCode::InvalidParams,
+            "target is required",
+            json!({}),
+        )
+    })?;
     let driver = driver_from_state(state).await?;
     let deadline = tokio::time::Instant::now() + Duration::from_millis(timeout_ms);
 
@@ -2188,7 +2341,11 @@ async fn action_wait(state: &AppState, arguments: &Value) -> Result<Value> {
 async fn action_scroll(state: &AppState, arguments: &Value) -> Result<Value> {
     let session_id = resolve_session_id(state, arguments).await?;
     let direction = required_str(arguments, "direction")?.to_lowercase();
-    let distance = arguments.get("distance").and_then(Value::as_f64).unwrap_or(0.6).clamp(0.1, 0.95);
+    let distance = arguments
+        .get("distance")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.6)
+        .clamp(0.1, 0.95);
 
     let driver = driver_from_state(state).await?;
     perform_scroll_gesture(&driver, &session_id, &direction, distance).await?;
@@ -2304,9 +2461,13 @@ async fn action_scroll_until(state: &AppState, arguments: &Value) -> Result<Valu
         .unwrap_or(350)
         .clamp(0, 10_000);
 
-    let resolved = resolve_target(state, arguments)
-        .await?
-        .ok_or_else(|| ToolCallError::new(ToolErrorCode::InvalidParams, "target is required", json!({})))?;
+    let resolved = resolve_target(state, arguments).await?.ok_or_else(|| {
+        ToolCallError::new(
+            ToolErrorCode::InvalidParams,
+            "target is required",
+            json!({}),
+        )
+    })?;
     let driver = driver_from_state(state).await?;
 
     let deadline = tokio::time::Instant::now() + Duration::from_millis(timeout_ms);
@@ -2374,9 +2535,13 @@ async fn action_scroll_until(state: &AppState, arguments: &Value) -> Result<Valu
 
 async fn element_text(state: &AppState, arguments: &Value) -> Result<Value> {
     let session_id = resolve_session_id(state, arguments).await?;
-    let resolved = resolve_target(state, arguments)
-        .await?
-        .ok_or_else(|| ToolCallError::new(ToolErrorCode::InvalidParams, "target is required", json!({})))?;
+    let resolved = resolve_target(state, arguments).await?.ok_or_else(|| {
+        ToolCallError::new(
+            ToolErrorCode::InvalidParams,
+            "target is required",
+            json!({}),
+        )
+    })?;
     let driver = driver_from_state(state).await?;
 
     let ids = driver
@@ -2421,9 +2586,13 @@ async fn element_text(state: &AppState, arguments: &Value) -> Result<Value> {
 async fn element_attribute(state: &AppState, arguments: &Value) -> Result<Value> {
     let session_id = resolve_session_id(state, arguments).await?;
     let name = required_str(arguments, "name")?;
-    let resolved = resolve_target(state, arguments)
-        .await?
-        .ok_or_else(|| ToolCallError::new(ToolErrorCode::InvalidParams, "target is required", json!({})))?;
+    let resolved = resolve_target(state, arguments).await?.ok_or_else(|| {
+        ToolCallError::new(
+            ToolErrorCode::InvalidParams,
+            "target is required",
+            json!({}),
+        )
+    })?;
     let driver = driver_from_state(state).await?;
 
     let ids = driver
@@ -2453,7 +2622,9 @@ async fn element_attribute(state: &AppState, arguments: &Value) -> Result<Value>
         )
     })?;
 
-    let value = driver.element_attribute(&session_id, element_id, name).await?;
+    let value = driver
+        .element_attribute(&session_id, element_id, name)
+        .await?;
     Ok(tool_success(
         json!({
             "ok": true,
@@ -2468,9 +2639,13 @@ async fn element_attribute(state: &AppState, arguments: &Value) -> Result<Value>
 
 async fn element_rect(state: &AppState, arguments: &Value) -> Result<Value> {
     let session_id = resolve_session_id(state, arguments).await?;
-    let resolved = resolve_target(state, arguments)
-        .await?
-        .ok_or_else(|| ToolCallError::new(ToolErrorCode::InvalidParams, "target is required", json!({})))?;
+    let resolved = resolve_target(state, arguments).await?.ok_or_else(|| {
+        ToolCallError::new(
+            ToolErrorCode::InvalidParams,
+            "target is required",
+            json!({}),
+        )
+    })?;
     let driver = driver_from_state(state).await?;
 
     let ids = driver
@@ -2842,7 +3017,9 @@ fn parse_field_queries(value: Option<&Value>) -> Result<Vec<FieldQuery>> {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| anyhow!("fields[{idx}].name is required"))?;
-        let query_value = obj.get("query").ok_or_else(|| anyhow!("fields[{idx}].query is required"))?;
+        let query_value = obj
+            .get("query")
+            .ok_or_else(|| anyhow!("fields[{idx}].query is required"))?;
         let query = parse_node_query(Some(query_value));
         let attr = obj
             .get("attr")
@@ -3008,11 +3185,7 @@ struct TextNodeMatch {
     y: f64,
 }
 
-fn extract_suggestion_texts(
-    source: &str,
-    query: &NodeQuery,
-    limit: usize,
-) -> Vec<Value> {
+fn extract_suggestion_texts(source: &str, query: &NodeQuery, limit: usize) -> Vec<Value> {
     let mut nodes = extract_nodes_from_source(source, query);
     nodes.sort_by(|a, b| {
         a.y.partial_cmp(&b.y)
@@ -3050,7 +3223,10 @@ fn extract_nodes_from_source(source: &str, query: &NodeQuery) -> Vec<TextNodeMat
                 let name = attr_text(&e, "name");
                 if node_matches(&e, &elem_type, query, &stack) {
                     if let Some(text) = extract_preferred_text(&e) {
-                        let (x, y) = (attr_f64(&e, "x").unwrap_or(0.0), attr_f64(&e, "y").unwrap_or(0.0));
+                        let (x, y) = (
+                            attr_f64(&e, "x").unwrap_or(0.0),
+                            attr_f64(&e, "y").unwrap_or(0.0),
+                        );
                         out.push(TextNodeMatch { text, x, y });
                         if let Some(max) = query.max {
                             if out.len() >= max {
@@ -3066,7 +3242,10 @@ fn extract_nodes_from_source(source: &str, query: &NodeQuery) -> Vec<TextNodeMat
                 let elem_type = String::from_utf8_lossy(e.name().as_ref()).into_owned();
                 if node_matches(&e, &elem_type, query, &stack) {
                     if let Some(text) = extract_preferred_text(&e) {
-                        let (x, y) = (attr_f64(&e, "x").unwrap_or(0.0), attr_f64(&e, "y").unwrap_or(0.0));
+                        let (x, y) = (
+                            attr_f64(&e, "x").unwrap_or(0.0),
+                            attr_f64(&e, "y").unwrap_or(0.0),
+                        );
                         out.push(TextNodeMatch { text, x, y });
                         if let Some(max) = query.max {
                             if out.len() >= max {
@@ -3180,9 +3359,7 @@ fn extract_rows_from_source(
                 let elem_type = String::from_utf8_lossy(e.name().as_ref()).into_owned();
                 let name = attr_text(&e, "name");
 
-                if current.is_none()
-                    && element_matches_row(&e, &elem_type, row_query, &stack)
-                {
+                if current.is_none() && element_matches_row(&e, &elem_type, row_query, &stack) {
                     let mut field_matches = Vec::new();
                     field_matches.resize_with(field_queries.len(), Vec::new);
                     current = Some((
@@ -3205,9 +3382,7 @@ fn extract_rows_from_source(
             }
             Ok(Event::Empty(e)) => {
                 let elem_type = String::from_utf8_lossy(e.name().as_ref()).into_owned();
-                if current.is_none()
-                    && element_matches_row(&e, &elem_type, row_query, &stack)
-                {
+                if current.is_none() && element_matches_row(&e, &elem_type, row_query, &stack) {
                     let row = finalize_row(
                         attr_f64(&e, "x").unwrap_or(0.0),
                         attr_f64(&e, "y").unwrap_or(0.0),
@@ -3436,7 +3611,10 @@ fn finalize_row(
             "last" => values.last().cloned(),
             "longest" => values.into_iter().max_by_key(|v| v.len()),
             "all" => {
-                let joiner = field.join_delimiter.clone().unwrap_or_else(|| " | ".to_string());
+                let joiner = field
+                    .join_delimiter
+                    .clone()
+                    .unwrap_or_else(|| " | ".to_string());
                 Some(values.join(&joiner))
             }
             _ => values.first().cloned(),
@@ -3454,7 +3632,11 @@ fn finalize_row(
         };
         let cleaned = selected.map(|value| {
             if let Some(prefix) = &tag_query.strip_prefix {
-                value.strip_prefix(prefix).unwrap_or(&value).trim().to_string()
+                value
+                    .strip_prefix(prefix)
+                    .unwrap_or(&value)
+                    .trim()
+                    .to_string()
             } else {
                 value
             }
@@ -3690,7 +3872,10 @@ async fn web_click_css(state: &AppState, arguments: &Value) -> Result<Value> {
     if require_unique && ids.len() != 1 {
         return Err(ToolCallError::new(
             ToolErrorCode::AmbiguousMatch,
-            format!("expected exactly one match for selector '{selector}', got {}", ids.len()),
+            format!(
+                "expected exactly one match for selector '{selector}', got {}",
+                ids.len()
+            ),
             json!({"selector": selector, "matchCount": ids.len()}),
         )
         .into());
@@ -3698,7 +3883,10 @@ async fn web_click_css(state: &AppState, arguments: &Value) -> Result<Value> {
     let element_id = ids.get(index).ok_or_else(|| {
         ToolCallError::new(
             ToolErrorCode::ElementNotFound,
-            format!("no element at index {index} for selector '{selector}' (found {})", ids.len()),
+            format!(
+                "no element at index {index} for selector '{selector}' (found {})",
+                ids.len()
+            ),
             json!({"selector": selector, "index": index, "matchCount": ids.len()}),
         )
     })?;
@@ -3747,7 +3935,10 @@ async fn web_type_css(state: &AppState, arguments: &Value) -> Result<Value> {
     if require_unique && ids.len() != 1 {
         return Err(ToolCallError::new(
             ToolErrorCode::AmbiguousMatch,
-            format!("expected exactly one match for selector '{selector}', got {}", ids.len()),
+            format!(
+                "expected exactly one match for selector '{selector}', got {}",
+                ids.len()
+            ),
             json!({"selector": selector, "matchCount": ids.len()}),
         )
         .into());
@@ -3755,7 +3946,10 @@ async fn web_type_css(state: &AppState, arguments: &Value) -> Result<Value> {
     let element_id = ids.get(index).ok_or_else(|| {
         ToolCallError::new(
             ToolErrorCode::ElementNotFound,
-            format!("no element at index {index} for selector '{selector}' (found {})", ids.len()),
+            format!(
+                "no element at index {index} for selector '{selector}' (found {})",
+                ids.len()
+            ),
             json!({"selector": selector, "index": index, "matchCount": ids.len()}),
         )
     })?;
@@ -3864,11 +4058,23 @@ async fn workflow_list() -> Result<Value> {
 
 async fn workflow_run(state: &AppState, arguments: &Value) -> Result<Value> {
     let name = required_str(arguments, "name")?;
-    let commit = arguments.get("commit").and_then(Value::as_bool).unwrap_or(false);
-    let close_on_finish = arguments
-        .get("closeOnFinish")
+    let commit = arguments
+        .get("commit")
         .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let disconnect_on_finish = arguments
+        .get("disconnectOnFinish")
+        .and_then(Value::as_bool)
+        .or_else(|| arguments.get("closeOnFinish").and_then(Value::as_bool))
         .unwrap_or(true);
+    let background_app_on_finish = arguments
+        .get("backgroundAppOnFinish")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let lock_device_on_finish = arguments
+        .get("lockDeviceOnFinish")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let stop_appium_on_finish = arguments
         .get("stopAppiumOnFinish")
         .and_then(Value::as_bool)
@@ -3893,9 +4099,34 @@ async fn workflow_run(state: &AppState, arguments: &Value) -> Result<Value> {
                 .unwrap_or_else(|_| json!({}));
 
             if stop_appium_on_finish {
-                let _ = worker_shutdown(state, &json!({"stopAppium": true, "shutdownWDA": true})).await;
-            } else if close_on_finish {
-                let _ = session_delete(state, &json!({"stopAppium": false, "shutdownWDA": true})).await;
+                let _ = worker_shutdown(
+                    state,
+                    &json!({
+                        "stopAppium": true,
+                        "shutdownWDA": true,
+                        "backgroundApp": background_app_on_finish,
+                        "lockDevice": lock_device_on_finish
+                    }),
+                )
+                .await;
+            } else if disconnect_on_finish {
+                let _ = worker_shutdown(
+                    state,
+                    &json!({
+                        "stopAppium": false,
+                        "shutdownWDA": true,
+                        "backgroundApp": background_app_on_finish,
+                        "lockDevice": lock_device_on_finish
+                    }),
+                )
+                .await;
+            } else if background_app_on_finish || lock_device_on_finish {
+                let _ = perform_post_run_device_actions(
+                    state,
+                    background_app_on_finish,
+                    lock_device_on_finish,
+                )
+                .await;
             }
 
             let message = format!("workflow '{name}' failed: {err:#}");
@@ -3965,9 +4196,31 @@ async fn workflow_run(state: &AppState, arguments: &Value) -> Result<Value> {
     ];
 
     if stop_appium_on_finish {
-        let _ = worker_shutdown(state, &json!({"stopAppium": true, "shutdownWDA": true})).await;
-    } else if close_on_finish {
-        let _ = session_delete(state, &json!({"stopAppium": false, "shutdownWDA": true})).await;
+        let _ = worker_shutdown(
+            state,
+            &json!({
+                "stopAppium": true,
+                "shutdownWDA": true,
+                "backgroundApp": background_app_on_finish,
+                "lockDevice": lock_device_on_finish
+            }),
+        )
+        .await;
+    } else if disconnect_on_finish {
+        let _ = worker_shutdown(
+            state,
+            &json!({
+                "stopAppium": false,
+                "shutdownWDA": true,
+                "backgroundApp": background_app_on_finish,
+                "lockDevice": lock_device_on_finish
+            }),
+        )
+        .await;
+    } else if background_app_on_finish || lock_device_on_finish {
+        let _ =
+            perform_post_run_device_actions(state, background_app_on_finish, lock_device_on_finish)
+                .await;
     }
 
     Ok(tool_success_with_content(output, content))
@@ -4024,12 +4277,24 @@ async fn script_run(state: &AppState, arguments: &Value) -> Result<Value> {
         .get("steps")
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("steps must be an array"))?;
-    let commit = arguments.get("commit").and_then(Value::as_bool).unwrap_or(false);
-    let vars = arguments.get("vars").cloned().unwrap_or_else(|| json!({}));
-    let close_on_finish = arguments
-        .get("closeOnFinish")
+    let commit = arguments
+        .get("commit")
         .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let vars = arguments.get("vars").cloned().unwrap_or_else(|| json!({}));
+    let disconnect_on_finish = arguments
+        .get("disconnectOnFinish")
+        .and_then(Value::as_bool)
+        .or_else(|| arguments.get("closeOnFinish").and_then(Value::as_bool))
         .unwrap_or(true);
+    let background_app_on_finish = arguments
+        .get("backgroundAppOnFinish")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let lock_device_on_finish = arguments
+        .get("lockDeviceOnFinish")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let stop_appium_on_finish = arguments
         .get("stopAppiumOnFinish")
         .and_then(Value::as_bool)
@@ -4038,9 +4303,29 @@ async fn script_run(state: &AppState, arguments: &Value) -> Result<Value> {
     let result = run_steps(state, steps, commit, &vars, None).await?;
 
     if stop_appium_on_finish {
-        let _ = worker_shutdown(state, &json!({"stopAppium": true})).await;
-    } else if close_on_finish {
-        let _ = session_delete(state, &json!({"stopAppium": false})).await;
+        let _ = worker_shutdown(
+            state,
+            &json!({
+                "stopAppium": true,
+                "backgroundApp": background_app_on_finish,
+                "lockDevice": lock_device_on_finish
+            }),
+        )
+        .await;
+    } else if disconnect_on_finish {
+        let _ = worker_shutdown(
+            state,
+            &json!({
+                "stopAppium": false,
+                "backgroundApp": background_app_on_finish,
+                "lockDevice": lock_device_on_finish
+            }),
+        )
+        .await;
+    } else if background_app_on_finish || lock_device_on_finish {
+        let _ =
+            perform_post_run_device_actions(state, background_app_on_finish, lock_device_on_finish)
+                .await;
     }
 
     Ok(tool_success(result, "script complete"))
@@ -4182,17 +4467,16 @@ async fn run_steps(
 
             if attempt > retries + 1 {
                 let err = last_err.unwrap_or_else(|| anyhow!("unknown error"));
-                let artifacts = capture_failure_artifacts(state).await.unwrap_or_else(|_| json!({}));
+                let artifacts = capture_failure_artifacts(state)
+                    .await
+                    .unwrap_or_else(|_| json!({}));
                 let tool_error = tool_error_from_anyhow(&err, tool);
                 let structured = tool_error
                     .get("structuredContent")
                     .and_then(Value::as_object)
                     .cloned()
                     .unwrap_or_default();
-                let error_code = structured
-                    .get("errorCode")
-                    .cloned()
-                    .unwrap_or(Value::Null);
+                let error_code = structured.get("errorCode").cloned().unwrap_or(Value::Null);
                 let error_message = structured
                     .get("error")
                     .and_then(Value::as_str)
@@ -4334,14 +4618,14 @@ async fn util_list_first(arguments: &Value) -> Result<Value> {
         .get("list")
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("list must be an array"))?;
-    let field = arguments.get("field").and_then(Value::as_str).map(str::trim);
+    let field = arguments
+        .get("field")
+        .and_then(Value::as_str)
+        .map(str::trim);
 
     let value = list.first().cloned().unwrap_or(Value::Null);
     let extracted = if let Some(field) = field.filter(|f| !f.is_empty()) {
-        value
-            .get(field)
-            .cloned()
-            .unwrap_or(Value::Null)
+        value.get(field).cloned().unwrap_or(Value::Null)
     } else {
         value
     };
@@ -4361,7 +4645,10 @@ async fn util_list_nth(arguments: &Value) -> Result<Value> {
         .get("index")
         .and_then(Value::as_u64)
         .ok_or_else(|| anyhow!("index must be an integer >= 1"))? as usize;
-    let field = arguments.get("field").and_then(Value::as_str).map(str::trim);
+    let field = arguments
+        .get("field")
+        .and_then(Value::as_str)
+        .map(str::trim);
 
     let found = index > 0 && index <= list.len();
     let value = if found {
@@ -4370,10 +4657,7 @@ async fn util_list_nth(arguments: &Value) -> Result<Value> {
         Value::Null
     };
     let extracted = if let Some(field) = field.filter(|f| !f.is_empty()) {
-        value
-            .get(field)
-            .cloned()
-            .unwrap_or(Value::Null)
+        value.get(field).cloned().unwrap_or(Value::Null)
     } else {
         value
     };
@@ -4433,7 +4717,10 @@ async fn util_date_bucket_counts(arguments: &Value) -> Result<Value> {
         .get("items")
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("items must be an array"))?;
-    let field = arguments.get("field").and_then(Value::as_str).map(str::trim);
+    let field = arguments
+        .get("field")
+        .and_then(Value::as_str)
+        .map(str::trim);
     let windows = arguments
         .get("windowsDays")
         .and_then(Value::as_array)
@@ -4444,7 +4731,9 @@ async fn util_date_bucket_counts(arguments: &Value) -> Result<Value> {
         .filter(|value| *value > 0)
         .collect();
     if windows_days.is_empty() {
-        return Err(anyhow!("windowsDays must contain at least one positive integer"));
+        return Err(anyhow!(
+            "windowsDays must contain at least one positive integer"
+        ));
     }
 
     let now_ms = arguments
@@ -4477,10 +4766,7 @@ async fn util_date_bucket_counts(arguments: &Value) -> Result<Value> {
 
     let mut counts = Vec::new();
     for window in windows_days {
-        let count = ages_days
-            .iter()
-            .filter(|age| **age <= window)
-            .count();
+        let count = ages_days.iter().filter(|age| **age <= window).count();
         counts.push(json!({ "windowDays": window, "count": count }));
     }
 
@@ -4617,7 +4903,12 @@ fn substitute_vars(value: Value, vars: &Value) -> Value {
                 Value::String(substitute_string(&s, vars))
             }
         }
-        Value::Array(items) => Value::Array(items.into_iter().map(|v| substitute_vars(v, vars)).collect()),
+        Value::Array(items) => Value::Array(
+            items
+                .into_iter()
+                .map(|v| substitute_vars(v, vars))
+                .collect(),
+        ),
         Value::Object(map) => {
             let mut out = serde_json::Map::with_capacity(map.len());
             for (k, v) in map {
@@ -4686,7 +4977,10 @@ fn substitute_exact_value(input: &str, vars: &Value) -> Option<Value> {
     if !trimmed.starts_with("{{") || !trimmed.ends_with("}}") {
         return None;
     }
-    let key = trimmed.trim_start_matches("{{").trim_end_matches("}}").trim();
+    let key = trimmed
+        .trim_start_matches("{{")
+        .trim_end_matches("}}")
+        .trim();
     if key.is_empty() {
         return None;
     }
@@ -4792,7 +5086,9 @@ fn value_equals(value: &Value, candidate: &Value) -> bool {
             }
         }
         (Value::String(a), Value::Number(b)) => a.trim().parse::<f64>().ok().map_or(false, |v| {
-            b.as_f64().map(|bv| (bv - v).abs() < f64::EPSILON).unwrap_or(false)
+            b.as_f64()
+                .map(|bv| (bv - v).abs() < f64::EPSILON)
+                .unwrap_or(false)
         }),
         _ => value == candidate,
     }
@@ -4817,16 +5113,13 @@ fn lookup_var_string(vars: &Value, key: &str) -> Option<String> {
 }
 
 async fn driver_from_state(state: &AppState) -> Result<WebDriverClient> {
-    let base_url = state
-        .appium_base_url()
-        .await
-        .ok_or_else(|| {
-            anyhow::Error::new(ToolCallError::new(
-                ToolErrorCode::ActionFailed,
-                "Appium is not initialized. Call ios.appium.ensure first.",
-                json!({}),
-            ))
-        })?;
+    let base_url = state.appium_base_url().await.ok_or_else(|| {
+        anyhow::Error::new(ToolCallError::new(
+            ToolErrorCode::ActionFailed,
+            "Appium is not initialized. Call ios.appium.ensure first.",
+            json!({}),
+        ))
+    })?;
     let driver = WebDriverClient::new(&base_url).map_err(|err| {
         anyhow::Error::new(ToolCallError::new(
             ToolErrorCode::ActionFailed,
@@ -4889,7 +5182,10 @@ async fn wait_for_selector(
         } else if require_unique && ids.len() != 1 {
             return Err(ToolCallError::new(
                 ToolErrorCode::AmbiguousMatch,
-                format!("expected exactly one match for selector '{selector}', got {}", ids.len()),
+                format!(
+                    "expected exactly one match for selector '{selector}', got {}",
+                    ids.len()
+                ),
                 json!({"selector": selector, "matchCount": ids.len()}),
             )
             .into());
@@ -4959,7 +5255,10 @@ mod tests {
             result.get("errorCode").and_then(Value::as_str),
             Some("COMMIT_REQUIRED")
         );
-        let trace = result.get("trace").and_then(Value::as_array).expect("trace");
+        let trace = result
+            .get("trace")
+            .and_then(Value::as_array)
+            .expect("trace");
         assert_eq!(trace.len(), 1);
         assert_eq!(
             trace[0].get("errorCode").and_then(Value::as_str),
@@ -4985,10 +5284,16 @@ mod tests {
             result.get("errorCode").and_then(Value::as_str),
             Some("NO_SESSION")
         );
-        let trace = result.get("trace").and_then(Value::as_array).expect("trace");
+        let trace = result
+            .get("trace")
+            .and_then(Value::as_array)
+            .expect("trace");
         assert!(!trace.is_empty());
         let last = trace.last().unwrap();
-        assert_eq!(last.get("errorCode").and_then(Value::as_str), Some("NO_SESSION"));
+        assert_eq!(
+            last.get("errorCode").and_then(Value::as_str),
+            Some("NO_SESSION")
+        );
     }
 
     #[tokio::test]

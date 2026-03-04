@@ -8,6 +8,13 @@ usage() {
   cat <<'EOF'
 Usage: scripts/ios_tools.sh <command> [args]
 
+Global options (apply to workflow commands):
+  --disconnect-on-finish 0|1       Keep/disconnect WebDriver session after each workflow (default: 1).
+  --stop-appium-on-finish 0|1      Stop Appium from ios.workflow.run itself (default: 0).
+  --background-on-exit 0|1         Press Home before session teardown (default: 0).
+  --lock-device-on-exit 0|1        Lock device before session teardown (default: 0).
+  --shutdown-after-run 0|1         Send explicit rzn.worker.shutdown after workflow (default: 1).
+
 Commands:
   build                 Build release worker binary
   build-universal       Build universal macOS worker binary
@@ -103,6 +110,78 @@ bool_json() {
   fi
 }
 
+parse_global_flags() {
+  local filtered=()
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --disconnect-on-finish)
+        if [[ "$#" -ge 2 && "${2:0:2}" != "--" ]]; then
+          IOS_WORKFLOW_DISCONNECT_ON_FINISH="$2"
+          shift 2
+        else
+          IOS_WORKFLOW_DISCONNECT_ON_FINISH="1"
+          shift 1
+        fi
+        ;;
+      --stop-appium-on-finish)
+        if [[ "$#" -ge 2 && "${2:0:2}" != "--" ]]; then
+          IOS_WORKFLOW_STOP_APPIUM_ON_FINISH="$2"
+          shift 2
+        else
+          IOS_WORKFLOW_STOP_APPIUM_ON_FINISH="1"
+          shift 1
+        fi
+        ;;
+      --background-on-exit)
+        if [[ "$#" -ge 2 && "${2:0:2}" != "--" ]]; then
+          IOS_BACKGROUND_APP_ON_EXIT="$2"
+          shift 2
+        else
+          IOS_BACKGROUND_APP_ON_EXIT="1"
+          shift 1
+        fi
+        ;;
+      --lock-device-on-exit)
+        if [[ "$#" -ge 2 && "${2:0:2}" != "--" ]]; then
+          IOS_LOCK_DEVICE_ON_EXIT="$2"
+          shift 2
+        else
+          IOS_LOCK_DEVICE_ON_EXIT="1"
+          shift 1
+        fi
+        ;;
+      --shutdown-after-run)
+        if [[ "$#" -ge 2 && "${2:0:2}" != "--" ]]; then
+          IOS_WORKFLOW_SHUTDOWN_AFTER_RUN="$2"
+          shift 2
+        else
+          IOS_WORKFLOW_SHUTDOWN_AFTER_RUN="1"
+          shift 1
+        fi
+        ;;
+      *)
+        filtered+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  PARSED_ARGS=("${filtered[@]}")
+}
+
+build_shutdown_args_json() {
+  local stop_appium_json="$1"
+  local background_app_json
+  local lock_device_json
+  background_app_json="$(bool_json "${IOS_BACKGROUND_APP_ON_EXIT:-0}")"
+  lock_device_json="$(bool_json "${IOS_LOCK_DEVICE_ON_EXIT:-0}")"
+  jq -nc \
+    --argjson stopAppium "$stop_appium_json" \
+    --argjson backgroundApp "$background_app_json" \
+    --argjson lockDevice "$lock_device_json" \
+    '{stopAppium:$stopAppium,shutdownWDA:true,backgroundApp:$backgroundApp,lockDevice:$lockDevice}'
+}
+
 load_ios_session_env() {
   IOS_XCODE_ORG_ID="${IOS_XCODE_ORG_ID:-}"
   IOS_XCODE_SIGNING_ID="${IOS_XCODE_SIGNING_ID:-}"
@@ -151,12 +230,36 @@ run_workflow_rpc() {
   local stop_appium_json="$6"
   local raw_out="$7"
 
-  cat <<JSON | "$bin" > "$raw_out"
+  local disconnect_on_finish_json
+  local stop_appium_on_finish_json
+  local background_on_finish_json
+  local lock_on_finish_json
+  local shutdown_after_run_json
+  local shutdown_args_json
+  local req_file
+
+  disconnect_on_finish_json="$(bool_json "${IOS_WORKFLOW_DISCONNECT_ON_FINISH:-1}")"
+  stop_appium_on_finish_json="$(bool_json "${IOS_WORKFLOW_STOP_APPIUM_ON_FINISH:-0}")"
+  background_on_finish_json="$(bool_json "${IOS_WORKFLOW_BACKGROUND_ON_FINISH:-${IOS_BACKGROUND_APP_ON_EXIT:-0}}")"
+  lock_on_finish_json="$(bool_json "${IOS_WORKFLOW_LOCK_ON_FINISH:-${IOS_LOCK_DEVICE_ON_EXIT:-0}}")"
+  shutdown_after_run_json="$(bool_json "${IOS_WORKFLOW_SHUTDOWN_AFTER_RUN:-1}")"
+  shutdown_args_json="$(build_shutdown_args_json "$stop_appium_json")"
+  req_file="$(mktemp /tmp/ios-tools-workflow-rpc.XXXXXX.jsonl)"
+
+  cat <<JSON > "$req_file"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"$workflow_name","session":$session_json,"args":$args_json,"commit":$commit_json}}}
-{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":{"stopAppium":$stop_appium_json}}}
+{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"$workflow_name","session":$session_json,"args":$args_json,"commit":$commit_json,"disconnectOnFinish":$disconnect_on_finish_json,"closeOnFinish":$disconnect_on_finish_json,"stopAppiumOnFinish":$stop_appium_on_finish_json,"backgroundAppOnFinish":$background_on_finish_json,"lockDeviceOnFinish":$lock_on_finish_json}}}
 JSON
+
+  if [[ "$shutdown_after_run_json" == "true" ]]; then
+    cat <<JSON >> "$req_file"
+{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$shutdown_args_json}}
+JSON
+  fi
+
+  "$bin" < "$req_file" > "$raw_out"
+  rm -f "$req_file"
 }
 
 extract_workflow_artifacts() {
@@ -477,6 +580,8 @@ merge_arg_override() {
 
 cmd="${1:-help}"
 shift || true
+parse_global_flags "$@"
+set -- "${PARSED_ARGS[@]}"
 
 case "$cmd" in
   build)
@@ -513,11 +618,12 @@ JSON
     if [[ "$STOP_APPIUM" == "0" ]]; then
       STOP_APPIUM_JSON="false"
     fi
+    SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_JSON")"
     BIN="$(worker_bin)"
     cat <<JSON | "$BIN"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":{"stopAppium":$STOP_APPIUM_JSON,"shutdownWDA":true}}}
+{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
     ;;
   wda-shutdown)
@@ -577,11 +683,12 @@ JSON
     if [[ "$IOS_STOP_APPIUM_ON_EXIT" == "1" ]]; then
       STOP_APPIUM_ON_EXIT_JSON="true"
     fi
+    SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_ON_EXIT_JSON")"
     cat <<JSON | "$BIN"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"safari.google_search","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{"query":"$QUERY","limit":$LIMIT},"commit":false}}}
-{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":{"stopAppium":$STOP_APPIUM_ON_EXIT_JSON}}}
+{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
     ;;
   reddit-read-smoke)
@@ -621,11 +728,12 @@ JSON
     if [[ "$IOS_STOP_APPIUM_ON_EXIT" == "1" ]]; then
       STOP_APPIUM_ON_EXIT_JSON="true"
     fi
+    SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_ON_EXIT_JSON")"
     cat <<JSON | "$BIN"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.read_first_post","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{},"commit":false}}}
-{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":{"stopAppium":$STOP_APPIUM_ON_EXIT_JSON}}}
+{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
     ;;
   reddit-comment-smoke)
@@ -671,11 +779,12 @@ JSON
     if [[ "$IOS_STOP_APPIUM_ON_EXIT" == "1" ]]; then
       STOP_APPIUM_ON_EXIT_JSON="true"
     fi
+    SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_ON_EXIT_JSON")"
     cat <<JSON | "$BIN"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.comment_first_post","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{"commentText":"$COMMENT_TEXT"},"commit":$COMMIT_JSON}}}
-{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":{"stopAppium":$STOP_APPIUM_ON_EXIT_JSON}}}
+{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
     ;;
   reddit-daily-scroll)
@@ -1208,6 +1317,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
+    SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_ON_EXIT_JSON")"
     RUN_REPLY_JSON="false"
     if [[ -n "$REPLY_TEXT" || "$EXECUTE_REPLY" == "1" ]]; then
       RUN_REPLY_JSON="true"
@@ -1253,7 +1363,7 @@ JSON
     fi
 
     cat <<JSON >> "$REQ_FILE"
-{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":{"stopAppium":$STOP_APPIUM_ON_EXIT_JSON}}}
+{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
 
     RZN_IOS_REUSE_ACTIVE_SESSION=1 "$BIN" < "$REQ_FILE" > "$RAW_OUT"
@@ -1352,11 +1462,12 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
+    SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_ON_EXIT_JSON")"
     cat <<JSON | "$BIN" > "$RAW_OUT"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"appstore.typeahead","session":$SESSION_JSON,"args":$ARGS_JSON,"commit":false}}}
-{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":{"stopAppium":$STOP_APPIUM_ON_EXIT_JSON}}}
+{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
 
     if jq -e 'select(.id=="wf-1") | .result.isError == true' "$RAW_OUT" >/dev/null; then
@@ -1472,11 +1583,12 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
+    SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_ON_EXIT_JSON")"
     cat <<JSON | "$BIN" > "$RAW_OUT"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"appstore.search_results","session":$SESSION_JSON,"args":$ARGS_JSON,"commit":false}}}
-{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":{"stopAppium":$STOP_APPIUM_ON_EXIT_JSON}}}
+{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
 
     if jq -e 'select(.id=="wf-1") | .result.isError == true' "$RAW_OUT" >/dev/null; then

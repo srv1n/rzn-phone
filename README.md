@@ -35,6 +35,7 @@ Reddit workflow notes are documented in `docs/reddit_workflows.md`.
 - `ios.web.eval_js` is intentionally exposed and high-risk. It can mutate page state.
 - Use host approval controls for `mcp:plugin.ios-tools.ios:*` when running in autonomous flows.
 - `ios.workflow.run` supports `commit`; mutating workflows enforce `requiresCommit` at step level.
+- `ios.workflow.run` supports post-run controls: `disconnectOnFinish`, `stopAppiumOnFinish`, `backgroundAppOnFinish`, and `lockDeviceOnFinish`.
 - Reddit and LinkedIn engagement workflows use a dual gate: action arg (`execute_*`/`submit`) plus `commit=true`.
 - App Store workflows in this repo are read-only (no purchase/install/review actions).
 - LinkedIn write/delete/interaction workflows use `requiresCommit` on mutating taps; run dry with `--commit 0` first.
@@ -176,7 +177,10 @@ Run workflow:
   "arguments": {
     "name": "safari.google_search",
     "session": { "udid": "00008110-001C12340E87801E" },
-    "args": { "query": "best wireless headphones", "limit": 5 }
+    "args": { "query": "best wireless headphones", "limit": 5 },
+    "disconnectOnFinish": true,
+    "backgroundAppOnFinish": true,
+    "lockDeviceOnFinish": false
   }
 }
 ```
@@ -279,6 +283,13 @@ Card-based social workflows (catalog-backed):
 ./scripts/ios_tools.sh social-card-list --app linkedin
 ./scripts/ios_tools.sh social-card-run linkedin.daily_scroll <udid> --set max_posts=20
 ./scripts/ios_tools.sh social-card-run reddit.comment_post <udid> --text "Nice breakdown." --execute 0 --commit 0
+```
+
+Optional end-of-run cleanup on any workflow command:
+
+```bash
+./scripts/ios_tools.sh linkedin-like-post <udid> --execute 1 --commit 1 \
+  --background-on-exit 1 --lock-device-on-exit 1
 ```
 
 With explicit WDA signing + xcodebuild logs:
