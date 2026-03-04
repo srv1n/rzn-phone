@@ -25,7 +25,7 @@ LinkedIn workflow notes are documented in `docs/linkedin_workflows.md`.
 - Alerts: `ios.alert.text`, `ios.alert.wait`, `ios.alert.accept`, `ios.alert.dismiss`
 - Deterministic runner: `ios.script.run`
 - Safari primitives: `ios.web.goto`, `ios.web.wait_css`, `ios.web.click_css`, `ios.web.type_css`, `ios.web.press_key`, `ios.web.page_source`, `ios.web.screenshot`, `ios.web.eval_js`
-- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `linkedin.read_feed`, `linkedin.daily_scroll_digest`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
+- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `linkedin.read_feed`, `linkedin.open_post`, `linkedin.daily_scroll_digest`, `linkedin.like_post`, `linkedin.comment_post`, `linkedin.reply_to_comment`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
 
 ## Safety notes
 
@@ -34,7 +34,7 @@ LinkedIn workflow notes are documented in `docs/linkedin_workflows.md`.
 - `ios.workflow.run` supports a `commit` argument for future destructive workflows; current MVP workflow is read-only.
 - `reddit.comment_first_post` requires `commit=true` to tap the submit button (`requiresCommit=true` step).
 - App Store workflows in this repo are read-only (no purchase/install/review actions).
-- LinkedIn write/delete workflows use `requiresCommit` on submit/save/delete steps; run dry with `--commit 0` first.
+- LinkedIn write/delete/interaction workflows use `requiresCommit` on mutating taps; run dry with `--commit 0` first.
 
 ## Prerequisites
 
@@ -227,6 +227,15 @@ LinkedIn read/create/update/delete:
 ./scripts/ios_tools.sh linkedin-create-post <udid> "Testing workflow draft" --submit 0 --commit 0 --out /tmp/linkedin-create-dry
 ./scripts/ios_tools.sh linkedin-update-post <udid> "Updated text from workflow" --execute 0 --commit 0 --out /tmp/linkedin-update-dry
 ./scripts/ios_tools.sh linkedin-delete-post <udid> --execute 0 --commit 0 --out /tmp/linkedin-delete-dry
+```
+
+LinkedIn interaction flows (LM-safe dry-run first):
+
+```bash
+./scripts/ios_tools.sh linkedin-open-post <udid> --post-index 0 --max-feed-scrolls 6 --out /tmp/linkedin-open
+./scripts/ios_tools.sh linkedin-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-like-dry
+./scripts/ios_tools.sh linkedin-comment-post <udid> "Nice perspective, thanks for sharing." --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-comment-dry
+./scripts/ios_tools.sh linkedin-reply-comment <udid> "Great point." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/linkedin-reply-dry
 ```
 
 LinkedIn daily scroll digest (thread-ready output):

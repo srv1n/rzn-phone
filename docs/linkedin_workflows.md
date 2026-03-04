@@ -3,7 +3,11 @@
 This repo now includes first-pass LinkedIn workflows for iOS real devices:
 
 - `linkedin.read_feed`
+- `linkedin.open_post`
 - `linkedin.daily_scroll_digest`
+- `linkedin.like_post`
+- `linkedin.comment_post`
+- `linkedin.reply_to_comment`
 - `linkedin.create_post`
 - `linkedin.update_latest_post`
 - `linkedin.delete_latest_post`
@@ -58,6 +62,17 @@ This command writes:
 - `digest.json`: structured posts with parsed author/title/body/media/engagement
 - `thread.md`: thread-style summary of high-engagement posts (`score >= min-engagement-score`)
 
+Interaction targeting (read-only open + commit-gated actions):
+
+```bash
+./scripts/ios_tools.sh linkedin-open-post <udid> --post-index 0 --max-feed-scrolls 6 --out /tmp/linkedin-open
+./scripts/ios_tools.sh linkedin-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-like-dry
+./scripts/ios_tools.sh linkedin-comment-post <udid> "Thanks for sharing this." --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-comment-dry
+./scripts/ios_tools.sh linkedin-reply-comment <udid> "Great callout." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/linkedin-reply-dry
+```
+
+Each command writes `result.json` and best-effort screenshot/UI-source artifacts; action workflows only mutate when both `--execute 1` and `--commit 1` are set.
+
 Create post dry-run (prepare draft only, no submit):
 
 ```bash
@@ -95,9 +110,42 @@ LINKEDIN_CONFIRM_DELETE_PREDICATE="label == 'Delete'" \
 ./scripts/ios_tools.sh linkedin-update-post <udid> "Updated text" --execute 1 --commit 1
 ```
 
+## Override Selectors (Interaction Flows)
+
+Use these environment overrides when your LinkedIn build/locale differs:
+
+```bash
+LINKEDIN_POST_CARD_PREDICATE="name CONTAINS 'feedUpdateCardA11yID'" \
+LINKEDIN_POST_READY_PREDICATE="label CONTAINS 'Like' OR label CONTAINS 'Comment'" \
+LINKEDIN_LIKE_BUTTON_PREDICATE="label CONTAINS 'Like'" \
+LINKEDIN_COMMENT_BUTTON_PREDICATE="label CONTAINS 'Comment'" \
+LINKEDIN_COMMENT_FIELD_PREDICATE="label CONTAINS 'Add a comment'" \
+LINKEDIN_COMMENT_SUBMIT_PREDICATE="label CONTAINS 'Post comment'" \
+LINKEDIN_REPLY_BUTTON_PREDICATE="label CONTAINS 'Reply'" \
+LINKEDIN_REPLY_FIELD_PREDICATE="label CONTAINS 'Add a reply'" \
+LINKEDIN_REPLY_SUBMIT_PREDICATE="label CONTAINS 'Post reply'" \
+./scripts/ios_tools.sh linkedin-comment-post <udid> "Nice insight." --execute 1 --commit 1
+```
+
+`linkedin-reply-comment` also supports `--target-comment-contains "<text>"` to scroll comments toward a matching thread before tapping a reply button.
+
+## Agentic Pattern
+
+For autonomous LM usage, keep this deterministic loop:
+
+1. Run `linkedin-daily-scroll` to produce `digest.json` + `thread.md`.
+2. Score/select candidate posts by policy (topic fit, risk, engagement threshold, recency).
+3. Dry-run interaction command with `--execute 0 --commit 0` to verify selectors.
+4. Re-run with `--execute 1 --commit 1` only when policy permits the action.
+5. Persist artifacts for audit (`result.json`, screenshots, XML source).
+
 ## Safety Notes
 
 - `linkedin.daily_scroll_digest`: read-only feed sweep; no commit-gated actions.
+- `linkedin.open_post`: read-only targeting helper; no commit-gated actions.
+- `linkedin.like_post`: Like tap is gated by `requiresCommit` and only runs when `args.execute_like=true`.
+- `linkedin.comment_post`: Comment submit is gated by `requiresCommit` and only runs when `args.execute_comment=true`.
+- `linkedin.reply_to_comment`: Reply submit is gated by `requiresCommit` and only runs when `args.execute_reply=true`.
 - `linkedin.create_post`: submit step is gated by `requiresCommit` and only runs when `args.submit=true`.
 - `linkedin.update_latest_post`: save step is gated by `requiresCommit` and only runs when `args.execute_update=true`.
 - `linkedin.delete_latest_post`: delete + confirm taps are gated by `requiresCommit` and only run when `args.execute_delete=true`.

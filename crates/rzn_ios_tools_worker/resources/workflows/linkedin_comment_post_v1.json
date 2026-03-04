@@ -1,0 +1,232 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "linkedin.comment_post",
+  "version": "1.0.0",
+  "description": "Open a LinkedIn feed post, draft a comment, and optionally submit it (commit-gated).",
+  "inputs": {
+    "comment_text": { "type": "string", "required": true },
+    "execute_comment": { "type": "boolean", "default": false },
+    "post_index": { "type": "integer", "default": 0, "min": 0, "max": 50 },
+    "max_feed_scrolls": { "type": "integer", "default": 6, "min": 0, "max": 25 },
+    "post_card_predicate": { "type": "string", "default": "name CONTAINS 'feedUpdateCardA11yIDurn:li:fsd_update'" },
+    "post_ready_predicate": { "type": "string", "default": "label CONTAINS 'Like' OR label CONTAINS 'Comment' OR label CONTAINS 'Repost' OR label CONTAINS 'Send'" },
+    "comment_button_predicate": { "type": "string", "default": "label CONTAINS 'Comment' OR name CONTAINS 'Comment'" },
+    "comment_field_predicate": { "type": "string", "default": "type == 'XCUIElementTypeTextView' OR type == 'XCUIElementTypeTextField' OR label CONTAINS 'comment' OR label CONTAINS 'Add a comment' OR value CONTAINS 'comment'" },
+    "comment_submit_predicate": { "type": "string", "default": "label CONTAINS 'Post comment' OR label == 'Post' OR label == 'Send'" },
+    "maxNodes": { "type": "integer", "default": 240, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Set args.execute_comment=true and run with commit=true to submit the drafted comment.",
+    "When execute_comment=false the workflow only drafts comment text and captures artifacts.",
+    "Comment submit tap is guarded with requiresCommit for agent safety."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.linkedin.LinkedIn",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "menuOverlay",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "NavPanelViewControllerScrimViewA11yID", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "menuOverlayCount",
+      "arguments": { "list": "{{steps.menuOverlay.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.menuOverlayCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "NavPanelViewControllerScrimViewA11yID" } }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "premiumClose",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "LINPremiumFeedFullPageTakeoverUpsellCloseButtonViewA11yID", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "premiumCloseCount",
+      "arguments": { "list": "{{steps.premiumClose.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.premiumCloseCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "LINPremiumFeedFullPageTakeoverUpsellCloseButtonViewA11yID" } }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "premiumNoThanks",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "LINPremiumFeedFullPageTakeoverUpsellCancelCTAButtonA11yID", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "premiumNoThanksCount",
+      "arguments": { "list": "{{steps.premiumNoThanks.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.premiumNoThanksCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "LINPremiumFeedFullPageTakeoverUpsellCancelCTAButtonA11yID" } }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "composeCancel",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "13603", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "composeCancelCount",
+      "arguments": { "list": "{{steps.composeCancel.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.composeCancelCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "13603" } }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "discardButtons",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "labelContains": "Discard", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "discardButtonsCount",
+      "arguments": { "list": "{{steps.discardButtons.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.discardButtonsCount.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "label CONTAINS 'Discard' OR label CONTAINS 'Delete draft' OR label CONTAINS 'Discard post'"
+        }
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "accessibility id", "value": "12000" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_card_predicate}}" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.scroll_until",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_card_predicate}}" },
+        "direction": "down",
+        "distance": 0.6,
+        "maxScrolls": "{{max_feed_scrolls}}",
+        "timeoutMs": 60000,
+        "settleMs": 350
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_card_predicate}}", "index": "{{post_index}}" }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_ready_predicate}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{comment_button_predicate}}" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{comment_field_predicate}}" },
+        "timeoutMs": 15000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.type",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{comment_field_predicate}}" },
+        "text": "{{comment_text}}",
+        "clearFirst": true
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "draftCommentScreenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "draftCommentUiSource" },
+    { "tool": "ios.ui.observe_compact", "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" }, "saveAs": "draftCommentCompactSnapshot" },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "execute_comment", "truthy": true },
+      "requiresCommit": true,
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{comment_submit_predicate}}" } }
+    },
+    {
+      "tool": "ios.ui.screenshot",
+      "when": { "var": "execute_comment", "truthy": true },
+      "arguments": {},
+      "saveAs": "afterCommentScreenshot"
+    }
+  ],
+  "output": {
+    "requestedComment": "{{execute_comment}}",
+    "draftCommentScreenshot": "{{steps.draftCommentScreenshot}}",
+    "draftCommentUiSource": "{{steps.draftCommentUiSource}}",
+    "draftCommentCompactSnapshot": "{{steps.draftCommentCompactSnapshot}}",
+    "afterCommentScreenshot": "{{steps.afterCommentScreenshot}}"
+  }
+}

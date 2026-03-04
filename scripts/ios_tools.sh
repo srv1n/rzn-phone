@@ -39,6 +39,14 @@ Commands:
                         Real-device smoke test; asserts at least 1 suggestion and 1 result row.
   linkedin-read-feed <udid> [--out <dir>] [--limit <n>]
                         Run linkedin.read_feed and write result.json + screenshot/ui source artifacts when present.
+  linkedin-open-post <udid> [--out <dir>] [--post-index <n>] [--max-feed-scrolls <n>]
+                        Run linkedin.open_post for deterministic post targeting (read-only).
+  linkedin-like-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-feed-scrolls <n>]
+                        Run linkedin.like_post. Default is dry-run (execute=0).
+  linkedin-comment-post <udid> <comment> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-feed-scrolls <n>]
+                        Run linkedin.comment_post. Default is dry-run draft (execute=0).
+  linkedin-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-feed-scrolls <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]
+                        Run linkedin.reply_to_comment. Default is dry-run draft (execute=0).
   linkedin-create-post <udid> <text> [--out <dir>] [--submit 0|1] [--commit 0|1]
                         Run linkedin.create_post. Default is dry-run draft capture (submit=0).
   linkedin-update-post <udid> <text> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]
@@ -129,13 +137,34 @@ extract_workflow_artifacts() {
   jq -c 'select(.id=="wf-1") | .result.structuredContent' "$raw_out" | jq . > "$out_dir/result.json"
 
   local screenshot_b64
-  screenshot_b64="$(jq -r 'select(.id=="wf-1") | (.result.structuredContent.screenshot.data // .result.structuredContent.draftScreenshot.data // .result.structuredContent.readyScreenshot.data // empty)' "$raw_out")"
+  screenshot_b64="$(jq -r 'select(.id=="wf-1") | (
+      .result.structuredContent.screenshot.data //
+      .result.structuredContent.draftScreenshot.data //
+      .result.structuredContent.readyScreenshot.data //
+      .result.structuredContent.postScreenshot.data //
+      .result.structuredContent.beforeLikeScreenshot.data //
+      .result.structuredContent.afterLikeScreenshot.data //
+      .result.structuredContent.draftCommentScreenshot.data //
+      .result.structuredContent.afterCommentScreenshot.data //
+      .result.structuredContent.draftReplyScreenshot.data //
+      .result.structuredContent.afterReplyScreenshot.data //
+      empty
+    )' "$raw_out")"
   if [[ -n "$screenshot_b64" ]]; then
     printf '%s' "$screenshot_b64" | base64 --decode > "$out_dir/screenshot.png"
   fi
 
   local ui_source
-  ui_source="$(jq -r 'select(.id=="wf-1") | (.result.structuredContent.uiSource.source // .result.structuredContent.draftUiSource.source // .result.structuredContent.readyUiSource.source // empty)' "$raw_out")"
+  ui_source="$(jq -r 'select(.id=="wf-1") | (
+      .result.structuredContent.uiSource.source //
+      .result.structuredContent.draftUiSource.source //
+      .result.structuredContent.readyUiSource.source //
+      .result.structuredContent.postUiSource.source //
+      .result.structuredContent.beforeLikeUiSource.source //
+      .result.structuredContent.draftCommentUiSource.source //
+      .result.structuredContent.draftReplyUiSource.source //
+      empty
+    )' "$raw_out")"
   if [[ -n "$ui_source" ]]; then
     printf '%s' "$ui_source" > "$out_dir/ui_source.xml"
   fi
@@ -783,6 +812,336 @@ JSON
     ensure_workflow_success "$RAW_OUT" "linkedin-read-feed failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "linkedin read_feed saved artifacts to: $OUT_DIR"
+    ;;
+  linkedin-open-post)
+    UDID="${1:-}"
+    if [[ "$#" -ge 1 ]]; then
+      shift 1
+    else
+      shift "$#"
+    fi
+    POST_INDEX=0
+    MAX_FEED_SCROLLS=6
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --post-index)
+          POST_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --max-feed-scrolls)
+          MAX_FEED_SCROLLS="${2:-6}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for linkedin-open-post: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh linkedin-open-post <udid> [--out <dir>] [--post-index <n>] [--max-feed-scrolls <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/linkedin-open-post.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --argjson post_index "$POST_INDEX" \
+      --argjson max_feed_scrolls "$MAX_FEED_SCROLLS" \
+      --arg post_card_predicate "${LINKEDIN_POST_CARD_PREDICATE:-}" \
+      --arg post_ready_predicate "${LINKEDIN_POST_READY_PREDICATE:-}" \
+      '{post_index:$post_index,max_feed_scrolls:$max_feed_scrolls}
+       + (if $post_card_predicate == "" then {} else {post_card_predicate:$post_card_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "linkedin.open_post" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "linkedin-open-post failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "linkedin open_post saved artifacts to: $OUT_DIR"
+    ;;
+  linkedin-like-post)
+    UDID="${1:-}"
+    if [[ "$#" -ge 1 ]]; then
+      shift 1
+    else
+      shift "$#"
+    fi
+    EXECUTE=0
+    COMMIT=0
+    POST_INDEX=0
+    MAX_FEED_SCROLLS=6
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --post-index)
+          POST_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --max-feed-scrolls)
+          MAX_FEED_SCROLLS="${2:-6}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for linkedin-like-post: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh linkedin-like-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-feed-scrolls <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/linkedin-like-post.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_JSON="$(bool_json "$EXECUTE")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --argjson execute_like "$EXECUTE_JSON" \
+      --argjson post_index "$POST_INDEX" \
+      --argjson max_feed_scrolls "$MAX_FEED_SCROLLS" \
+      --arg post_card_predicate "${LINKEDIN_POST_CARD_PREDICATE:-}" \
+      --arg post_ready_predicate "${LINKEDIN_POST_READY_PREDICATE:-}" \
+      --arg like_button_predicate "${LINKEDIN_LIKE_BUTTON_PREDICATE:-}" \
+      '{execute_like:$execute_like,post_index:$post_index,max_feed_scrolls:$max_feed_scrolls}
+       + (if $post_card_predicate == "" then {} else {post_card_predicate:$post_card_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
+       + (if $like_button_predicate == "" then {} else {like_button_predicate:$like_button_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "linkedin.like_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "linkedin-like-post failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "linkedin like_post saved artifacts to: $OUT_DIR"
+    ;;
+  linkedin-comment-post)
+    UDID="${1:-}"
+    COMMENT_TEXT="${2:-}"
+    if [[ "$#" -ge 2 ]]; then
+      shift 2
+    else
+      shift "$#"
+    fi
+    EXECUTE=0
+    COMMIT=0
+    POST_INDEX=0
+    MAX_FEED_SCROLLS=6
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --post-index)
+          POST_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --max-feed-scrolls)
+          MAX_FEED_SCROLLS="${2:-6}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for linkedin-comment-post: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" || -z "$COMMENT_TEXT" ]]; then
+      echo "usage: scripts/ios_tools.sh linkedin-comment-post <udid> <comment> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-feed-scrolls <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/linkedin-comment-post.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_JSON="$(bool_json "$EXECUTE")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --arg comment_text "$COMMENT_TEXT" \
+      --argjson execute_comment "$EXECUTE_JSON" \
+      --argjson post_index "$POST_INDEX" \
+      --argjson max_feed_scrolls "$MAX_FEED_SCROLLS" \
+      --arg post_card_predicate "${LINKEDIN_POST_CARD_PREDICATE:-}" \
+      --arg post_ready_predicate "${LINKEDIN_POST_READY_PREDICATE:-}" \
+      --arg comment_button_predicate "${LINKEDIN_COMMENT_BUTTON_PREDICATE:-}" \
+      --arg comment_field_predicate "${LINKEDIN_COMMENT_FIELD_PREDICATE:-}" \
+      --arg comment_submit_predicate "${LINKEDIN_COMMENT_SUBMIT_PREDICATE:-}" \
+      '{comment_text:$comment_text,execute_comment:$execute_comment,post_index:$post_index,max_feed_scrolls:$max_feed_scrolls}
+       + (if $post_card_predicate == "" then {} else {post_card_predicate:$post_card_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
+       + (if $comment_button_predicate == "" then {} else {comment_button_predicate:$comment_button_predicate} end)
+       + (if $comment_field_predicate == "" then {} else {comment_field_predicate:$comment_field_predicate} end)
+       + (if $comment_submit_predicate == "" then {} else {comment_submit_predicate:$comment_submit_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "linkedin.comment_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "linkedin-comment-post failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "linkedin comment_post saved artifacts to: $OUT_DIR"
+    ;;
+  linkedin-reply-comment)
+    UDID="${1:-}"
+    REPLY_TEXT="${2:-}"
+    if [[ "$#" -ge 2 ]]; then
+      shift 2
+    else
+      shift "$#"
+    fi
+    EXECUTE=0
+    COMMIT=0
+    POST_INDEX=0
+    REPLY_INDEX=0
+    MAX_FEED_SCROLLS=6
+    MAX_COMMENT_SCROLLS=6
+    TARGET_COMMENT_CONTAINS=""
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --post-index)
+          POST_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --reply-index)
+          REPLY_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --max-feed-scrolls)
+          MAX_FEED_SCROLLS="${2:-6}"
+          shift 2
+          ;;
+        --max-comment-scrolls)
+          MAX_COMMENT_SCROLLS="${2:-6}"
+          shift 2
+          ;;
+        --target-comment-contains)
+          TARGET_COMMENT_CONTAINS="${2:-}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for linkedin-reply-comment: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" || -z "$REPLY_TEXT" ]]; then
+      echo "usage: scripts/ios_tools.sh linkedin-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-feed-scrolls <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/linkedin-reply-comment.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_JSON="$(bool_json "$EXECUTE")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --arg reply_text "$REPLY_TEXT" \
+      --argjson execute_reply "$EXECUTE_JSON" \
+      --argjson post_index "$POST_INDEX" \
+      --argjson reply_index "$REPLY_INDEX" \
+      --argjson max_feed_scrolls "$MAX_FEED_SCROLLS" \
+      --argjson max_comment_scrolls "$MAX_COMMENT_SCROLLS" \
+      --arg target_comment_contains "$TARGET_COMMENT_CONTAINS" \
+      --arg post_card_predicate "${LINKEDIN_POST_CARD_PREDICATE:-}" \
+      --arg post_ready_predicate "${LINKEDIN_POST_READY_PREDICATE:-}" \
+      --arg comment_button_predicate "${LINKEDIN_COMMENT_BUTTON_PREDICATE:-}" \
+      --arg reply_button_predicate "${LINKEDIN_REPLY_BUTTON_PREDICATE:-}" \
+      --arg reply_field_predicate "${LINKEDIN_REPLY_FIELD_PREDICATE:-}" \
+      --arg reply_submit_predicate "${LINKEDIN_REPLY_SUBMIT_PREDICATE:-}" \
+      '{reply_text:$reply_text,execute_reply:$execute_reply,post_index:$post_index,reply_index:$reply_index,max_feed_scrolls:$max_feed_scrolls,max_comment_scrolls:$max_comment_scrolls}
+       + (if $target_comment_contains == "" then {} else {target_comment_contains:$target_comment_contains} end)
+       + (if $post_card_predicate == "" then {} else {post_card_predicate:$post_card_predicate} end)
+       + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
+       + (if $comment_button_predicate == "" then {} else {comment_button_predicate:$comment_button_predicate} end)
+       + (if $reply_button_predicate == "" then {} else {reply_button_predicate:$reply_button_predicate} end)
+       + (if $reply_field_predicate == "" then {} else {reply_field_predicate:$reply_field_predicate} end)
+       + (if $reply_submit_predicate == "" then {} else {reply_submit_predicate:$reply_submit_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "linkedin.reply_to_comment" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "linkedin-reply-comment failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "linkedin reply_to_comment saved artifacts to: $OUT_DIR"
     ;;
   linkedin-create-post)
     UDID="${1:-}"
