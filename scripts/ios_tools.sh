@@ -215,6 +215,8 @@ build_linkedin_digest() {
       if . == null then 0
       else (tostring | gsub(","; "") | tonumber? // 0)
       end;
+    def capture_int($text; $re):
+      ([($text | capture($re; "i").n?)] | first | to_int);
     def lines_from($raw):
       ($raw | tostring | split("\n") | map(trim) | map(select(length > 0)));
     def author_from($lines):
@@ -334,6 +336,8 @@ build_reddit_digest() {
       if . == null then 0
       else (tostring | gsub(","; "") | tonumber? // 0)
       end;
+    def capture_int($text; $re):
+      ([($text | capture($re; "i").n?)] | first | to_int);
     def lines_from($raw):
       ($raw | tostring | split("\n") | map(trim) | map(select(length > 0)));
     def first_match($lines; $re):
@@ -373,9 +377,9 @@ build_reddit_digest() {
       | title_from($lines) as $title
       | body_from($lines; $title) as $body
       | engagement_line($lines) as $eng
-      | (($eng | capture("(?<n>[0-9][0-9,]*)\\s+upvotes?"; "i").n?) | to_int) as $upvotes
-      | (($eng | capture("(?<n>[0-9][0-9,]*)\\s+comments?"; "i").n?) | to_int) as $comments
-      | (($eng | capture("(?<n>[0-9][0-9,]*)\\s+shares?"; "i").n?) | to_int) as $shares
+      | capture_int($eng; "(?<n>[0-9][0-9,]*)\\s+upvotes?") as $upvotes
+      | capture_int($eng; "(?<n>[0-9][0-9,]*)\\s+comments?") as $comments
+      | capture_int($eng; "(?<n>[0-9][0-9,]*)\\s+shares?") as $shares
       | {
           position: ($row.position // 0),
           author: $author,
@@ -419,10 +423,10 @@ build_reddit_digest() {
             .engagingPosts
             | to_entries
             | map(
-                "### \(.key + 1). \((.value.author // \"\") | if . == \"\" then \"(unknown)\" else . end)\n"
+                "### \(.key + 1). \((.value.author // "") | if . == "" then "(unknown)" else . end)\n"
                 + "Score: \(.value.engagement.score) | Upvotes: \(.value.engagement.upvotes) | Comments: \(.value.engagement.comments) | Shares: \(.value.engagement.shares)\n"
-                + "Title: \((.value.title // \"\") | if . == \"\" then \"(none)\" else . end)\n"
-                + "Body:\n\((.value.body // \"\") | if . == \"\" then \"(none)\" else . end)\n"
+                + "Title: \((.value.title // "") | if . == "" then "(none)" else . end)\n"
+                + "Body:\n\((.value.body // "") | if . == "" then "(none)" else . end)\n"
               )
             | join("\n")
           )
@@ -780,9 +784,11 @@ JSON
     ARGS_JSON="$(jq -nc \
       --argjson post_index "$POST_INDEX" \
       --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_open_predicate "${REDDIT_POST_OPEN_PREDICATE:-}" \
       --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
       '{post_index:$post_index}
        + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_open_predicate == "" then {} else {post_open_predicate:$post_open_predicate} end)
        + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)')"
 
     BIN="$(worker_bin)"
@@ -850,10 +856,12 @@ JSON
       --argjson execute_like "$EXECUTE_JSON" \
       --argjson post_index "$POST_INDEX" \
       --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_open_predicate "${REDDIT_POST_OPEN_PREDICATE:-}" \
       --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
       --arg like_button_predicate "${REDDIT_LIKE_BUTTON_PREDICATE:-}" \
       '{execute_like:$execute_like,post_index:$post_index}
        + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_open_predicate == "" then {} else {post_open_predicate:$post_open_predicate} end)
        + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
        + (if $like_button_predicate == "" then {} else {like_button_predicate:$like_button_predicate} end)')"
 
@@ -924,11 +932,13 @@ JSON
       --argjson execute_comment "$EXECUTE_JSON" \
       --argjson post_index "$POST_INDEX" \
       --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_open_predicate "${REDDIT_POST_OPEN_PREDICATE:-}" \
       --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
       --arg comment_field_predicate "${REDDIT_COMMENT_FIELD_PREDICATE:-}" \
       --arg comment_submit_predicate "${REDDIT_COMMENT_SUBMIT_PREDICATE:-}" \
       '{comment_text:$comment_text,execute_comment:$execute_comment,post_index:$post_index}
        + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_open_predicate == "" then {} else {post_open_predicate:$post_open_predicate} end)
        + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
        + (if $comment_field_predicate == "" then {} else {comment_field_predicate:$comment_field_predicate} end)
        + (if $comment_submit_predicate == "" then {} else {comment_submit_predicate:$comment_submit_predicate} end)')"
@@ -1018,6 +1028,7 @@ JSON
       --argjson max_comment_scrolls "$MAX_COMMENT_SCROLLS" \
       --arg target_comment_contains "$TARGET_COMMENT_CONTAINS" \
       --arg post_cell_predicate "${REDDIT_POST_CELL_PREDICATE:-}" \
+      --arg post_open_predicate "${REDDIT_POST_OPEN_PREDICATE:-}" \
       --arg post_ready_predicate "${REDDIT_POST_READY_PREDICATE:-}" \
       --arg reply_button_predicate "${REDDIT_REPLY_BUTTON_PREDICATE:-}" \
       --arg reply_field_predicate "${REDDIT_REPLY_FIELD_PREDICATE:-}" \
@@ -1025,6 +1036,7 @@ JSON
       '{reply_text:$reply_text,execute_reply:$execute_reply,post_index:$post_index,reply_index:$reply_index,max_comment_scrolls:$max_comment_scrolls}
        + (if $target_comment_contains == "" then {} else {target_comment_contains:$target_comment_contains} end)
        + (if $post_cell_predicate == "" then {} else {post_cell_predicate:$post_cell_predicate} end)
+       + (if $post_open_predicate == "" then {} else {post_open_predicate:$post_open_predicate} end)
        + (if $post_ready_predicate == "" then {} else {post_ready_predicate:$post_ready_predicate} end)
        + (if $reply_button_predicate == "" then {} else {reply_button_predicate:$reply_button_predicate} end)
        + (if $reply_field_predicate == "" then {} else {reply_field_predicate:$reply_field_predicate} end)

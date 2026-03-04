@@ -59,11 +59,11 @@
       "saveAs": "feedRows",
       "arguments": {
         "row": {
-          "type": "XCUIElementTypeCell",
+          "type": "XCUIElementTypeOther",
           "namePrefix": "reddit_feed__post__post_cell"
         },
         "primary": {
-          "type": "XCUIElementTypeCell",
+          "type": "XCUIElementTypeOther",
           "attr": "label",
           "pick": "first"
         },

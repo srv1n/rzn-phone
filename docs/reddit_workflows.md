@@ -44,6 +44,7 @@ Use environment overrides if your app build/locale differs:
 
 ```bash
 REDDIT_POST_CELL_PREDICATE="name CONTAINS 'reddit_feed__post__post_cell'" \
+REDDIT_POST_OPEN_PREDICATE="name CONTAINS 'reddit_feed__post__title_text'" \
 REDDIT_POST_READY_PREDICATE="label CONTAINS 'Comment'" \
 REDDIT_LIKE_BUTTON_PREDICATE="label CONTAINS[c] 'upvote'" \
 REDDIT_COMMENT_FIELD_PREDICATE="label CONTAINS[c] 'comment'" \
@@ -53,6 +54,9 @@ REDDIT_REPLY_FIELD_PREDICATE="label CONTAINS[c] 'reply'" \
 REDDIT_REPLY_SUBMIT_PREDICATE="label == 'Reply' OR label == 'Send'" \
 ./scripts/ios_tools.sh reddit-comment-post <udid> "Nice write-up." --execute 1 --commit 1
 ```
+
+If the app is already inside a post detail view, you can broaden `REDDIT_POST_CELL_PREDICATE` to include title nodes:
+`name CONTAINS 'reddit_feed__post__title_text' OR name CONTAINS 'reddit_feed__post__post_cell'`.
 
 ## Agentic Pattern
 
