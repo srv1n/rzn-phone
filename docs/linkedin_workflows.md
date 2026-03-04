@@ -3,6 +3,7 @@
 This repo now includes first-pass LinkedIn workflows for iOS real devices:
 
 - `linkedin.read_feed`
+- `linkedin.daily_scroll_digest`
 - `linkedin.create_post`
 - `linkedin.update_latest_post`
 - `linkedin.delete_latest_post`
@@ -45,6 +46,18 @@ Read feed (read-only):
 ./scripts/ios_tools.sh linkedin-read-feed <udid> --limit 5 --out /tmp/linkedin-read
 ```
 
+Daily scroll digest (read-only + parsed artifacts):
+
+```bash
+./scripts/ios_tools.sh linkedin-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/linkedin-daily
+```
+
+This command writes:
+
+- `result.json`: raw workflow output (`rows`, screenshots, UI source)
+- `digest.json`: structured posts with parsed author/title/body/media/engagement
+- `thread.md`: thread-style summary of high-engagement posts (`score >= min-engagement-score`)
+
 Create post dry-run (prepare draft only, no submit):
 
 ```bash
@@ -84,6 +97,7 @@ LINKEDIN_CONFIRM_DELETE_PREDICATE="label == 'Delete'" \
 
 ## Safety Notes
 
+- `linkedin.daily_scroll_digest`: read-only feed sweep; no commit-gated actions.
 - `linkedin.create_post`: submit step is gated by `requiresCommit` and only runs when `args.submit=true`.
 - `linkedin.update_latest_post`: save step is gated by `requiresCommit` and only runs when `args.execute_update=true`.
 - `linkedin.delete_latest_post`: delete + confirm taps are gated by `requiresCommit` and only run when `args.execute_delete=true`.

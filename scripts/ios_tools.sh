@@ -45,6 +45,8 @@ Commands:
                         Run linkedin.update_latest_post. Default is dry-run edit preparation (execute=0).
   linkedin-delete-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]
                         Run linkedin.delete_latest_post. Default is dry-run delete preparation (execute=0).
+  linkedin-daily-scroll <udid> [--out <dir>] [--max-posts <n>] [--max-scrolls <n>] [--min-engagement-score <n>]
+                        Run linkedin.daily_scroll_digest and emit digest.json + thread.md from structured feed rows.
 EOF
 }
 
@@ -154,6 +156,125 @@ ensure_workflow_success() {
   fi
 
   return 0
+}
+
+build_linkedin_digest() {
+  local raw_out="$1"
+  local out_dir="$2"
+  local min_score="$3"
+
+  local digest_json="$out_dir/digest.json"
+  local thread_md="$out_dir/thread.md"
+
+  jq --argjson minScore "$min_score" '
+    def trim: gsub("^\\s+|\\s+$"; "");
+    def to_int:
+      if . == null then 0
+      else (tostring | gsub(","; "") | tonumber? // 0)
+      end;
+    def lines_from($raw):
+      ($raw | tostring | split("\n") | map(trim) | map(select(length > 0)));
+    def author_from($lines):
+      (
+        if ($lines | length) == 0 then ""
+        elif ($lines[0] | test("^(Suggested|Promoted)$"; "i")) then ($lines[1] // $lines[0] // "")
+        else ($lines[0] // "")
+        end
+      ) | split(",")[0] | trim;
+    def engagement_line($lines):
+      ($lines | map(select(test("Reactions?|Comments?|Reposts?"; "i"))) | first // "");
+    def content_lines($lines; $author):
+      (
+        $lines
+        | map(select(test("^(Suggested|Promoted)$"; "i") | not))
+        | map(select(test("^React, Comment on"; "i") | not))
+        | map(select(test("View (image|video) in fullscreen"; "i") | not))
+        | map(select(test("\\bReactions?\\b|\\bComments?\\b|\\bReposts?\\b"; "i") | not))
+        | map(select(test("Visible to anyone on or off LinkedIn"; "i") | not))
+        | map(select(. != $author))
+      );
+    def post_from_row:
+      . as $row
+      | ($row.rawLabel // "") as $raw
+      | lines_from($raw) as $lines
+      | author_from($lines) as $author
+      | engagement_line($lines) as $eng
+      | content_lines($lines; $author) as $content
+      | (
+          $content
+          | map(
+              select(
+                test("^[^,]{1,80}, .+\\b(\\d+[smhdw]|\\d+\\s*(min|mins|minute|minutes|hour|hours|day|days|week|weeks))\\b"; "i")
+                | not
+              )
+            )
+        ) as $content_clean
+      | (($eng | capture("(?<n>[0-9][0-9,]*)\\s+Reactions?"; "i").n?) | to_int) as $reactions
+      | (($eng | capture("(?<n>[0-9][0-9,]*)\\s+Comments?"; "i").n?) | to_int) as $comments
+      | (($eng | capture("(?<n>[0-9][0-9,]*)\\s+Reposts?"; "i").n?) | to_int) as $reposts
+      | {
+          position: ($row.position // 0),
+          author: $author,
+          title: ($content_clean[0] // $content[0] // ""),
+          body: ((($content_clean[1:] // $content[1:] // []) | join("\n"))),
+          media: {
+            has_media: ($raw | test("View (image|video) in fullscreen"; "i")),
+            type: (
+              if ($raw | test("View image in fullscreen"; "i")) then "image"
+              elif ($raw | test("View video in fullscreen"; "i")) then "video"
+              else "unknown"
+              end
+            )
+          },
+          engagement: {
+            reactions: $reactions,
+            comments: $comments,
+            reposts: $reposts,
+            score: ($reactions + ($comments * 2) + ($reposts * 3)),
+            raw: $eng
+          },
+          rawLabel: $raw
+        };
+
+    select(.id == "wf-1")
+    | .result.structuredContent
+    | {
+        generatedAt: (now | todateiso8601),
+        workflow: "linkedin.daily_scroll_digest",
+        scannedPosts: (.rowCount // ((.rows // []) | length)),
+        scrolls: (.scrolls // 0),
+        thresholdScore: $minScore,
+        posts: ((.rows // []) | map(post_from_row))
+      }
+    | .engagingPosts = (.posts | map(select(.engagement.score >= $minScore)) | sort_by(.engagement.score) | reverse)
+  ' "$raw_out" > "$digest_json"
+
+  jq -r '
+    "# LinkedIn Daily Scroll Digest\n\n"
+    + "Generated: \(.generatedAt)\n"
+    + "Scanned posts: \(.scannedPosts)\n"
+    + "Scrolls: \(.scrolls)\n"
+    + "Threshold score: \(.thresholdScore)\n\n"
+    + "## Engaging Posts\n\n"
+    + (
+        if (.engagingPosts | length) == 0 then
+          "No posts met the engagement threshold.\n"
+        else
+          (
+            .engagingPosts
+            | to_entries
+            | map(
+                "### \(.key + 1). \(.value.author)\n"
+                + "Score: \(.value.engagement.score) | Reactions: \(.value.engagement.reactions) | Comments: \(.value.engagement.comments) | Reposts: \(.value.engagement.reposts)\n"
+                + "Title: \((.value.title // "") | if . == "" then "(none)" else . end)\n"
+                + "Body:\n\((.value.body // "") | if . == "" then "(none)" else . end)\n"
+                + "Media: \(.value.media.type)\n"
+              )
+            | join("\n")
+          )
+        end
+      )
+  ' "$digest_json" > "$thread_md"
 }
 
 cmd="${1:-help}"
@@ -894,6 +1015,71 @@ JSON
     ensure_workflow_success "$RAW_OUT" "linkedin-delete-post failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "linkedin delete_latest_post saved artifacts to: $OUT_DIR"
+    ;;
+  linkedin-daily-scroll)
+    UDID="${1:-}"
+    if [[ "$#" -ge 1 ]]; then
+      shift 1
+    else
+      shift "$#"
+    fi
+    MAX_POSTS=30
+    MAX_SCROLLS=8
+    MIN_ENGAGEMENT_SCORE=20
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --max-posts)
+          MAX_POSTS="${2:-30}"
+          shift 2
+          ;;
+        --max-scrolls)
+          MAX_SCROLLS="${2:-8}"
+          shift 2
+          ;;
+        --min-engagement-score)
+          MIN_ENGAGEMENT_SCORE="${2:-20}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for linkedin-daily-scroll: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh linkedin-daily-scroll <udid> [--out <dir>] [--max-posts <n>] [--max-scrolls <n>] [--min-engagement-score <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/linkedin-daily-scroll.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --argjson max_posts "$MAX_POSTS" \
+      --argjson max_scrolls "$MAX_SCROLLS" \
+      '{max_posts:$max_posts,max_scrolls:$max_scrolls}')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "linkedin.daily_scroll_digest" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "linkedin-daily-scroll failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    build_linkedin_digest "$RAW_OUT" "$OUT_DIR" "$MIN_ENGAGEMENT_SCORE"
+    echo "linkedin daily scroll digest saved artifacts to: $OUT_DIR"
     ;;
   help|-h|--help)
     usage
