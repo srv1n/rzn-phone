@@ -23,6 +23,8 @@ The tester kit contains:
 - `artifacts/ios-tools-<version>-macos_universal.zip`: signed plugin bundle with the worker binary and workflow JSON files
 - `scripts/tester_doctor.sh`: local environment/device preflight
 - `examples/ios-tools.mcp.json`: sample MCP server config for Codex/Claude-style local clients
+- `examples/agent-handoff.md`: compact agent-facing setup and diagnosis instructions
+- `AGENT_SETUP.md`: full agent playbook for setup, safe execution, and troubleshooting
 - `cards/social/`: reference card catalogs for higher-level workflow orchestration
 
 ## Who this is for
@@ -172,7 +174,7 @@ Suggested starter workflows:
 - `linkedin.read_feed`
 - `linkedin.daily_scroll_digest`
 
-## Prompt to hand to Codex or Claude
+## Prompt to hand to Codex, Cloud Code, or Claude
 
 If the tester is using a local coding/agent client, give them a prompt like:
 
@@ -181,6 +183,8 @@ Use the ios-tools MCP server on this machine. Start with ios.env.doctor and ios.
 ```
 
 That is enough to get safe exploration started without teaching them the full tool surface up front.
+
+For a stricter setup workflow, include `AGENT_SETUP.md` and `examples/agent-handoff.md` from the tester kit when handing off to another agent.
 
 ## Distribution recommendation
 
