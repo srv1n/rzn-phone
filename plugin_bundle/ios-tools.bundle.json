@@ -22,9 +22,34 @@
     }
   ],
   "resources": [
-    { "path": "resources/workflows/safari_google_search_v1.json" },
+    { "path": "resources/workflows/appstore_app_details_v1.json" },
+    { "path": "resources/workflows/appstore_reviews_v1.json" },
+    { "path": "resources/workflows/appstore_screenshots_v1.json" },
+    { "path": "resources/workflows/appstore_search_results_v1.json" },
+    { "path": "resources/workflows/appstore_typeahead_v1.json" },
+    { "path": "resources/workflows/appstore_version_history_v1.json" },
+    { "path": "resources/workflows/linkedin_comment_post_v1.json" },
+    { "path": "resources/workflows/linkedin_create_post_v1.json" },
+    { "path": "resources/workflows/linkedin_daily_scroll_digest_v1.json" },
+    { "path": "resources/workflows/linkedin_delete_latest_post_v1.json" },
+    { "path": "resources/workflows/linkedin_like_post_v1.json" },
+    { "path": "resources/workflows/linkedin_open_post_v1.json" },
+    { "path": "resources/workflows/linkedin_read_feed_v1.json" },
+    { "path": "resources/workflows/linkedin_reply_to_comment_v1.json" },
+    { "path": "resources/workflows/linkedin_update_latest_post_v1.json" },
+    { "path": "resources/workflows/reddit_comment_first_post_v1.json" },
+    { "path": "resources/workflows/reddit_comment_post_v1.json" },
+    { "path": "resources/workflows/reddit_daily_scroll_digest_v1.json" },
+    { "path": "resources/workflows/reddit_like_post_v1.json" },
+    { "path": "resources/workflows/reddit_open_dm_thread_v1.json" },
+    { "path": "resources/workflows/reddit_open_inbox_v1.json" },
+    { "path": "resources/workflows/reddit_open_post_v1.json" },
     { "path": "resources/workflows/reddit_read_first_post_v1.json" },
-    { "path": "resources/workflows/reddit_comment_first_post_v1.json" }
+    { "path": "resources/workflows/reddit_reply_dm_thread_v1.json" },
+    { "path": "resources/workflows/reddit_reply_to_comment_v1.json" },
+    { "path": "resources/workflows/reddit_send_dm_by_username_v1.json" },
+    { "path": "resources/workflows/reddit_send_dm_v1.json" },
+    { "path": "resources/workflows/safari_google_search_v1.json" }
   ],
   "payloads": [
     {
