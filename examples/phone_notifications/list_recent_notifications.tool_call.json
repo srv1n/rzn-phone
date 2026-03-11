@@ -1,0 +1,64 @@
+{
+  "name": "ios.script.run",
+  "arguments": {
+    "commit": false,
+    "disconnectOnFinish": true,
+    "backgroundAppOnFinish": false,
+    "vars": {
+      "udid": "<UDID>",
+      "maxNodes": 220
+    },
+    "steps": [
+      { "tool": "ios.appium.ensure", "arguments": {} },
+      {
+        "tool": "ios.session.create",
+        "arguments": {
+          "udid": "{{udid}}",
+          "kind": "native_app",
+          "bundleId": "com.apple.springboard",
+          "replaceExisting": true,
+          "noReset": true
+        }
+      },
+      {
+        "tool": "ios.action.scroll",
+        "arguments": {
+          "direction": "down",
+          "distance": 0.85
+        }
+      },
+      { "tool": "util.sleep", "arguments": { "minMs": 900, "maxMs": 1700 } },
+      { "tool": "ios.ui.source", "arguments": {}, "saveAs": "notificationCenterUiSource" },
+      {
+        "tool": "ios.ui.extract_rows",
+        "arguments": {
+          "source": "{{steps.notificationCenterUiSource.source}}",
+          "row": {
+            "type": "XCUIElementTypeCell"
+          },
+          "primary": {
+            "type": "XCUIElementTypeStaticText",
+            "attr": "label",
+            "pick": "longest"
+          },
+          "fields": [
+            {
+              "name": "body",
+              "attr": "label",
+              "pick": "longest",
+              "query": { "type": "XCUIElementTypeStaticText", "max": 8 }
+            }
+          ],
+          "limit": 25
+        },
+        "saveAs": "notifications"
+      },
+      {
+        "tool": "ios.ui.observe_compact",
+        "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+        "saveAs": "notificationCompactSnapshot"
+      },
+      { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "notificationScreenshot" }
+    ]
+  }
+}

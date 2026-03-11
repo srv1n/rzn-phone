@@ -1,0 +1,123 @@
+version: 1
+
+system:
+  id: "phone_calls"
+  display_name: "Phone Calls"
+  what_it_does: "Reads recent call history on a paired iPhone and leaves call placement as an approval-gated actuation path."
+  use_cases:
+    - "List recent calls from the Phone app"
+    - "Inspect missed, incoming, or outgoing call history"
+    - "Gate outbound call initiation behind explicit approval"
+
+capability_groups:
+  - id: "read_call_history"
+    name: "Read call history"
+    description: "Inspect recent calls and call metadata without placing a call."
+    tool_ids:
+      - "phone_calls.list_recent_calls"
+
+  - id: "place_calls"
+    name: "Place calls"
+    description: "Initiate a call from the Phone app. This should remain approval-gated and non-indexed."
+    tool_ids:
+      - "phone_calls.initiate_call"
+
+setup_steps:
+  - id: "install_plugin"
+    kind: "install"
+    label: "Install phone automation plugin"
+    description: "Install the signed phone automation bundle."
+  - id: "pair_device"
+    kind: "runtime"
+    label: "Pair device"
+    description: "Connect a trusted iPhone that can be driven through Appium/XCUITest."
+  - id: "grant_permissions"
+    kind: "runtime"
+    label: "Grant Phone and automation permissions"
+    description: "Allow the automation stack to inspect the Phone app while the device remains unlocked."
+  - id: "test_connection"
+    kind: "connectivity"
+    label: "Verify device connection"
+    description: "Confirm the worker can create a session and reach the paired phone."
+
+context_parameters:
+  - id: "device_id"
+    label: "Device ID"
+    kind: "device_selector"
+    required: true
+  - id: "phone_number"
+    label: "Phone number"
+    kind: "string"
+    required: false
+  - id: "call_filter"
+    label: "Call filter"
+    kind: "string"
+    required: false
+    default: "all"
+  - id: "max_calls"
+    label: "Max calls"
+    kind: "integer"
+    required: false
+    default: 25
+
+quick_starts:
+  - id: "list_recent_calls"
+    title: "List recent calls"
+    description: "Open the Phone app and extract visible recents with a read-only starter script."
+    tool_id: "phone_calls.list_recent_calls"
+    args:
+      max_calls: 25
+    example_path: "examples/phone_calls/list_recent_calls.tool_call.json"
+
+result_handling:
+  tools:
+    phone_calls.list_recent_calls:
+      human_view:
+        renderer: "table"
+        columns:
+          - key: "contact"
+            label: "Contact"
+          - key: "call_type"
+            label: "Type"
+          - key: "timestamp"
+            label: "When"
+      llm_view:
+        include:
+          - "calls[].call_id"
+          - "calls[].contact"
+          - "calls[].phone_number"
+          - "calls[].call_type"
+          - "calls[].timestamp"
+          - "calls[].duration_seconds"
+        max_items: 50
+      index_view:
+        mode: "records"
+        record_type: "call_log"
+        records_path: "calls[]"
+        fields:
+          external_id: "call_id"
+          title: "contact"
+          body_text: "summary"
+          published_at: "timestamp"
+          metadata.phone_number: "phone_number"
+          metadata.call_type: "call_type"
+          metadata.duration_seconds: "duration_seconds"
+        bm25_text:
+          template: "{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+
+    phone_calls.initiate_call:
+      human_view:
+        renderer: "summary"
+      llm_view:
+        include:
+          - "status"
+          - "phone_number"
+        max_items: 1
+      index_view:
+        mode: "none"
+      debug_view:
+        mode: "raw_json"

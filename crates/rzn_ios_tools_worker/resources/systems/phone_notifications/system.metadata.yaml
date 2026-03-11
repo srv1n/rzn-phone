@@ -1,0 +1,172 @@
+version: 1
+
+system:
+  id: "phone_notifications"
+  display_name: "Phone Notifications"
+  what_it_does: "Reads notification center content on a paired iPhone and keeps any device-mutating cleanup actions out of the default path."
+  use_cases:
+    - "List recent notifications visible on the device"
+    - "Filter notifications by app package or sender label"
+    - "Inspect notification summaries without indexing transport-only acknowledgements"
+
+capability_groups:
+  - id: "read_notifications"
+    name: "Read notifications"
+    description: "Inspect recent notifications and app-specific notification rows."
+    tool_ids:
+      - "phone_notifications.list_recent_notifications"
+      - "phone_notifications.filter_notifications_by_app"
+
+  - id: "device_actions"
+    name: "Device actions"
+    description: "Potential future actions such as clearing notifications or opening a notification. Keep these approval-gated and non-indexed."
+    tool_ids:
+      - "phone_notifications.clear_notifications"
+      - "phone_notifications.open_notification"
+
+setup_steps:
+  - id: "install_plugin"
+    kind: "install"
+    label: "Install phone automation plugin"
+    description: "Install the signed phone automation bundle."
+  - id: "pair_device"
+    kind: "runtime"
+    label: "Pair device"
+    description: "Connect a trusted iPhone that can be driven through Appium/XCUITest."
+  - id: "grant_permissions"
+    kind: "runtime"
+    label: "Grant notification and automation permissions"
+    description: "Keep the device unlocked so Notification Center content can be inspected."
+  - id: "test_connection"
+    kind: "connectivity"
+    label: "Verify device connection"
+    description: "Confirm the worker can create a session and reach the paired phone."
+
+context_parameters:
+  - id: "device_id"
+    label: "Device ID"
+    kind: "device_selector"
+    required: true
+  - id: "app_package"
+    label: "App package"
+    kind: "string"
+    required: false
+  - id: "notification_text"
+    label: "Notification text"
+    kind: "string"
+    required: false
+  - id: "max_notifications"
+    label: "Max notifications"
+    kind: "integer"
+    required: false
+    default: 25
+
+quick_starts:
+  - id: "list_recent_notifications"
+    title: "List recent notifications"
+    description: "Pull down Notification Center and extract visible rows with a read-only starter script."
+    tool_id: "phone_notifications.list_recent_notifications"
+    args:
+      max_notifications: 25
+    example_path: "examples/phone_notifications/list_recent_notifications.tool_call.json"
+  - id: "filter_notifications_by_app"
+    title: "Filter by app"
+    description: "Use the same starter script, then project notifications for one app label."
+    tool_id: "phone_notifications.filter_notifications_by_app"
+    args:
+      app_package: "com.apple.MobileSMS"
+      max_notifications: 25
+    example_path: "examples/phone_notifications/list_recent_notifications.tool_call.json"
+
+result_handling:
+  tools:
+    phone_notifications.list_recent_notifications:
+      human_view:
+        renderer: "table"
+        columns:
+          - key: "app_name"
+            label: "App"
+          - key: "title"
+            label: "Title"
+          - key: "timestamp"
+            label: "When"
+      llm_view:
+        include:
+          - "notifications[].notification_id"
+          - "notifications[].app_name"
+          - "notifications[].title"
+          - "notifications[].body"
+          - "notifications[].timestamp"
+        max_items: 50
+      index_view:
+        mode: "records"
+        record_type: "notification"
+        records_path: "notifications[]"
+        fields:
+          external_id: "notification_id"
+          title: "title"
+          body_text: "body"
+          source_name: "app_name"
+          published_at: "timestamp"
+          metadata.app_package: "app_package"
+        bm25_text:
+          template: "{{source_name}}\n{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+
+    phone_notifications.filter_notifications_by_app:
+      human_view:
+        renderer: "table"
+      llm_view:
+        include:
+          - "app_package"
+          - "matches[].notification_id"
+          - "matches[].title"
+          - "matches[].body"
+          - "matches[].timestamp"
+        max_items: 50
+      index_view:
+        mode: "records"
+        record_type: "notification"
+        records_path: "matches[]"
+        fields:
+          external_id: "notification_id"
+          title: "title"
+          body_text: "body"
+          source_name: "app_name"
+          published_at: "timestamp"
+          metadata.app_package: "app_package"
+        bm25_text:
+          template: "{{source_name}}\n{{title}}\n\n{{body_text}}"
+        embedding_text:
+          template: "{{title}}\n\n{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+
+    phone_notifications.clear_notifications:
+      human_view:
+        renderer: "summary"
+      llm_view:
+        include:
+          - "status"
+          - "cleared_count"
+        max_items: 1
+      index_view:
+        mode: "none"
+      debug_view:
+        mode: "raw_json"
+
+    phone_notifications.open_notification:
+      human_view:
+        renderer: "summary"
+      llm_view:
+        include:
+          - "status"
+          - "notification_id"
+        max_items: 1
+      index_view:
+        mode: "none"
+      debug_view:
+        mode: "raw_json"

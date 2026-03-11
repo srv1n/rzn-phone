@@ -1,0 +1,74 @@
+{
+  "name": "ios.script.run",
+  "arguments": {
+    "commit": false,
+    "disconnectOnFinish": true,
+    "backgroundAppOnFinish": true,
+    "vars": {
+      "udid": "<UDID>",
+      "threadIndex": 0,
+      "maxNodes": 240
+    },
+    "steps": [
+      { "tool": "ios.appium.ensure", "arguments": {} },
+      {
+        "tool": "ios.session.create",
+        "arguments": {
+          "udid": "{{udid}}",
+          "kind": "native_app",
+          "bundleId": "com.apple.MobileSMS",
+          "replaceExisting": true,
+          "noReset": true
+        }
+      },
+      {
+        "tool": "ios.action.wait",
+        "arguments": {
+          "target": {
+            "using": "-ios predicate string",
+            "value": "type == 'XCUIElementTypeCell' OR label CONTAINS[c] 'Messages'"
+          },
+          "timeoutMs": 30000
+        },
+        "retries": 1
+      },
+      {
+        "tool": "ios.action.tap",
+        "arguments": {
+          "target": {
+            "using": "-ios predicate string",
+            "value": "type == 'XCUIElementTypeCell'",
+            "index": "{{threadIndex}}"
+          }
+        }
+      },
+      { "tool": "util.sleep", "arguments": { "minMs": 700, "maxMs": 1500 } },
+      { "tool": "ios.ui.source", "arguments": {}, "saveAs": "threadUiSource" },
+      {
+        "tool": "ios.ui.extract_rows",
+        "arguments": {
+          "source": "{{steps.threadUiSource.source}}",
+          "row": { "type": "XCUIElementTypeCell" },
+          "fields": [
+            {
+              "name": "body",
+              "attr": "label",
+              "pick": "longest",
+              "query": { "type": "XCUIElementTypeStaticText", "max": 8 }
+            }
+          ],
+          "limit": 20,
+          "maxScrolls": 2,
+          "scroll": { "direction": "up", "distance": 0.55, "settleMs": 400 }
+        },
+        "saveAs": "messages"
+      },
+      {
+        "tool": "ios.ui.observe_compact",
+        "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+        "saveAs": "threadCompactSnapshot"
+      },
+      { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "threadScreenshot" }
+    ]
+  }
+}

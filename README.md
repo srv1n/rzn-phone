@@ -14,7 +14,27 @@ Reddit workflow notes are documented in `docs/reddit_workflows.md`.
 - Rust MCP stdio worker (`crates/rzn_ios_tools_worker`)
 - Dev-mountable Claude-compatible plugin config (`claude_plugin/ios-tools`)
 - Signed bundle config for `rzn-plugin-devkit` (`plugin_bundle/ios-tools.bundle.json`)
+- System metadata for phone-facing surfaces (`crates/rzn_ios_tools_worker/resources/systems/*`)
+- Starter phone-system examples (`examples/phone_messages`, `examples/phone_calls`, `examples/phone_notifications`)
 - Build/package/smoke scripts (`scripts/*`)
+
+## Phone system surface
+
+The signed bundle now carries three system metadata slices so the host can treat phone automation as
+coherent systems instead of one opaque device worker:
+
+| System | Read path | Actuation path |
+| --- | --- | --- |
+| `phone_messages` | list threads, read latest messages | send message (approval-gated) |
+| `phone_calls` | inspect recents / call history | initiate call (approval-gated) |
+| `phone_notifications` | list/filter notifications | clear/open notification (approval-gated) |
+
+Current implementation status:
+
+- Metadata lives under `resources/systems/<system_id>/system.metadata.yaml`.
+- Starter examples live under `examples/<system_id>/`.
+- The worker still exposes generic `ios.*` primitives, so the example payloads bridge conceptual
+  `phone_*` operations onto `ios.script.run` until dedicated phone workflows or tools land.
 
 ## MVP tool surface
 
@@ -28,7 +48,7 @@ Reddit workflow notes are documented in `docs/reddit_workflows.md`.
 - Deterministic runner: `ios.script.run`
 - Utilities: `util.list.length`, `util.list.first`, `util.list.nth`, `util.rank_by_name`, `util.date.bucket_counts`, `util.sleep`
 - Safari primitives: `ios.web.goto`, `ios.web.wait_css`, `ios.web.click_css`, `ios.web.type_css`, `ios.web.press_key`, `ios.web.page_source`, `ios.web.screenshot`, `ios.web.eval_js`
-- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `reddit.open_post`, `reddit.daily_scroll_digest`, `reddit.like_post`, `reddit.comment_post`, `reddit.reply_to_comment`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `linkedin.read_feed`, `linkedin.open_post`, `linkedin.daily_scroll_digest`, `linkedin.like_post`, `linkedin.comment_post`, `linkedin.reply_to_comment`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
+- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `reddit.open_post`, `reddit.daily_scroll_digest`, `reddit.like_post`, `reddit.comment_post`, `reddit.reply_to_comment`, `reddit.open_inbox`, `reddit.open_dm_thread`, `reddit.send_dm`, `reddit.send_dm_by_username`, `reddit.reply_dm_thread`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `linkedin.read_feed`, `linkedin.open_post`, `linkedin.daily_scroll_digest`, `linkedin.like_post`, `linkedin.comment_post`, `linkedin.reply_to_comment`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
 
 ## Safety notes
 
@@ -39,7 +59,7 @@ Reddit workflow notes are documented in `docs/reddit_workflows.md`.
 - Reddit and LinkedIn engagement workflows use a dual gate: action arg (`execute_*`/`submit`) plus `commit=true`.
 - App Store workflows in this repo are read-only (no purchase/install/review actions).
 - LinkedIn write/delete/interaction workflows use `requiresCommit` on mutating taps; run dry with `--commit 0` first.
-- Reddit write/interaction workflows use `requiresCommit` on mutating taps; run dry with `--commit 0` first.
+- Reddit write/interaction/DM workflows use `requiresCommit` on mutating taps; run dry with `--commit 0` first.
 
 ## Prerequisites
 
@@ -152,6 +172,15 @@ This writes and verifies:
 - `dist/plugins/ios-tools/0.1.0/macos_universal/plugin.json`
 - `dist/plugins/ios-tools/0.1.0/macos_universal/plugin.sig`
 
+The resulting ZIP now also includes:
+
+- `resources/systems/phone_messages/system.metadata.yaml`
+- `resources/systems/phone_calls/system.metadata.yaml`
+- `resources/systems/phone_notifications/system.metadata.yaml`
+- `examples/phone_messages/...`
+- `examples/phone_calls/...`
+- `examples/phone_notifications/...`
+
 ## Example `tools/call`
 
 Create session:
@@ -242,6 +271,16 @@ Reddit interaction flows (LM-safe dry-run first):
 ./scripts/ios_tools.sh reddit-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-like-dry
 ./scripts/ios_tools.sh reddit-comment-post <udid> "Thanks for sharing this." --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-comment-dry
 ./scripts/ios_tools.sh reddit-reply-comment <udid> "Great callout." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/reddit-reply-dry
+```
+
+Reddit DM flows (LM-safe dry-run first):
+
+```bash
+./scripts/ios_tools.sh reddit-open-inbox <udid> --out /tmp/reddit-open-inbox
+./scripts/ios_tools.sh reddit-open-dm-thread <udid> --thread-index 0 --out /tmp/reddit-open-dm-thread
+./scripts/ios_tools.sh reddit-send-dm <udid> "Hey there" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-send-dm-dry
+./scripts/ios_tools.sh reddit-send-dm-user <udid> "chorefit" "Hey there" --execute 0 --commit 0 --out /tmp/reddit-send-dm-user-dry
+./scripts/ios_tools.sh reddit-reply-dm <udid> "Following up here" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-reply-dm-dry
 ```
 
 Single-session Reddit operation (open + like + comment + optional reply in one worker run):

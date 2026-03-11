@@ -22,6 +22,9 @@
     }
   ],
   "resources": [
+    { "path": "resources/systems/phone_messages/system.metadata.yaml" },
+    { "path": "resources/systems/phone_calls/system.metadata.yaml" },
+    { "path": "resources/systems/phone_notifications/system.metadata.yaml" },
     { "path": "resources/workflows/appstore_app_details_v1.json" },
     { "path": "resources/workflows/appstore_reviews_v1.json" },
     { "path": "resources/workflows/appstore_screenshots_v1.json" },
@@ -61,6 +64,30 @@
     {
       "source": "$RZN_PHONE_ROOT/crates/rzn_ios_tools_worker/resources/workflows",
       "dest": "resources/workflows",
+      "platforms": ["macos_universal"],
+      "mode": "644"
+    },
+    {
+      "source": "$RZN_PHONE_ROOT/crates/rzn_ios_tools_worker/resources/systems",
+      "dest": "resources/systems",
+      "platforms": ["macos_universal"],
+      "mode": "644"
+    },
+    {
+      "source": "$RZN_PHONE_ROOT/examples/phone_messages",
+      "dest": "examples/phone_messages",
+      "platforms": ["macos_universal"],
+      "mode": "644"
+    },
+    {
+      "source": "$RZN_PHONE_ROOT/examples/phone_calls",
+      "dest": "examples/phone_calls",
+      "platforms": ["macos_universal"],
+      "mode": "644"
+    },
+    {
+      "source": "$RZN_PHONE_ROOT/examples/phone_notifications",
+      "dest": "examples/phone_notifications",
       "platforms": ["macos_universal"],
       "mode": "644"
     }
