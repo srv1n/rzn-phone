@@ -23,18 +23,20 @@ Reddit workflow notes are documented in `docs/reddit_workflows.md`.
 The signed bundle now carries three system metadata slices so the host can treat phone automation as
 coherent systems instead of one opaque device worker:
 
-| System | Read path | Actuation path |
+| System | Read path | Actuation status |
 | --- | --- | --- |
-| `phone_messages` | list threads, read latest messages | send message (approval-gated) |
-| `phone_calls` | inspect recents / call history | initiate call (approval-gated) |
-| `phone_notifications` | list/filter notifications | clear/open notification (approval-gated) |
+| `phone_messages` | list threads, read latest messages | not promoted yet |
+| `phone_calls` | inspect recents / call history | not promoted yet |
+| `phone_notifications` | list/filter notifications | not promoted yet |
 
 Current implementation status:
 
 - Metadata lives under `resources/systems/<system_id>/system.metadata.yaml`.
 - Starter examples live under `examples/<system_id>/`.
-- The worker still exposes generic `ios.*` primitives, so the example payloads bridge conceptual
-  `phone_*` operations onto `ios.script.run` until dedicated phone workflows or tools land.
+- The worker now exposes first-class read-oriented `phone_*` tools that wrap the lower-level
+  `ios.*` primitives.
+- Side-effectful phone actions are intentionally not promoted in this release; the metadata only
+  advertises the real read surface.
 
 ## MVP tool surface
 

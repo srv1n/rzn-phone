@@ -1,72 +1,8 @@
 {
-  "name": "ios.script.run",
+  "name": "phone_messages.list_recent_threads",
   "arguments": {
-    "commit": false,
-    "disconnectOnFinish": true,
-    "backgroundAppOnFinish": true,
-    "vars": {
-      "udid": "<UDID>",
-      "maxNodes": 220
-    },
-    "steps": [
-      { "tool": "ios.appium.ensure", "arguments": {} },
-      {
-        "tool": "ios.session.create",
-        "arguments": {
-          "udid": "{{udid}}",
-          "kind": "native_app",
-          "bundleId": "com.apple.MobileSMS",
-          "replaceExisting": true,
-          "noReset": true
-        }
-      },
-      {
-        "tool": "ios.action.wait",
-        "arguments": {
-          "target": {
-            "using": "-ios predicate string",
-            "value": "name CONTAINS[c] 'Compose' OR label CONTAINS[c] 'Compose' OR name CONTAINS[c] 'Messages' OR label CONTAINS[c] 'Messages'"
-          },
-          "timeoutMs": 30000
-        },
-        "retries": 1
-      },
-      { "tool": "util.sleep", "arguments": { "minMs": 600, "maxMs": 1400 } },
-      { "tool": "ios.ui.source", "arguments": {}, "saveAs": "messagesUiSource" },
-      {
-        "tool": "ios.ui.extract_rows",
-        "arguments": {
-          "source": "{{steps.messagesUiSource.source}}",
-          "row": { "type": "XCUIElementTypeCell" },
-          "primary": {
-            "type": "XCUIElementTypeStaticText",
-            "attr": "label",
-            "pick": "longest"
-          },
-          "fields": [
-            {
-              "name": "preview",
-              "attr": "label",
-              "pick": "longest",
-              "query": { "type": "XCUIElementTypeStaticText", "max": 6 }
-            },
-            {
-              "name": "timestamp",
-              "attr": "label",
-              "pick": "last",
-              "query": { "type": "XCUIElementTypeStaticText", "max": 6 }
-            }
-          ],
-          "limit": 25
-        },
-        "saveAs": "threads"
-      },
-      {
-        "tool": "ios.ui.observe_compact",
-        "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
-        "saveAs": "messagesCompactSnapshot"
-      },
-      { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "messagesScreenshot" }
-    ]
+    "deviceId": "<UDID>",
+    "maxThreads": 25,
+    "backgroundAppOnFinish": true
   }
 }

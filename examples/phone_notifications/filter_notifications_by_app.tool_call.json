@@ -1,7 +1,8 @@
 {
-  "name": "phone_notifications.list_recent_notifications",
+  "name": "phone_notifications.filter_notifications_by_app",
   "arguments": {
     "deviceId": "<UDID>",
+    "appLabel": "Messages",
     "maxNotifications": 25,
     "backgroundAppOnFinish": false
   }

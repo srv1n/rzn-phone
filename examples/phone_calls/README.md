@@ -1,11 +1,6 @@
 # Phone Calls Examples
 
-These examples define the initial read-only quick start for the `phone_calls` system metadata.
-
-Current bridge:
-
-- System metadata talks in terms of `phone_calls.*` operations.
-- The worker still runs them through `ios.script.run` and low-level `ios.*` tools.
+These examples call the first-class read-only `phone_calls.*` MCP tool shipped by this repo.
 
 Starter file:
 
@@ -14,5 +9,5 @@ Starter file:
 Notes:
 
 - Replace `<UDID>` before running the example.
-- The selectors are intentionally broad because Phone app accessibility labels vary by locale and iOS version.
+- The selectors under the wrapper are intentionally broad because Phone app accessibility labels vary by locale and iOS version.
 - The quick start is read-only and keeps call placement out of the default path.

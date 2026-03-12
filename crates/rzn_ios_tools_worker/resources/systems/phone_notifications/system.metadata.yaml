@@ -3,10 +3,10 @@ version: 1
 system:
   id: "phone_notifications"
   display_name: "Phone Notifications"
-  what_it_does: "Reads notification center content on a paired iPhone and keeps any device-mutating cleanup actions out of the default path."
+  what_it_does: "Reads visible Notification Center rows on a paired iPhone and supports app-label filtering without mutating device state."
   use_cases:
     - "List recent notifications visible on the device"
-    - "Filter notifications by app package or sender label"
+    - "Filter notifications by visible app label"
     - "Inspect notification summaries without indexing transport-only acknowledgements"
 
 capability_groups:
@@ -16,13 +16,6 @@ capability_groups:
     tool_ids:
       - "phone_notifications.list_recent_notifications"
       - "phone_notifications.filter_notifications_by_app"
-
-  - id: "device_actions"
-    name: "Device actions"
-    description: "Potential future actions such as clearing notifications or opening a notification. Keep these approval-gated and non-indexed."
-    tool_ids:
-      - "phone_notifications.clear_notifications"
-      - "phone_notifications.open_notification"
 
 setup_steps:
   - id: "install_plugin"
@@ -47,12 +40,8 @@ context_parameters:
     label: "Device ID"
     kind: "device_selector"
     required: true
-  - id: "app_package"
-    label: "App package"
-    kind: "string"
-    required: false
-  - id: "notification_text"
-    label: "Notification text"
+  - id: "app_label"
+    label: "App label"
     kind: "string"
     required: false
   - id: "max_notifications"
@@ -64,19 +53,19 @@ context_parameters:
 quick_starts:
   - id: "list_recent_notifications"
     title: "List recent notifications"
-    description: "Pull down Notification Center and extract visible rows with a read-only starter script."
+    description: "Pull down Notification Center and extract visible rows with a read-only tool."
     tool_id: "phone_notifications.list_recent_notifications"
     args:
-      max_notifications: 25
+      maxNotifications: 25
     example_path: "examples/phone_notifications/list_recent_notifications.tool_call.json"
   - id: "filter_notifications_by_app"
     title: "Filter by app"
     description: "Use the same starter script, then project notifications for one app label."
     tool_id: "phone_notifications.filter_notifications_by_app"
     args:
-      app_package: "com.apple.MobileSMS"
-      max_notifications: 25
-    example_path: "examples/phone_notifications/list_recent_notifications.tool_call.json"
+      appLabel: "Messages"
+      maxNotifications: 25
+    example_path: "examples/phone_notifications/filter_notifications_by_app.tool_call.json"
 
 result_handling:
   tools:
@@ -86,15 +75,14 @@ result_handling:
         columns:
           - key: "app_name"
             label: "App"
-          - key: "title"
-            label: "Title"
+          - key: "body"
+            label: "Summary"
           - key: "timestamp"
             label: "When"
       llm_view:
         include:
           - "notifications[].notification_id"
           - "notifications[].app_name"
-          - "notifications[].title"
           - "notifications[].body"
           - "notifications[].timestamp"
         max_items: 50
@@ -104,26 +92,33 @@ result_handling:
         records_path: "notifications[]"
         fields:
           external_id: "notification_id"
-          title: "title"
+          title: "app_name"
           body_text: "body"
           source_name: "app_name"
           published_at: "timestamp"
-          metadata.app_package: "app_package"
+          metadata.position: "position"
         bm25_text:
-          template: "{{source_name}}\n{{title}}\n\n{{body_text}}"
+          template: "{{source_name}}\n\n{{body_text}}"
         embedding_text:
-          template: "{{title}}\n\n{{body_text}}"
+          template: "{{source_name}}\n\n{{body_text}}"
       debug_view:
         mode: "raw_json"
 
     phone_notifications.filter_notifications_by_app:
       human_view:
         renderer: "table"
+        columns:
+          - key: "app_name"
+            label: "App"
+          - key: "body"
+            label: "Summary"
+          - key: "timestamp"
+            label: "When"
       llm_view:
         include:
-          - "app_package"
+          - "appLabel"
           - "matches[].notification_id"
-          - "matches[].title"
+          - "matches[].app_name"
           - "matches[].body"
           - "matches[].timestamp"
         max_items: 50
@@ -133,40 +128,14 @@ result_handling:
         records_path: "matches[]"
         fields:
           external_id: "notification_id"
-          title: "title"
+          title: "app_name"
           body_text: "body"
           source_name: "app_name"
           published_at: "timestamp"
-          metadata.app_package: "app_package"
+          metadata.position: "position"
         bm25_text:
-          template: "{{source_name}}\n{{title}}\n\n{{body_text}}"
+          template: "{{source_name}}\n\n{{body_text}}"
         embedding_text:
-          template: "{{title}}\n\n{{body_text}}"
-      debug_view:
-        mode: "raw_json"
-
-    phone_notifications.clear_notifications:
-      human_view:
-        renderer: "summary"
-      llm_view:
-        include:
-          - "status"
-          - "cleared_count"
-        max_items: 1
-      index_view:
-        mode: "none"
-      debug_view:
-        mode: "raw_json"
-
-    phone_notifications.open_notification:
-      human_view:
-        renderer: "summary"
-      llm_view:
-        include:
-          - "status"
-          - "notification_id"
-        max_items: 1
-      index_view:
-        mode: "none"
+          template: "{{source_name}}\n\n{{body_text}}"
       debug_view:
         mode: "raw_json"

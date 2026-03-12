@@ -871,6 +871,85 @@ pub fn list_tool_definitions() -> Vec<Value> {
 	                "additionalProperties": false
 	            }),
 	        ),
+        tool(
+            "phone_messages.list_recent_threads",
+            "List recent conversation threads from the Messages app on a paired iPhone.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
+                    "udid": { "type": "string", "description": "Alias of deviceId." },
+                    "maxThreads": { "type": "integer", "minimum": 1, "maximum": 50, "default": 25 },
+                    "backgroundAppOnFinish": { "type": "boolean", "default": true },
+                    "lockDeviceOnFinish": { "type": "boolean", "default": false }
+                },
+                "additionalProperties": false
+            }),
+        ),
+        tool(
+            "phone_messages.read_latest_messages",
+            "Open a recent Messages thread and read the latest visible messages without sending anything.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
+                    "udid": { "type": "string", "description": "Alias of deviceId." },
+                    "threadId": { "type": "string", "description": "Thread id returned by phone_messages.list_recent_threads." },
+                    "threadIndex": { "type": "integer", "minimum": 0, "default": 0 },
+                    "maxMessages": { "type": "integer", "minimum": 1, "maximum": 50, "default": 20 },
+                    "backgroundAppOnFinish": { "type": "boolean", "default": true },
+                    "lockDeviceOnFinish": { "type": "boolean", "default": false }
+                },
+                "additionalProperties": false
+            }),
+        ),
+        tool(
+            "phone_calls.list_recent_calls",
+            "List recent call history from the Phone app on a paired iPhone.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
+                    "udid": { "type": "string", "description": "Alias of deviceId." },
+                    "maxCalls": { "type": "integer", "minimum": 1, "maximum": 50, "default": 25 },
+                    "backgroundAppOnFinish": { "type": "boolean", "default": true },
+                    "lockDeviceOnFinish": { "type": "boolean", "default": false }
+                },
+                "additionalProperties": false
+            }),
+        ),
+        tool(
+            "phone_notifications.list_recent_notifications",
+            "Open Notification Center and list recent visible notifications from a paired iPhone.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
+                    "udid": { "type": "string", "description": "Alias of deviceId." },
+                    "maxNotifications": { "type": "integer", "minimum": 1, "maximum": 50, "default": 25 },
+                    "backgroundAppOnFinish": { "type": "boolean", "default": false },
+                    "lockDeviceOnFinish": { "type": "boolean", "default": false }
+                },
+                "additionalProperties": false
+            }),
+        ),
+        tool(
+            "phone_notifications.filter_notifications_by_app",
+            "List recent notifications, then filter them by visible app label.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
+                    "udid": { "type": "string", "description": "Alias of deviceId." },
+                    "appLabel": { "type": "string", "description": "Visible app label to match against notification rows." },
+                    "appPackage": { "type": "string", "description": "Alias of appLabel for compatibility; this worker filters by visible UI label, not bundle id." },
+                    "maxNotifications": { "type": "integer", "minimum": 1, "maximum": 50, "default": 25 },
+                    "backgroundAppOnFinish": { "type": "boolean", "default": false },
+                    "lockDeviceOnFinish": { "type": "boolean", "default": false }
+                },
+                "additionalProperties": false
+            }),
+        ),
     ]
 }
 
@@ -921,6 +1000,19 @@ pub async fn handle_tool_call(
         "ios.workflow.list" => workflow_list().await,
         "ios.workflow.run" => workflow_run(state, &arguments).await,
         "ios.script.run" => script_run(state, &arguments).await,
+        "phone_messages.list_recent_threads" => {
+            phone_messages_list_recent_threads(state, &arguments).await
+        }
+        "phone_messages.read_latest_messages" => {
+            phone_messages_read_latest_messages(state, &arguments).await
+        }
+        "phone_calls.list_recent_calls" => phone_calls_list_recent_calls(state, &arguments).await,
+        "phone_notifications.list_recent_notifications" => {
+            phone_notifications_list_recent_notifications(state, &arguments).await
+        }
+        "phone_notifications.filter_notifications_by_app" => {
+            phone_notifications_filter_notifications_by_app(state, &arguments).await
+        }
         "util.rank_by_name" => util_rank_by_name(&arguments).await,
         "util.list.length" => util_list_length(&arguments).await,
         "util.list.first" => util_list_first(&arguments).await,
@@ -4331,6 +4423,945 @@ async fn script_run(state: &AppState, arguments: &Value) -> Result<Value> {
     Ok(tool_success(result, "script complete"))
 }
 
+async fn phone_messages_list_recent_threads(state: &AppState, arguments: &Value) -> Result<Value> {
+    let device_id = required_device_id(arguments)?;
+    let max_threads = bounded_usize_arg(arguments, "maxThreads", 25, 1, 50);
+    let background_app_on_finish = bool_arg(arguments, "backgroundAppOnFinish", true);
+    let lock_device_on_finish = bool_arg(arguments, "lockDeviceOnFinish", false);
+
+    let steps = vec![
+        json!({ "tool": "ios.appium.ensure", "arguments": {} }),
+        json!({
+            "tool": "ios.session.create",
+            "arguments": {
+                "udid": "{{udid}}",
+                "kind": "native_app",
+                "bundleId": "com.apple.MobileSMS",
+                "replaceExisting": true,
+                "noReset": true
+            }
+        }),
+        json!({
+            "tool": "ios.action.wait",
+            "arguments": {
+                "target": {
+                    "using": "-ios predicate string",
+                    "value": "name CONTAINS[c] 'Compose' OR label CONTAINS[c] 'Compose' OR name CONTAINS[c] 'Messages' OR label CONTAINS[c] 'Messages'"
+                },
+                "timeoutMs": 30000
+            },
+            "retries": 1
+        }),
+        json!({ "tool": "util.sleep", "arguments": { "minMs": 600, "maxMs": 1400 } }),
+        json!({ "tool": "ios.ui.source", "arguments": {}, "saveAs": "messagesUiSource" }),
+        json!({
+            "tool": "ios.ui.extract_rows",
+            "arguments": {
+                "source": "{{steps.messagesUiSource.source}}",
+                "row": { "type": "XCUIElementTypeCell" },
+                "primary": {
+                    "type": "XCUIElementTypeStaticText",
+                    "attr": "label",
+                    "pick": "first"
+                },
+                "fields": [
+                    {
+                        "name": "preview",
+                        "attr": "label",
+                        "pick": "longest",
+                        "query": { "type": "XCUIElementTypeStaticText", "max": 6 }
+                    },
+                    {
+                        "name": "timestamp",
+                        "attr": "label",
+                        "pick": "last",
+                        "query": { "type": "XCUIElementTypeStaticText", "max": 6 }
+                    }
+                ],
+                "split": {
+                    "fields": ["title"],
+                    "skipMetricLike": false
+                },
+                "limit": "{{maxThreads}}"
+            },
+            "saveAs": "threads"
+        }),
+        json!({ "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "messagesScreenshot" }),
+    ];
+
+    let mut output = run_phone_steps(
+        state,
+        "phone_messages.list_recent_threads",
+        steps,
+        json!({
+            "udid": device_id,
+            "maxThreads": max_threads
+        }),
+        json!({
+            "systemId": "phone_messages",
+            "deviceId": "{{udid}}",
+            "threads": "{{steps.threads.rows}}",
+            "screenshot": "{{steps.messagesScreenshot}}"
+        }),
+        background_app_on_finish,
+        lock_device_on_finish,
+    )
+    .await?;
+
+    let normalized = normalize_message_threads(
+        output
+            .get("threads")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]),
+    );
+
+    if let Some(obj) = output.as_object_mut() {
+        obj.insert("threads".to_string(), Value::Array(normalized.clone()));
+        obj.insert("threadCount".to_string(), json!(normalized.len()));
+    }
+
+    let content = phone_tool_content(
+        format!("listed {} message threads", normalized.len()),
+        normalized.len(),
+        "threads",
+        output.get("screenshot"),
+    );
+
+    Ok(tool_success_with_content(output, content))
+}
+
+async fn phone_messages_read_latest_messages(state: &AppState, arguments: &Value) -> Result<Value> {
+    let device_id = required_device_id(arguments)?;
+    let thread_index = resolve_thread_index(arguments)?;
+    let max_messages = bounded_usize_arg(arguments, "maxMessages", 20, 1, 50);
+    let background_app_on_finish = bool_arg(arguments, "backgroundAppOnFinish", true);
+    let lock_device_on_finish = bool_arg(arguments, "lockDeviceOnFinish", false);
+
+    let steps = vec![
+        json!({ "tool": "ios.appium.ensure", "arguments": {} }),
+        json!({
+            "tool": "ios.session.create",
+            "arguments": {
+                "udid": "{{udid}}",
+                "kind": "native_app",
+                "bundleId": "com.apple.MobileSMS",
+                "replaceExisting": true,
+                "noReset": true
+            }
+        }),
+        json!({
+            "tool": "ios.action.wait",
+            "arguments": {
+                "target": {
+                    "using": "-ios predicate string",
+                    "value": "type == 'XCUIElementTypeCell' OR label CONTAINS[c] 'Messages'"
+                },
+                "timeoutMs": 30000
+            },
+            "retries": 1
+        }),
+        json!({
+            "tool": "ios.action.tap",
+            "arguments": {
+                "target": {
+                    "using": "-ios predicate string",
+                    "value": "type == 'XCUIElementTypeCell'",
+                    "index": "{{threadIndex}}"
+                }
+            }
+        }),
+        json!({ "tool": "util.sleep", "arguments": { "minMs": 700, "maxMs": 1500 } }),
+        json!({ "tool": "ios.ui.source", "arguments": {}, "saveAs": "threadUiSource" }),
+        json!({
+            "tool": "ios.ui.extract_rows",
+            "arguments": {
+                "source": "{{steps.threadUiSource.source}}",
+                "row": { "type": "XCUIElementTypeCell" },
+                "primary": {
+                    "type": "XCUIElementTypeStaticText",
+                    "attr": "label",
+                    "pick": "longest"
+                },
+                "fields": [
+                    {
+                        "name": "senderCandidate",
+                        "attr": "label",
+                        "pick": "first",
+                        "query": { "type": "XCUIElementTypeStaticText", "max": 8 }
+                    },
+                    {
+                        "name": "timestamp",
+                        "attr": "label",
+                        "pick": "last",
+                        "query": { "type": "XCUIElementTypeStaticText", "max": 8 }
+                    }
+                ],
+                "split": {
+                    "fields": ["body"],
+                    "skipMetricLike": false
+                },
+                "limit": "{{maxMessages}}",
+                "maxScrolls": 2,
+                "scroll": { "direction": "up", "distance": 0.55, "settleMs": 400 }
+            },
+            "saveAs": "messages"
+        }),
+        json!({ "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "threadScreenshot" }),
+    ];
+
+    let mut output = run_phone_steps(
+        state,
+        "phone_messages.read_latest_messages",
+        steps,
+        json!({
+            "udid": device_id,
+            "threadIndex": thread_index,
+            "maxMessages": max_messages
+        }),
+        json!({
+            "systemId": "phone_messages",
+            "deviceId": "{{udid}}",
+            "threadIndex": "{{threadIndex}}",
+            "messages": "{{steps.messages.rows}}",
+            "screenshot": "{{steps.threadScreenshot}}"
+        }),
+        background_app_on_finish,
+        lock_device_on_finish,
+    )
+    .await?;
+
+    let thread_id = arguments
+        .get("threadId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+        .unwrap_or_else(|| {
+            stable_phone_item_id(
+                "phone_messages-thread",
+                &[thread_index.to_string()],
+                thread_index + 1,
+            )
+        });
+    let thread_title = format!("Thread {}", thread_index + 1);
+    let normalized = normalize_thread_messages(
+        output
+            .get("messages")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]),
+        &thread_id,
+        &thread_title,
+    );
+
+    if let Some(obj) = output.as_object_mut() {
+        obj.insert(
+            "thread".to_string(),
+            json!({
+                "thread_id": thread_id,
+                "title": thread_title
+            }),
+        );
+        obj.insert("messages".to_string(), Value::Array(normalized.clone()));
+        obj.insert("messageCount".to_string(), json!(normalized.len()));
+    }
+
+    let content = phone_tool_content(
+        format!("read {} messages", normalized.len()),
+        normalized.len(),
+        "messages",
+        output.get("screenshot"),
+    );
+
+    Ok(tool_success_with_content(output, content))
+}
+
+async fn phone_calls_list_recent_calls(state: &AppState, arguments: &Value) -> Result<Value> {
+    let device_id = required_device_id(arguments)?;
+    let max_calls = bounded_usize_arg(arguments, "maxCalls", 25, 1, 50);
+    let background_app_on_finish = bool_arg(arguments, "backgroundAppOnFinish", true);
+    let lock_device_on_finish = bool_arg(arguments, "lockDeviceOnFinish", false);
+
+    let steps = vec![
+        json!({ "tool": "ios.appium.ensure", "arguments": {} }),
+        json!({
+            "tool": "ios.session.create",
+            "arguments": {
+                "udid": "{{udid}}",
+                "kind": "native_app",
+                "bundleId": "com.apple.mobilephone",
+                "replaceExisting": true,
+                "noReset": true
+            }
+        }),
+        json!({
+            "tool": "ios.action.wait",
+            "arguments": {
+                "target": {
+                    "using": "-ios predicate string",
+                    "value": "name CONTAINS[c] 'Recents' OR label CONTAINS[c] 'Recents' OR name CONTAINS[c] 'Phone' OR label CONTAINS[c] 'Phone'"
+                },
+                "timeoutMs": 30000
+            },
+            "retries": 1
+        }),
+        json!({
+            "tool": "ios.action.tap",
+            "arguments": {
+                "target": {
+                    "using": "-ios predicate string",
+                    "value": "name CONTAINS[c] 'Recents' OR label CONTAINS[c] 'Recents'"
+                }
+            }
+        }),
+        json!({ "tool": "util.sleep", "arguments": { "minMs": 700, "maxMs": 1500 } }),
+        json!({ "tool": "ios.ui.source", "arguments": {}, "saveAs": "callsUiSource" }),
+        json!({
+            "tool": "ios.ui.extract_rows",
+            "arguments": {
+                "source": "{{steps.callsUiSource.source}}",
+                "row": { "type": "XCUIElementTypeCell" },
+                "primary": {
+                    "type": "XCUIElementTypeStaticText",
+                    "attr": "label",
+                    "pick": "first"
+                },
+                "fields": [
+                    {
+                        "name": "timestamp",
+                        "attr": "label",
+                        "pick": "last",
+                        "query": { "type": "XCUIElementTypeStaticText", "max": 6 }
+                    },
+                    {
+                        "name": "summary",
+                        "attr": "label",
+                        "pick": "longest",
+                        "query": { "type": "XCUIElementTypeStaticText", "max": 6 }
+                    }
+                ],
+                "split": {
+                    "fields": ["contact"],
+                    "skipMetricLike": false
+                },
+                "limit": "{{maxCalls}}"
+            },
+            "saveAs": "calls"
+        }),
+        json!({ "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "callsScreenshot" }),
+    ];
+
+    let mut output = run_phone_steps(
+        state,
+        "phone_calls.list_recent_calls",
+        steps,
+        json!({
+            "udid": device_id,
+            "maxCalls": max_calls
+        }),
+        json!({
+            "systemId": "phone_calls",
+            "deviceId": "{{udid}}",
+            "calls": "{{steps.calls.rows}}",
+            "screenshot": "{{steps.callsScreenshot}}"
+        }),
+        background_app_on_finish,
+        lock_device_on_finish,
+    )
+    .await?;
+
+    let normalized = normalize_recent_calls(
+        output
+            .get("calls")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]),
+    );
+
+    if let Some(obj) = output.as_object_mut() {
+        obj.insert("calls".to_string(), Value::Array(normalized.clone()));
+        obj.insert("callCount".to_string(), json!(normalized.len()));
+    }
+
+    let content = phone_tool_content(
+        format!("listed {} recent calls", normalized.len()),
+        normalized.len(),
+        "calls",
+        output.get("screenshot"),
+    );
+
+    Ok(tool_success_with_content(output, content))
+}
+
+async fn phone_notifications_list_recent_notifications(
+    state: &AppState,
+    arguments: &Value,
+) -> Result<Value> {
+    let output = collect_recent_notifications(state, arguments).await?;
+    let count = output
+        .get("notifications")
+        .and_then(Value::as_array)
+        .map(|items| items.len())
+        .unwrap_or(0);
+
+    let content = phone_tool_content(
+        format!("listed {} notifications", count),
+        count,
+        "notifications",
+        output.get("screenshot"),
+    );
+
+    Ok(tool_success_with_content(output, content))
+}
+
+async fn phone_notifications_filter_notifications_by_app(
+    state: &AppState,
+    arguments: &Value,
+) -> Result<Value> {
+    let app_label = required_app_label(arguments)?;
+    let mut output = collect_recent_notifications(state, arguments).await?;
+    let notifications = output
+        .get("notifications")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let lowered = app_label.to_lowercase();
+    let matches: Vec<Value> = notifications
+        .into_iter()
+        .filter(|item| {
+            item.get("app_name")
+                .and_then(Value::as_str)
+                .map(|value| value.to_lowercase().contains(&lowered))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    if let Some(obj) = output.as_object_mut() {
+        obj.insert("appLabel".to_string(), json!(app_label));
+        obj.insert("matches".to_string(), Value::Array(matches.clone()));
+        obj.insert("matchCount".to_string(), json!(matches.len()));
+    }
+
+    let content = phone_tool_content(
+        format!("matched {} notifications for {}", matches.len(), app_label),
+        matches.len(),
+        "matches",
+        output.get("screenshot"),
+    );
+
+    Ok(tool_success_with_content(output, content))
+}
+
+async fn collect_recent_notifications(state: &AppState, arguments: &Value) -> Result<Value> {
+    let device_id = required_device_id(arguments)?;
+    let max_notifications = bounded_usize_arg(arguments, "maxNotifications", 25, 1, 50);
+    let background_app_on_finish = bool_arg(arguments, "backgroundAppOnFinish", false);
+    let lock_device_on_finish = bool_arg(arguments, "lockDeviceOnFinish", false);
+
+    let steps = vec![
+        json!({ "tool": "ios.appium.ensure", "arguments": {} }),
+        json!({
+            "tool": "ios.session.create",
+            "arguments": {
+                "udid": "{{udid}}",
+                "kind": "native_app",
+                "bundleId": "com.apple.springboard",
+                "replaceExisting": true,
+                "noReset": true
+            }
+        }),
+        json!({
+            "tool": "ios.action.scroll",
+            "arguments": {
+                "direction": "down",
+                "distance": 0.85
+            }
+        }),
+        json!({ "tool": "util.sleep", "arguments": { "minMs": 900, "maxMs": 1700 } }),
+        json!({ "tool": "ios.ui.source", "arguments": {}, "saveAs": "notificationUiSource" }),
+        json!({
+            "tool": "ios.ui.extract_rows",
+            "arguments": {
+                "source": "{{steps.notificationUiSource.source}}",
+                "row": { "type": "XCUIElementTypeCell" },
+                "primary": {
+                    "type": "XCUIElementTypeStaticText",
+                    "attr": "label",
+                    "pick": "first"
+                },
+                "fields": [
+                    {
+                        "name": "body",
+                        "attr": "label",
+                        "pick": "longest",
+                        "query": { "type": "XCUIElementTypeStaticText", "max": 8 }
+                    },
+                    {
+                        "name": "timestamp",
+                        "attr": "label",
+                        "pick": "last",
+                        "query": { "type": "XCUIElementTypeStaticText", "max": 8 }
+                    }
+                ],
+                "split": {
+                    "fields": ["app_name"],
+                    "skipMetricLike": false
+                },
+                "limit": "{{maxNotifications}}"
+            },
+            "saveAs": "notifications"
+        }),
+        json!({ "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "notificationsScreenshot" }),
+    ];
+
+    let mut output = run_phone_steps(
+        state,
+        "phone_notifications.list_recent_notifications",
+        steps,
+        json!({
+            "udid": device_id,
+            "maxNotifications": max_notifications
+        }),
+        json!({
+            "systemId": "phone_notifications",
+            "deviceId": "{{udid}}",
+            "notifications": "{{steps.notifications.rows}}",
+            "screenshot": "{{steps.notificationsScreenshot}}"
+        }),
+        background_app_on_finish,
+        lock_device_on_finish,
+    )
+    .await?;
+
+    let normalized = normalize_recent_notifications(
+        output
+            .get("notifications")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]),
+    );
+
+    if let Some(obj) = output.as_object_mut() {
+        obj.insert(
+            "notifications".to_string(),
+            Value::Array(normalized.clone()),
+        );
+        obj.insert("notificationCount".to_string(), json!(normalized.len()));
+    }
+
+    Ok(output)
+}
+
+async fn run_phone_steps(
+    state: &AppState,
+    tool_name: &str,
+    steps: Vec<Value>,
+    vars: Value,
+    output_template: Value,
+    background_app_on_finish: bool,
+    lock_device_on_finish: bool,
+) -> Result<Value> {
+    let output_result = run_steps(state, &steps, false, &vars, Some(&output_template)).await;
+
+    if let Err(err) = &output_result {
+        let artifacts = capture_failure_artifacts(state)
+            .await
+            .unwrap_or_else(|_| json!({}));
+        let _ = worker_shutdown(
+            state,
+            &json!({
+                "stopAppium": false,
+                "shutdownWDA": true,
+                "backgroundApp": background_app_on_finish,
+                "lockDevice": lock_device_on_finish
+            }),
+        )
+        .await;
+        let message = format!("{tool_name} failed: {err:#}");
+        return Err(ToolCallError::new(
+            classify_tool_error_code(&message),
+            message,
+            json!({
+                "tool": tool_name,
+                "artifacts": artifacts
+            }),
+        )
+        .into());
+    }
+
+    let _ = worker_shutdown(
+        state,
+        &json!({
+            "stopAppium": false,
+            "shutdownWDA": true,
+            "backgroundApp": background_app_on_finish,
+            "lockDevice": lock_device_on_finish
+        }),
+    )
+    .await;
+
+    let output = output_result.expect("output_result already checked");
+    if output.get("ok").and_then(Value::as_bool) == Some(false) {
+        let message = output
+            .get("error")
+            .and_then(Value::as_str)
+            .map(ToString::to_string)
+            .unwrap_or_else(|| format!("{tool_name} failed"));
+        return Err(ToolCallError::new(
+            tool_error_code_from_value(output.get("errorCode")),
+            message,
+            json!({
+                "tool": tool_name,
+                "output": output
+            }),
+        )
+        .into());
+    }
+
+    Ok(output)
+}
+
+fn phone_tool_content(
+    message: String,
+    count: usize,
+    noun: &str,
+    screenshot: Option<&Value>,
+) -> Vec<Value> {
+    let mut content = vec![json!({
+        "type": "text",
+        "text": format!("{message} ({count} {noun})")
+    })];
+    if let Some(block) = screenshot_to_content_block(screenshot) {
+        content.push(block);
+    }
+    content
+}
+
+fn screenshot_to_content_block(screenshot: Option<&Value>) -> Option<Value> {
+    let shot = screenshot?;
+    let data = shot.get("data")?.as_str()?;
+    if data.trim().is_empty() {
+        return None;
+    }
+    Some(json!({
+        "type": "image",
+        "mimeType": shot.get("mimeType").and_then(Value::as_str).unwrap_or("image/png"),
+        "data": data
+    }))
+}
+
+fn normalize_message_threads(rows: &[Value]) -> Vec<Value> {
+    rows.iter()
+        .enumerate()
+        .map(|(idx, row)| {
+            let position = idx + 1;
+            let title = row_text(row, &["title", "name", "rawLabel"])
+                .unwrap_or_else(|| format!("Thread {position}"));
+            let preview = row_text(row, &["preview", "subtitle"])
+                .filter(|value| !strings_eq_ci(value, &title));
+            let timestamp = row_text(row, &["timestamp"]);
+            json!({
+                "thread_id": stable_phone_item_id("phone_messages-thread", &[title.clone(), timestamp.clone().unwrap_or_default()], position),
+                "title": title,
+                "preview": preview,
+                "timestamp": timestamp,
+                "position": position,
+                "raw_label": row_text(row, &["rawLabel"])
+            })
+        })
+        .collect()
+}
+
+fn normalize_thread_messages(rows: &[Value], thread_id: &str, thread_title: &str) -> Vec<Value> {
+    rows.iter()
+        .enumerate()
+        .map(|(idx, row)| {
+            let position = idx + 1;
+            let body = row_text(row, &["body", "rawLabel"])
+                .unwrap_or_else(|| format!("Message {position}"));
+            let sender = row_text(row, &["senderCandidate"])
+                .filter(|value| !strings_eq_ci(value, &body))
+                .filter(|value| !looks_like_timestamp(value));
+            let sent_at = row_text(row, &["timestamp"]).filter(|value| !strings_eq_ci(value, &body));
+            json!({
+                "message_id": stable_phone_item_id("phone_messages-message", &[thread_id.to_string(), body.clone(), sent_at.clone().unwrap_or_default()], position),
+                "thread_id": thread_id,
+                "thread_title": thread_title,
+                "body": body,
+                "sender": sender,
+                "direction": Value::Null,
+                "sent_at": sent_at,
+                "position": position,
+                "raw_label": row_text(row, &["rawLabel"])
+            })
+        })
+        .collect()
+}
+
+fn normalize_recent_calls(rows: &[Value]) -> Vec<Value> {
+    rows.iter()
+        .enumerate()
+        .map(|(idx, row)| {
+            let position = idx + 1;
+            let contact = row_text(row, &["contact", "name", "rawLabel"])
+                .unwrap_or_else(|| format!("Call {position}"));
+            let summary = row_text(row, &["summary", "rawLabel"]).unwrap_or_else(|| contact.clone());
+            let timestamp = row_text(row, &["timestamp"]);
+            let phone_number = extract_phone_number_candidate(&summary).or_else(|| extract_phone_number_candidate(&contact));
+            let call_type = infer_call_type(&summary);
+            json!({
+                "call_id": stable_phone_item_id("phone_calls-call", &[contact.clone(), timestamp.clone().unwrap_or_default()], position),
+                "contact": contact,
+                "summary": summary,
+                "phone_number": phone_number,
+                "call_type": call_type,
+                "timestamp": timestamp,
+                "position": position,
+                "raw_label": row_text(row, &["rawLabel"])
+            })
+        })
+        .collect()
+}
+
+fn normalize_recent_notifications(rows: &[Value]) -> Vec<Value> {
+    rows.iter()
+        .enumerate()
+        .map(|(idx, row)| {
+            let position = idx + 1;
+            let app_name = row_text(row, &["app_name", "name", "rawLabel"])
+                .unwrap_or_else(|| format!("Notification {position}"));
+            let body = row_text(row, &["body"])
+                .filter(|value| !strings_eq_ci(value, &app_name))
+                .or_else(|| row_text(row, &["rawLabel"]).filter(|value| !strings_eq_ci(value, &app_name)));
+            let timestamp = row_text(row, &["timestamp"]);
+            json!({
+                "notification_id": stable_phone_item_id("phone_notifications-item", &[app_name.clone(), body.clone().unwrap_or_default(), timestamp.clone().unwrap_or_default()], position),
+                "app_name": app_name,
+                "body": body,
+                "timestamp": timestamp,
+                "position": position,
+                "raw_label": row_text(row, &["rawLabel"])
+            })
+        })
+        .collect()
+}
+
+fn required_device_id(arguments: &Value) -> Result<String> {
+    for key in ["deviceId", "device_id", "udid"] {
+        if let Some(value) = arguments.get(key).and_then(Value::as_str) {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return Ok(trimmed.to_string());
+            }
+        }
+    }
+
+    Err(ToolCallError::new(
+        ToolErrorCode::InvalidParams,
+        "'deviceId' (or 'udid') is required",
+        json!({"param": "deviceId"}),
+    )
+    .into())
+}
+
+fn required_app_label(arguments: &Value) -> Result<String> {
+    for key in ["appLabel", "app_label", "appPackage", "app_package"] {
+        if let Some(value) = arguments.get(key).and_then(Value::as_str) {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return Ok(trimmed.to_string());
+            }
+        }
+    }
+
+    Err(ToolCallError::new(
+        ToolErrorCode::InvalidParams,
+        "'appLabel' is required",
+        json!({"param": "appLabel"}),
+    )
+    .into())
+}
+
+fn resolve_thread_index(arguments: &Value) -> Result<usize> {
+    if let Some(value) = arguments.get("threadIndex").and_then(Value::as_u64) {
+        return Ok(value as usize);
+    }
+    if let Some(value) = arguments.get("thread_index").and_then(Value::as_u64) {
+        return Ok(value as usize);
+    }
+    if let Some(value) = arguments.get("threadId").and_then(Value::as_str) {
+        if let Some(index) = parse_position_from_stable_id(value) {
+            return Ok(index.saturating_sub(1));
+        }
+    }
+    Ok(0)
+}
+
+fn bounded_usize_arg(
+    arguments: &Value,
+    key: &str,
+    default: usize,
+    min: usize,
+    max: usize,
+) -> usize {
+    arguments
+        .get(key)
+        .and_then(Value::as_u64)
+        .map(|value| value as usize)
+        .unwrap_or(default)
+        .clamp(min, max)
+}
+
+fn bool_arg(arguments: &Value, key: &str, default: bool) -> bool {
+    arguments
+        .get(key)
+        .and_then(Value::as_bool)
+        .unwrap_or(default)
+}
+
+fn row_text(row: &Value, keys: &[&str]) -> Option<String> {
+    keys.iter().find_map(|key| {
+        row.get(*key)
+            .and_then(Value::as_str)
+            .and_then(|value| normalize_text(value.to_string()))
+    })
+}
+
+fn stable_phone_item_id(prefix: &str, parts: &[String], position: usize) -> String {
+    let mut slug_parts = Vec::new();
+    for part in parts {
+        let slug = slugify_fragment(part);
+        if !slug.is_empty() {
+            slug_parts.push(slug);
+        }
+    }
+    if slug_parts.is_empty() {
+        format!("{prefix}-{position}")
+    } else {
+        format!("{prefix}-{position}-{}", slug_parts.join("-"))
+    }
+}
+
+fn parse_position_from_stable_id(value: &str) -> Option<usize> {
+    let mut seen_numeric = None;
+    for part in value.split('-') {
+        if let Ok(parsed) = part.parse::<usize>() {
+            seen_numeric = Some(parsed);
+            break;
+        }
+    }
+    seen_numeric
+}
+
+fn slugify_fragment(value: &str) -> String {
+    let mut out = String::new();
+    let mut prev_dash = false;
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            prev_dash = false;
+        } else if !prev_dash {
+            out.push('-');
+            prev_dash = true;
+        }
+    }
+    out.trim_matches('-').to_string()
+}
+
+fn extract_phone_number_candidate(value: &str) -> Option<String> {
+    let mut out = String::new();
+    for ch in value.chars() {
+        if ch.is_ascii_digit() || (ch == '+' && out.is_empty()) {
+            out.push(ch);
+        }
+    }
+    if out.chars().filter(|ch| ch.is_ascii_digit()).count() >= 7 {
+        Some(out)
+    } else {
+        None
+    }
+}
+
+fn infer_call_type(value: &str) -> Option<String> {
+    let lower = value.to_lowercase();
+    if lower.contains("missed") {
+        Some("missed".to_string())
+    } else if lower.contains("outgoing") {
+        Some("outgoing".to_string())
+    } else if lower.contains("incoming") {
+        Some("incoming".to_string())
+    } else if lower.contains("voicemail") {
+        Some("voicemail".to_string())
+    } else {
+        None
+    }
+}
+
+fn looks_like_timestamp(value: &str) -> bool {
+    let lower = value.to_lowercase();
+    lower.contains("am")
+        || lower.contains("pm")
+        || lower.contains("today")
+        || lower.contains("yesterday")
+        || lower.contains("mon")
+        || lower.contains("tue")
+        || lower.contains("wed")
+        || lower.contains("thu")
+        || lower.contains("fri")
+        || lower.contains("sat")
+        || lower.contains("sun")
+}
+
+fn strings_eq_ci(left: &str, right: &str) -> bool {
+    left.trim().eq_ignore_ascii_case(right.trim())
+}
+
+fn classify_tool_error_code(message: &str) -> ToolErrorCode {
+    let lowered = message.to_lowercase();
+    if lowered.contains("device was not, or could not be, unlocked")
+        || lowered.contains("could not be unlocked")
+        || lowered.contains("bserrorcodedescription=locked")
+        || lowered.contains(" for reason: locked")
+    {
+        ToolErrorCode::DeviceLocked
+    } else if lowered.contains("timeout") {
+        ToolErrorCode::Timeout
+    } else if lowered.contains("no active session")
+        || lowered.contains("sessionid is required")
+        || lowered.contains("appium is not initialized")
+    {
+        ToolErrorCode::NoSession
+    } else if lowered.contains("no elements found") || lowered.contains("no matching elements") {
+        ToolErrorCode::ElementNotFound
+    } else if lowered.contains("expected exactly one match")
+        || lowered.contains("multiple matching elements")
+        || lowered.contains("ambiguous")
+    {
+        ToolErrorCode::AmbiguousMatch
+    } else if lowered.contains("required") || lowered.contains("invalid params") {
+        ToolErrorCode::InvalidParams
+    } else {
+        ToolErrorCode::ActionFailed
+    }
+}
+
+fn tool_error_code_from_value(value: Option<&Value>) -> ToolErrorCode {
+    match value.and_then(Value::as_str).unwrap_or("") {
+        "NO_SESSION" => ToolErrorCode::NoSession,
+        "DEVICE_LOCKED" => ToolErrorCode::DeviceLocked,
+        "INVALID_PARAMS" => ToolErrorCode::InvalidParams,
+        "ELEMENT_NOT_FOUND" => ToolErrorCode::ElementNotFound,
+        "AMBIGUOUS_MATCH" => ToolErrorCode::AmbiguousMatch,
+        "TIMEOUT" => ToolErrorCode::Timeout,
+        "COMMIT_REQUIRED" => ToolErrorCode::CommitRequired,
+        "NOT_SUPPORTED" => ToolErrorCode::NotSupported,
+        "INTERNAL" => ToolErrorCode::Internal,
+        _ => ToolErrorCode::ActionFailed,
+    }
+}
+
 async fn run_steps(
     state: &AppState,
     steps: &[Value],
@@ -5235,6 +6266,34 @@ mod tests {
                 .and_then(Value::as_str),
             Some("ios.action.tap")
         );
+    }
+
+    #[test]
+    fn list_tool_definitions_includes_phone_system_tools() {
+        let names: Vec<String> = list_tool_definitions()
+            .into_iter()
+            .filter_map(|tool| {
+                tool.get("name")
+                    .and_then(Value::as_str)
+                    .map(ToString::to_string)
+            })
+            .collect();
+
+        assert!(names.contains(&"phone_messages.list_recent_threads".to_string()));
+        assert!(names.contains(&"phone_messages.read_latest_messages".to_string()));
+        assert!(names.contains(&"phone_calls.list_recent_calls".to_string()));
+        assert!(names.contains(&"phone_notifications.list_recent_notifications".to_string()));
+        assert!(names.contains(&"phone_notifications.filter_notifications_by_app".to_string()));
+    }
+
+    #[test]
+    fn stable_phone_ids_encode_position_for_thread_lookup() {
+        let id = stable_phone_item_id(
+            "phone_messages-thread",
+            &[String::from("Alice"), String::from("Today")],
+            3,
+        );
+        assert_eq!(parse_position_from_stable_id(&id), Some(3));
     }
 
     #[tokio::test]

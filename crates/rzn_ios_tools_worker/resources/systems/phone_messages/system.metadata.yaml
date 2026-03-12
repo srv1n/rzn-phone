@@ -3,11 +3,10 @@ version: 1
 system:
   id: "phone_messages"
   display_name: "Phone Messages"
-  what_it_does: "Reads message threads on a paired iPhone and supports approval-gated draft/send flows for SMS or iMessage."
+  what_it_does: "Reads recent message threads and visible message bodies from the Messages app on a paired iPhone."
   use_cases:
     - "List recent conversations from the Messages app"
     - "Read the latest messages in a selected thread"
-    - "Draft or send a reply after explicit approval"
 
 capability_groups:
   - id: "read_messages"
@@ -16,12 +15,6 @@ capability_groups:
     tool_ids:
       - "phone_messages.list_recent_threads"
       - "phone_messages.read_latest_messages"
-
-  - id: "send_messages"
-    name: "Send messages"
-    description: "Draft or send outbound messages. These actions are side-effectful and should stay approval-gated."
-    tool_ids:
-      - "phone_messages.send_message"
 
 setup_steps:
   - id: "install_plugin"
@@ -50,31 +43,37 @@ context_parameters:
     label: "Thread ID"
     kind: "string"
     required: false
-  - id: "phone_number"
-    label: "Phone number"
-    kind: "string"
+  - id: "thread_index"
+    label: "Thread index"
+    kind: "integer"
     required: false
+    default: 0
   - id: "max_threads"
     label: "Max threads"
     kind: "integer"
     required: false
     default: 25
+  - id: "max_messages"
+    label: "Max messages"
+    kind: "integer"
+    required: false
+    default: 20
 
 quick_starts:
   - id: "list_recent_threads"
     title: "List recent threads"
-    description: "Open Messages and extract the visible conversation list with a read-only starter script."
+    description: "Open Messages and extract the visible conversation list with a read-only tool."
     tool_id: "phone_messages.list_recent_threads"
     args:
-      max_threads: 25
+      maxThreads: 25
     example_path: "examples/phone_messages/list_recent_threads.tool_call.json"
   - id: "read_latest_messages"
     title: "Read latest messages"
     description: "Open a thread and collect the visible message rows without sending anything."
     tool_id: "phone_messages.read_latest_messages"
     args:
-      thread_index: 0
-      max_messages: 20
+      threadIndex: 0
+      maxMessages: 20
     example_path: "examples/phone_messages/read_latest_messages.tool_call.json"
 
 result_handling:
@@ -95,7 +94,6 @@ result_handling:
           - "threads[].title"
           - "threads[].preview"
           - "threads[].timestamp"
-          - "threads[].unread"
         max_items: 50
       index_view:
         mode: "records"
@@ -106,8 +104,7 @@ result_handling:
           title: "title"
           body_text: "preview"
           published_at: "timestamp"
-          metadata.unread: "unread"
-          metadata.participants: "participants"
+          metadata.position: "position"
         bm25_text:
           template: "{{title}}\n\n{{body_text}}"
         embedding_text:
@@ -123,9 +120,8 @@ result_handling:
           - "thread.thread_id"
           - "thread.title"
           - "messages[].message_id"
-          - "messages[].sender"
-          - "messages[].direction"
           - "messages[].body"
+          - "messages[].sender"
           - "messages[].sent_at"
         max_items: 50
       index_view:
@@ -138,25 +134,11 @@ result_handling:
           body_text: "body"
           author: "sender"
           published_at: "sent_at"
-          metadata.direction: "direction"
           metadata.thread_id: "thread_id"
+          metadata.position: "position"
         bm25_text:
           template: "{{title}}\n\n{{body_text}}"
         embedding_text:
           template: "{{body_text}}"
-      debug_view:
-        mode: "raw_json"
-
-    phone_messages.send_message:
-      human_view:
-        renderer: "summary"
-      llm_view:
-        include:
-          - "status"
-          - "thread_id"
-          - "recipient"
-        max_items: 1
-      index_view:
-        mode: "none"
       debug_view:
         mode: "raw_json"
