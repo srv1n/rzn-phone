@@ -7,6 +7,7 @@ system:
   use_cases:
     - "List recent conversations from the Messages app"
     - "Read the latest messages in a selected thread"
+    - "Find likely one-time passcodes / authentication codes in recent threads"
 
 capability_groups:
   - id: "read_messages"
@@ -15,6 +16,7 @@ capability_groups:
     tool_ids:
       - "phone_messages.list_recent_threads"
       - "phone_messages.read_latest_messages"
+      - "phone_messages.find_recent_otp"
 
 setup_steps:
   - id: "install_plugin"
@@ -58,6 +60,22 @@ context_parameters:
     kind: "integer"
     required: false
     default: 20
+  - id: "thread_contains"
+    label: "Thread contains"
+    kind: "string"
+    required: false
+  - id: "sender_contains"
+    label: "Sender contains"
+    kind: "string"
+    required: false
+  - id: "message_contains"
+    label: "Message contains"
+    kind: "string"
+    required: false
+  - id: "code_length"
+    label: "Exact code length"
+    kind: "integer"
+    required: false
 
 quick_starts:
   - id: "list_recent_threads"
@@ -75,6 +93,14 @@ quick_starts:
       threadIndex: 0
       maxMessages: 20
     example_path: "examples/phone_messages/read_latest_messages.tool_call.json"
+  - id: "find_recent_otp"
+    title: "Find recent OTP"
+    description: "Scan recent threads and rank likely authentication-code candidates."
+    tool_id: "phone_messages.find_recent_otp"
+    args:
+      maxThreads: 5
+      maxMessages: 8
+    example_path: "examples/phone_messages/find_recent_otp.tool_call.json"
 
 result_handling:
   tools:
@@ -140,5 +166,24 @@ result_handling:
           template: "{{title}}\n\n{{body_text}}"
         embedding_text:
           template: "{{body_text}}"
+      debug_view:
+        mode: "raw_json"
+
+    phone_messages.find_recent_otp:
+      human_view:
+        renderer: "list"
+      llm_view:
+        include:
+          - "found"
+          - "candidateCount"
+          - "bestCandidate.code"
+          - "bestCandidate.thread_title"
+          - "bestCandidate.message_excerpt"
+          - "candidates[].code"
+          - "candidates[].thread_title"
+          - "candidates[].message_excerpt"
+          - "candidates[].sender"
+          - "candidates[].sent_at"
+        max_items: 20
       debug_view:
         mode: "raw_json"

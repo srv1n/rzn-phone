@@ -1,0 +1,57 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "phone_messages.find_recent_otp",
+  "version": "1.0.0",
+  "description": "Inspect recent iPhone Messages threads and return likely OTP/authentication codes.",
+  "platforms": ["ios"],
+  "inputs": {
+    "maxThreads": { "type": "integer", "default": 5, "min": 1, "max": 20 },
+    "maxMessages": { "type": "integer", "default": 8, "min": 1, "max": 50 },
+    "threadContains": { "type": "string" },
+    "senderContains": { "type": "string" },
+    "messageContains": { "type": "string" },
+    "codeLength": { "type": "integer", "min": 4, "max": 8 },
+    "minCodeLength": { "type": "integer", "default": 4, "min": 4, "max": 8 },
+    "maxCodeLength": { "type": "integer", "default": 8, "min": 4, "max": 8 },
+    "backgroundAppOnFinish": { "type": "boolean", "default": true },
+    "lockDeviceOnFinish": { "type": "boolean", "default": false }
+  },
+  "notes": [
+    "Read-only workflow.",
+    "The workflow scans recent message threads, extracts 4-8 digit codes, and ranks candidates using auth-related keywords plus thread/message filters."
+  ],
+  "steps": [
+    {
+      "tool": "phone_messages.find_recent_otp",
+      "arguments": {
+        "deviceId": "{{udid}}",
+        "maxThreads": "{{maxThreads}}",
+        "maxMessages": "{{maxMessages}}",
+        "threadContains": "{{threadContains}}",
+        "senderContains": "{{senderContains}}",
+        "messageContains": "{{messageContains}}",
+        "codeLength": "{{codeLength}}",
+        "minCodeLength": "{{minCodeLength}}",
+        "maxCodeLength": "{{maxCodeLength}}",
+        "backgroundAppOnFinish": "{{backgroundAppOnFinish}}",
+        "lockDeviceOnFinish": "{{lockDeviceOnFinish}}"
+      },
+      "saveAs": "otpLookup"
+    }
+  ],
+  "output": {
+    "systemId": "{{steps.otpLookup.systemId}}",
+    "deviceId": "{{steps.otpLookup.deviceId}}",
+    "search": "{{steps.otpLookup.search}}",
+    "threadCount": "{{steps.otpLookup.threadCount}}",
+    "scannedThreads": "{{steps.otpLookup.scannedThreads}}",
+    "scannedMessages": "{{steps.otpLookup.scannedMessages}}",
+    "found": "{{steps.otpLookup.found}}",
+    "candidateCount": "{{steps.otpLookup.candidateCount}}",
+    "thread": "{{steps.otpLookup.thread}}",
+    "bestCandidate": "{{steps.otpLookup.bestCandidate}}",
+    "candidates": "{{steps.otpLookup.candidates}}",
+    "inspectedThreads": "{{steps.otpLookup.inspectedThreads}}",
+    "screenshot": "{{steps.otpLookup.screenshot}}"
+  }
+}

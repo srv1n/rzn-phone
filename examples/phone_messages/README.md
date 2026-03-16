@@ -23,3 +23,4 @@ Files:
 
 - `list_recent_threads.tool_call.json`
 - `read_latest_messages.tool_call.json`
+- `find_recent_otp.tool_call.json`

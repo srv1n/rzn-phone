@@ -1,0 +1,9 @@
+{
+  "name": "phone_messages.find_recent_otp",
+  "arguments": {
+    "deviceId": "<UDID>",
+    "maxThreads": 5,
+    "maxMessages": 8,
+    "backgroundAppOnFinish": true
+  }
+}

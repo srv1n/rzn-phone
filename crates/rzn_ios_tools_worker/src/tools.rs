@@ -904,6 +904,28 @@ pub fn list_tool_definitions() -> Vec<Value> {
             }),
         ),
         tool(
+            "phone_messages.find_recent_otp",
+            "Scan recent Messages threads for likely authentication codes / OTPs without sending anything.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
+                    "udid": { "type": "string", "description": "Alias of deviceId." },
+                    "maxThreads": { "type": "integer", "minimum": 1, "maximum": 20, "default": 5 },
+                    "maxMessages": { "type": "integer", "minimum": 1, "maximum": 50, "default": 8 },
+                    "threadContains": { "type": "string", "description": "Optional thread title/preview filter (for example service name)." },
+                    "senderContains": { "type": "string", "description": "Optional sender/thread filter to bias toward a specific service." },
+                    "messageContains": { "type": "string", "description": "Optional message body substring to require." },
+                    "codeLength": { "type": "integer", "minimum": 4, "maximum": 8, "description": "Exact OTP length to require." },
+                    "minCodeLength": { "type": "integer", "minimum": 4, "maximum": 8, "default": 4 },
+                    "maxCodeLength": { "type": "integer", "minimum": 4, "maximum": 8, "default": 8 },
+                    "backgroundAppOnFinish": { "type": "boolean", "default": true },
+                    "lockDeviceOnFinish": { "type": "boolean", "default": false }
+                },
+                "additionalProperties": false
+            }),
+        ),
+        tool(
             "phone_calls.list_recent_calls",
             "List recent call history from the Phone app on a paired iPhone.",
             json!({
@@ -1006,6 +1028,7 @@ pub async fn handle_tool_call(
         "phone_messages.read_latest_messages" => {
             phone_messages_read_latest_messages(state, &arguments).await
         }
+        "phone_messages.find_recent_otp" => phone_messages_find_recent_otp(state, &arguments).await,
         "phone_calls.list_recent_calls" => phone_calls_list_recent_calls(state, &arguments).await,
         "phone_notifications.list_recent_notifications" => {
             phone_notifications_list_recent_notifications(state, &arguments).await
@@ -4677,6 +4700,246 @@ async fn phone_messages_read_latest_messages(state: &AppState, arguments: &Value
     Ok(tool_success_with_content(output, content))
 }
 
+async fn phone_messages_find_recent_otp(state: &AppState, arguments: &Value) -> Result<Value> {
+    let device_id = required_device_id(arguments)?;
+    let max_threads = bounded_usize_arg(arguments, "maxThreads", 5, 1, 20);
+    let max_messages = bounded_usize_arg(arguments, "maxMessages", 8, 1, 50);
+    let background_app_on_finish = bool_arg(arguments, "backgroundAppOnFinish", true);
+    let lock_device_on_finish = bool_arg(arguments, "lockDeviceOnFinish", false);
+    let thread_contains = optional_string_arg(arguments, &["threadContains", "thread_contains"]);
+    let sender_contains = optional_string_arg(arguments, &["senderContains", "sender_contains"]);
+    let message_contains = optional_string_arg(arguments, &["messageContains", "message_contains"]);
+    let exact_code_length =
+        optional_bounded_usize_arg(arguments, &["codeLength", "code_length"], 4, 8);
+
+    let (min_code_length, max_code_length) = if let Some(exact) = exact_code_length {
+        (exact, exact)
+    } else {
+        let min_len =
+            optional_bounded_usize_arg(arguments, &["minCodeLength", "min_code_length"], 4, 8)
+                .unwrap_or(4);
+        let max_len =
+            optional_bounded_usize_arg(arguments, &["maxCodeLength", "max_code_length"], 4, 8)
+                .unwrap_or(8);
+        if min_len > max_len {
+            return Err(ToolCallError::new(
+                ToolErrorCode::InvalidParams,
+                "'minCodeLength' must be <= 'maxCodeLength'",
+                json!({"minCodeLength": min_len, "maxCodeLength": max_len}),
+            )
+            .into());
+        }
+        (min_len, max_len)
+    };
+
+    let list_result = phone_messages_list_recent_threads(
+        state,
+        &json!({
+            "deviceId": device_id.clone(),
+            "maxThreads": max_threads,
+            "backgroundAppOnFinish": background_app_on_finish,
+            "lockDeviceOnFinish": lock_device_on_finish
+        }),
+    )
+    .await?;
+    let list_structured = list_result
+        .get("structuredContent")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    let list_screenshot = list_structured.get("screenshot").cloned();
+    let threads = list_structured
+        .get("threads")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let filtered_threads: Vec<Value> = threads
+        .into_iter()
+        .filter(|thread| {
+            if let Some(filter) = thread_contains.as_deref() {
+                otp_thread_matches_filter(thread, filter)
+            } else {
+                true
+            }
+        })
+        .take(max_threads)
+        .collect();
+
+    let mut inspected_threads: Vec<Value> = Vec::new();
+    let mut candidates: Vec<Value> = Vec::new();
+    let mut seen_candidates = HashSet::<String>::new();
+    let mut scanned_messages = 0usize;
+    let mut successful_thread_reads = 0usize;
+    let mut last_thread_error: Option<anyhow::Error> = None;
+    let mut best_screenshot = list_screenshot;
+
+    for thread in filtered_threads.iter() {
+        let thread_index = thread
+            .get("position")
+            .and_then(Value::as_u64)
+            .unwrap_or(1)
+            .saturating_sub(1) as usize;
+        let read_result = phone_messages_read_latest_messages(
+            state,
+            &json!({
+                "deviceId": device_id.clone(),
+                "threadId": thread.get("thread_id").cloned().unwrap_or(Value::Null),
+                "threadIndex": thread_index,
+                "maxMessages": max_messages,
+                "backgroundAppOnFinish": background_app_on_finish,
+                "lockDeviceOnFinish": lock_device_on_finish
+            }),
+        )
+        .await;
+
+        let read_result = match read_result {
+            Ok(result) => result,
+            Err(err) => {
+                inspected_threads.push(json!({
+                    "thread": thread,
+                    "error": format!("{err:#}")
+                }));
+                last_thread_error = Some(err);
+                continue;
+            }
+        };
+
+        successful_thread_reads += 1;
+        let read_structured = read_result
+            .get("structuredContent")
+            .cloned()
+            .unwrap_or_else(|| json!({}));
+        let thread_meta = read_structured
+            .get("thread")
+            .cloned()
+            .unwrap_or_else(|| thread.clone());
+        let messages = read_structured
+            .get("messages")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        scanned_messages += messages.len();
+
+        let thread_candidates = extract_otp_candidates_from_messages(
+            &thread_meta,
+            &messages,
+            sender_contains.as_deref(),
+            message_contains.as_deref(),
+            min_code_length,
+            max_code_length,
+        );
+        if !thread_candidates.is_empty() {
+            best_screenshot = read_structured
+                .get("screenshot")
+                .cloned()
+                .or(best_screenshot);
+        }
+
+        let mut unique_thread_candidates = Vec::new();
+        for candidate in thread_candidates {
+            let dedupe_key = format!(
+                "{}:{}",
+                candidate
+                    .get("message_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
+                candidate.get("code").and_then(Value::as_str).unwrap_or("")
+            );
+            if dedupe_key == ":" || !seen_candidates.insert(dedupe_key) {
+                continue;
+            }
+            unique_thread_candidates.push(candidate.clone());
+            candidates.push(candidate);
+        }
+
+        inspected_threads.push(json!({
+            "thread": thread_meta,
+            "messageCount": messages.len(),
+            "candidateCount": unique_thread_candidates.len(),
+            "bestCandidate": unique_thread_candidates.first().cloned().unwrap_or(Value::Null)
+        }));
+    }
+
+    if successful_thread_reads == 0 && !filtered_threads.is_empty() {
+        if let Some(err) = last_thread_error {
+            return Err(err);
+        }
+    }
+
+    rank_otp_candidates(&mut candidates);
+
+    let best_candidate = candidates.first().cloned();
+    let found = best_candidate.is_some();
+    let mut output = json!({
+        "ok": true,
+        "systemId": "phone_messages",
+        "deviceId": device_id,
+        "search": {
+            "maxThreads": max_threads,
+            "maxMessages": max_messages,
+            "threadContains": thread_contains,
+            "senderContains": sender_contains,
+            "messageContains": message_contains,
+            "minCodeLength": min_code_length,
+            "maxCodeLength": max_code_length
+        },
+        "threadCount": filtered_threads.len(),
+        "scannedThreads": successful_thread_reads,
+        "scannedMessages": scanned_messages,
+        "found": found,
+        "candidateCount": candidates.len(),
+        "bestCandidate": best_candidate.clone().unwrap_or(Value::Null),
+        "candidates": candidates,
+        "inspectedThreads": inspected_threads,
+        "screenshot": best_screenshot.unwrap_or(Value::Null)
+    });
+
+    if let Some(best) = best_candidate.as_ref() {
+        if let Some(obj) = output.as_object_mut() {
+            obj.insert(
+                "thread".to_string(),
+                json!({
+                    "thread_id": best.get("thread_id").cloned().unwrap_or(Value::Null),
+                    "title": best.get("thread_title").cloned().unwrap_or(Value::Null),
+                    "position": best.get("thread_position").cloned().unwrap_or(Value::Null)
+                }),
+            );
+        }
+    }
+
+    let message = if let Some(best) = best_candidate.as_ref() {
+        let code = best
+            .get("code")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
+        let title = best
+            .get("thread_title")
+            .and_then(Value::as_str)
+            .unwrap_or("Messages");
+        format!(
+            "found {} OTP candidates; best code {} in {}",
+            output
+                .get("candidateCount")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+            code,
+            title
+        )
+    } else {
+        format!(
+            "found 0 OTP candidates across {} threads",
+            successful_thread_reads
+        )
+    };
+
+    let mut content = vec![json!({ "type": "text", "text": message })];
+    if let Some(block) = screenshot_to_content_block(output.get("screenshot")) {
+        content.push(block);
+    }
+
+    Ok(tool_success_with_content(output, content))
+}
+
 async fn phone_calls_list_recent_calls(state: &AppState, arguments: &Value) -> Result<Value> {
     let device_id = required_device_id(arguments)?;
     let max_calls = bounded_usize_arg(arguments, "maxCalls", 25, 1, 50);
@@ -5146,6 +5409,227 @@ fn normalize_recent_notifications(rows: &[Value]) -> Vec<Value> {
             })
         })
         .collect()
+}
+
+fn optional_string_arg(arguments: &Value, keys: &[&str]) -> Option<String> {
+    keys.iter().find_map(|key| {
+        arguments
+            .get(*key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+    })
+}
+
+fn optional_bounded_usize_arg(
+    arguments: &Value,
+    keys: &[&str],
+    min: usize,
+    max: usize,
+) -> Option<usize> {
+    keys.iter().find_map(|key| {
+        arguments
+            .get(*key)
+            .and_then(Value::as_u64)
+            .map(|value| (value as usize).clamp(min, max))
+    })
+}
+
+fn otp_thread_matches_filter(thread: &Value, filter: &str) -> bool {
+    row_text(thread, &["title"])
+        .map(|value| string_contains_ci(&value, filter))
+        .unwrap_or(false)
+        || row_text(thread, &["preview"])
+            .map(|value| string_contains_ci(&value, filter))
+            .unwrap_or(false)
+}
+
+fn extract_otp_candidates_from_messages(
+    thread: &Value,
+    messages: &[Value],
+    sender_contains: Option<&str>,
+    message_contains: Option<&str>,
+    min_code_length: usize,
+    max_code_length: usize,
+) -> Vec<Value> {
+    static OTP_CODE_RE: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"(?:^|[^\d])(\d{4,8})(?:[^\d]|$)").expect("otp regex"));
+    static AUTH_HINT_RE: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(
+            r"(?i)\b(otp|one[- ]time|verification|verify|passcode|security code|login code|auth(?:entication)? code|2fa|do not share|expires?)\b",
+        )
+        .expect("auth hint regex")
+    });
+
+    let thread_id =
+        row_text(thread, &["thread_id"]).unwrap_or_else(|| "phone_messages-thread".to_string());
+    let thread_title = row_text(thread, &["title"]).unwrap_or_else(|| "Messages".to_string());
+    let thread_position = thread.get("position").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let thread_preview = row_text(thread, &["preview"]).unwrap_or_default();
+    let sender_filter_matches_thread = sender_contains
+        .map(|filter| {
+            string_contains_ci(&thread_title, filter) || string_contains_ci(&thread_preview, filter)
+        })
+        .unwrap_or(false);
+
+    let mut out = Vec::new();
+    for message in messages {
+        let body = row_text(message, &["body", "raw_label", "rawLabel"]).unwrap_or_default();
+        if body.is_empty() {
+            continue;
+        }
+        if let Some(filter) = message_contains {
+            if !string_contains_ci(&body, filter) {
+                continue;
+            }
+        }
+
+        let sender = row_text(message, &["sender", "senderCandidate"]);
+        if let Some(filter) = sender_contains {
+            let sender_matches = sender
+                .as_deref()
+                .map(|value| string_contains_ci(value, filter))
+                .unwrap_or(false)
+                || sender_filter_matches_thread;
+            if !sender_matches {
+                continue;
+            }
+        }
+
+        let has_auth_hint = AUTH_HINT_RE.is_match(&body)
+            || AUTH_HINT_RE.is_match(&thread_title)
+            || AUTH_HINT_RE.is_match(&thread_preview);
+        let message_position =
+            message.get("position").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let sent_at = row_text(message, &["sent_at", "timestamp"]);
+        let message_id = row_text(message, &["message_id"]).unwrap_or_else(|| {
+            stable_phone_item_id(
+                "phone_messages-message",
+                &[thread_id.clone(), body.clone()],
+                message_position.max(1),
+            )
+        });
+
+        for capture in OTP_CODE_RE.captures_iter(&body) {
+            let Some(matched) = capture.get(1) else {
+                continue;
+            };
+            let code = matched.as_str();
+            if code.len() < min_code_length || code.len() > max_code_length {
+                continue;
+            }
+
+            let mut score = 0i64;
+            let mut reasons = Vec::<String>::new();
+
+            if has_auth_hint {
+                score += 60;
+                reasons.push("auth_hint".to_string());
+            }
+            if sender_filter_matches_thread {
+                score += 20;
+                reasons.push("thread_sender_match".to_string());
+            }
+            if let Some(filter) = sender_contains {
+                if sender
+                    .as_deref()
+                    .map(|value| string_contains_ci(value, filter))
+                    .unwrap_or(false)
+                {
+                    score += 25;
+                    reasons.push("sender_match".to_string());
+                }
+            }
+            if let Some(filter) = message_contains {
+                if string_contains_ci(&body, filter) {
+                    score += 15;
+                    reasons.push("message_match".to_string());
+                }
+            }
+            if code.len() == 6 {
+                score += 10;
+                reasons.push("common_length".to_string());
+            }
+            if thread_position > 0 {
+                score += (20usize.saturating_sub(thread_position.saturating_sub(1) * 3)) as i64;
+            }
+            score += message_position.min(20) as i64;
+
+            out.push(json!({
+                "code": code,
+                "code_length": code.len(),
+                "score": score,
+                "reasons": reasons,
+                "thread_id": thread_id.clone(),
+                "thread_title": thread_title.clone(),
+                "thread_position": thread_position,
+                "message_id": message_id.clone(),
+                "message_position": message_position,
+                "message_body": body.clone(),
+                "message_excerpt": build_message_excerpt(&body, matched.start(), matched.end()),
+                "sender": sender.clone(),
+                "sent_at": sent_at.clone()
+            }));
+        }
+    }
+
+    out
+}
+
+fn rank_otp_candidates(candidates: &mut [Value]) {
+    candidates.sort_by(|left, right| {
+        let left_score = left.get("score").and_then(Value::as_i64).unwrap_or(0);
+        let right_score = right.get("score").and_then(Value::as_i64).unwrap_or(0);
+        let left_thread = left
+            .get("thread_position")
+            .and_then(Value::as_u64)
+            .unwrap_or(u64::MAX);
+        let right_thread = right
+            .get("thread_position")
+            .and_then(Value::as_u64)
+            .unwrap_or(u64::MAX);
+        let left_message = left
+            .get("message_position")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let right_message = right
+            .get("message_position")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+
+        right_score
+            .cmp(&left_score)
+            .then(left_thread.cmp(&right_thread))
+            .then(right_message.cmp(&left_message))
+    });
+
+    for (idx, candidate) in candidates.iter_mut().enumerate() {
+        if let Some(obj) = candidate.as_object_mut() {
+            obj.insert("rank".to_string(), json!(idx + 1));
+        }
+    }
+}
+
+fn build_message_excerpt(body: &str, start: usize, end: usize) -> String {
+    let chars: Vec<char> = body.chars().collect();
+    let char_count = chars.len();
+    let start_idx = body[..start].chars().count();
+    let end_idx = body[..end].chars().count();
+    let window_start = start_idx.saturating_sub(24);
+    let window_end = (end_idx + 24).min(char_count);
+    let mut excerpt: String = chars[window_start..window_end].iter().collect();
+    if window_start > 0 {
+        excerpt = format!("...{excerpt}");
+    }
+    if window_end < char_count {
+        excerpt.push_str("...");
+    }
+    excerpt
+}
+
+fn string_contains_ci(haystack: &str, needle: &str) -> bool {
+    haystack.to_lowercase().contains(&needle.to_lowercase())
 }
 
 fn required_device_id(arguments: &Value) -> Result<String> {
@@ -6281,9 +6765,87 @@ mod tests {
 
         assert!(names.contains(&"phone_messages.list_recent_threads".to_string()));
         assert!(names.contains(&"phone_messages.read_latest_messages".to_string()));
+        assert!(names.contains(&"phone_messages.find_recent_otp".to_string()));
         assert!(names.contains(&"phone_calls.list_recent_calls".to_string()));
         assert!(names.contains(&"phone_notifications.list_recent_notifications".to_string()));
         assert!(names.contains(&"phone_notifications.filter_notifications_by_app".to_string()));
+    }
+
+    #[test]
+    fn extract_otp_candidates_prefers_auth_hint_messages() {
+        let thread = json!({
+            "thread_id": "phone_messages-thread-1-openai",
+            "title": "OpenAI",
+            "preview": "Your verification code is here",
+            "position": 1
+        });
+        let messages = vec![
+            json!({
+                "message_id": "msg-1",
+                "body": "Your verification code is 123456. Do not share it.",
+                "sender": "OpenAI",
+                "position": 3
+            }),
+            json!({
+                "message_id": "msg-2",
+                "body": "Order 654321 has shipped.",
+                "sender": "Shop",
+                "position": 2
+            }),
+        ];
+
+        let mut candidates =
+            extract_otp_candidates_from_messages(&thread, &messages, None, None, 4, 8);
+        rank_otp_candidates(&mut candidates);
+
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(
+            candidates[0].get("code").and_then(Value::as_str),
+            Some("123456")
+        );
+        assert!(
+            candidates[0]
+                .get("score")
+                .and_then(Value::as_i64)
+                .unwrap_or_default()
+                > candidates[1]
+                    .get("score")
+                    .and_then(Value::as_i64)
+                    .unwrap_or_default()
+        );
+    }
+
+    #[test]
+    fn extract_otp_candidates_respects_sender_and_length_filters() {
+        let thread = json!({
+            "thread_id": "phone_messages-thread-2-bank",
+            "title": "Bank",
+            "preview": "Security code",
+            "position": 2
+        });
+        let messages = vec![
+            json!({
+                "message_id": "msg-1",
+                "body": "Your code is 4321",
+                "sender": "Bank",
+                "position": 4
+            }),
+            json!({
+                "message_id": "msg-2",
+                "body": "Use 555555 to sign in",
+                "sender": "Another App",
+                "position": 5
+            }),
+        ];
+
+        let candidates =
+            extract_otp_candidates_from_messages(&thread, &messages, Some("Bank"), None, 4, 4);
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(
+            candidates[0].get("code").and_then(Value::as_str),
+            Some("4321")
+        );
     }
 
     #[test]

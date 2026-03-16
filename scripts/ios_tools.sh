@@ -33,6 +33,8 @@ Commands:
                                       IOS_SESSION_CREATE_TIMEOUT_MS=600000,
                                       IOS_WDA_LAUNCH_TIMEOUT_MS=240000, IOS_WDA_CONNECTION_TIMEOUT_MS=120000,
                                       IOS_STOP_APPIUM_ON_EXIT=1
+  messages-find-otp <udid> [--out <dir>] [--max-threads <n>] [--max-messages <n>] [--thread-contains <text>] [--sender-contains <text>] [--message-contains <text>] [--code-length <n>] [--min-code-length <n>] [--max-code-length <n>]
+                        Run phone_messages.find_recent_otp and write result.json + screenshot.png when present.
   reddit-read-smoke <udid>
                         Run reddit.read_first_post workflow (read-only) and return compact snapshot.
   reddit-comment-smoke <udid> <commentText> [commit=0|1]
@@ -690,6 +692,115 @@ JSON
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"safari.google_search","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{"query":"$QUERY","limit":$LIMIT},"commit":false}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
+    ;;
+  messages-find-otp)
+    UDID="${1:-}"
+    if [[ "$#" -ge 1 ]]; then
+      shift 1
+    else
+      shift "$#"
+    fi
+    MAX_THREADS=5
+    MAX_MESSAGES=8
+    THREAD_CONTAINS=""
+    SENDER_CONTAINS=""
+    MESSAGE_CONTAINS=""
+    CODE_LENGTH=""
+    MIN_CODE_LENGTH=4
+    MAX_CODE_LENGTH=8
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --max-threads)
+          MAX_THREADS="${2:-5}"
+          shift 2
+          ;;
+        --max-messages)
+          MAX_MESSAGES="${2:-8}"
+          shift 2
+          ;;
+        --thread-contains)
+          THREAD_CONTAINS="${2:-}"
+          shift 2
+          ;;
+        --sender-contains)
+          SENDER_CONTAINS="${2:-}"
+          shift 2
+          ;;
+        --message-contains)
+          MESSAGE_CONTAINS="${2:-}"
+          shift 2
+          ;;
+        --code-length)
+          CODE_LENGTH="${2:-}"
+          shift 2
+          ;;
+        --min-code-length)
+          MIN_CODE_LENGTH="${2:-4}"
+          shift 2
+          ;;
+        --max-code-length)
+          MAX_CODE_LENGTH="${2:-8}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for messages-find-otp: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh messages-find-otp <udid> [--out <dir>] [--max-threads <n>] [--max-messages <n>] [--thread-contains <text>] [--sender-contains <text>] [--message-contains <text>] [--code-length <n>] [--min-code-length <n>] [--max-code-length <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/messages-find-otp.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    SESSION_JSON="$(build_session_json "$UDID")"
+    OTP_BACKGROUND_JSON="$(bool_json "${IOS_WORKFLOW_BACKGROUND_ON_FINISH:-${IOS_BACKGROUND_APP_ON_EXIT:-1}}")"
+    OTP_LOCK_JSON="$(bool_json "${IOS_WORKFLOW_LOCK_ON_FINISH:-${IOS_LOCK_DEVICE_ON_EXIT:-0}}")"
+    ARGS_JSON="$(jq -nc \
+      --argjson maxThreads "$MAX_THREADS" \
+      --argjson maxMessages "$MAX_MESSAGES" \
+      --arg threadContains "$THREAD_CONTAINS" \
+      --arg senderContains "$SENDER_CONTAINS" \
+      --arg messageContains "$MESSAGE_CONTAINS" \
+      --arg codeLength "$CODE_LENGTH" \
+      --argjson minCodeLength "$MIN_CODE_LENGTH" \
+      --argjson maxCodeLength "$MAX_CODE_LENGTH" \
+      --argjson backgroundAppOnFinish "$OTP_BACKGROUND_JSON" \
+      --argjson lockDeviceOnFinish "$OTP_LOCK_JSON" \
+      '{maxThreads:$maxThreads,maxMessages:$maxMessages,minCodeLength:$minCodeLength,maxCodeLength:$maxCodeLength,backgroundAppOnFinish:$backgroundAppOnFinish,lockDeviceOnFinish:$lockDeviceOnFinish}
+       + (if $threadContains == "" then {} else {threadContains:$threadContains} end)
+       + (if $senderContains == "" then {} else {senderContains:$senderContains} end)
+       + (if $messageContains == "" then {} else {messageContains:$messageContains} end)
+       + (if $codeLength == "" then {} else {codeLength:($codeLength | tonumber)} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "phone_messages.find_recent_otp" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "messages-find-otp failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+
+    if ! jq -e 'select(.id=="wf-1") | .result.structuredContent.bestCandidate.code != null' "$RAW_OUT" >/dev/null; then
+      echo "messages find_recent_otp did not find an OTP candidate; artifacts saved to: $OUT_DIR" >&2
+      exit 1
+    fi
+
+    echo "messages find_recent_otp saved artifacts to: $OUT_DIR"
     ;;
   reddit-read-smoke)
     UDID="${1:-}"

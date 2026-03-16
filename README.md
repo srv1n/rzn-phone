@@ -25,7 +25,7 @@ coherent systems instead of one opaque device worker:
 
 | System | Read path | Actuation status |
 | --- | --- | --- |
-| `phone_messages` | list threads, read latest messages | not promoted yet |
+| `phone_messages` | list threads, read latest messages, find recent OTPs | not promoted yet |
 | `phone_calls` | inspect recents / call history | not promoted yet |
 | `phone_notifications` | list/filter notifications | not promoted yet |
 
@@ -34,7 +34,7 @@ Current implementation status:
 - Metadata lives under `resources/systems/<system_id>/system.metadata.yaml`.
 - Starter examples live under `examples/<system_id>/`.
 - The worker now exposes first-class read-oriented `phone_*` tools that wrap the lower-level
-  `ios.*` primitives.
+  `ios.*` primitives, including OTP lookup in recent Messages threads.
 - Side-effectful phone actions are intentionally not promoted in this release; the metadata only
   advertises the real read surface.
 
@@ -50,7 +50,7 @@ Current implementation status:
 - Deterministic runner: `ios.script.run`
 - Utilities: `util.list.length`, `util.list.first`, `util.list.nth`, `util.rank_by_name`, `util.date.bucket_counts`, `util.sleep`
 - Safari primitives: `ios.web.goto`, `ios.web.wait_css`, `ios.web.click_css`, `ios.web.type_css`, `ios.web.press_key`, `ios.web.page_source`, `ios.web.screenshot`, `ios.web.eval_js`
-- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `reddit.read_first_post`, `reddit.comment_first_post`, `reddit.open_post`, `reddit.daily_scroll_digest`, `reddit.like_post`, `reddit.comment_post`, `reddit.reply_to_comment`, `reddit.open_inbox`, `reddit.open_dm_thread`, `reddit.send_dm`, `reddit.send_dm_by_username`, `reddit.reply_dm_thread`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `linkedin.read_feed`, `linkedin.open_post`, `linkedin.daily_scroll_digest`, `linkedin.like_post`, `linkedin.comment_post`, `linkedin.reply_to_comment`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
+- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `phone_messages.find_recent_otp`, `reddit.read_first_post`, `reddit.comment_first_post`, `reddit.open_post`, `reddit.daily_scroll_digest`, `reddit.like_post`, `reddit.comment_post`, `reddit.reply_to_comment`, `reddit.open_inbox`, `reddit.open_dm_thread`, `reddit.send_dm`, `reddit.send_dm_by_username`, `reddit.reply_dm_thread`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `linkedin.read_feed`, `linkedin.open_post`, `linkedin.daily_scroll_digest`, `linkedin.like_post`, `linkedin.comment_post`, `linkedin.reply_to_comment`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
 
 ## Safety notes
 
@@ -250,6 +250,12 @@ App Store smoke (asserts at least 1 suggestion + 1 result row):
 
 ```bash
 ./scripts/ios_tools.sh appstore-smoke <udid> "voice notes"
+```
+
+Messages OTP lookup:
+
+```bash
+./scripts/ios_tools.sh messages-find-otp <udid> --thread-contains "OpenAI"
 ```
 
 Reddit (read-only):
