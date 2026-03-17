@@ -15,10 +15,12 @@
     "result_index": { "type": "integer", "default": 0, "min": 0, "max": 25 },
     "submit_mode": { "type": "string", "default": "keyboard" },
     "write_review_scrolls": { "type": "integer", "default": 5, "min": 0, "max": 12 },
-    "star_button_predicate": { "type": "string", "default": "label CONTAINS[c] 'star' OR name CONTAINS[c] 'star'" },
+    "rating_control_predicate": { "type": "string", "default": "type == 'XCUIElementTypeOther' AND name == 'Rating' AND label == 'Rating'" },
+    "rating_star_predicate": { "type": "string", "default": "type == 'XCUIElementTypeImage' AND name == 'star'" },
+    "five_star_selected_predicate": { "type": "string", "default": "type == 'XCUIElementTypeOther' AND name == 'Rating' AND value == '5 stars'" },
     "write_review_predicate": { "type": "string", "default": "label == 'Write a Review' OR name == 'Write a Review' OR value == 'Write a Review'" },
-    "review_title_field_predicate": { "type": "string", "default": "type == 'XCUIElementTypeTextField' AND (label CONTAINS[c] 'Title' OR name CONTAINS[c] 'Title' OR value CONTAINS[c] 'Title')" },
-    "review_body_field_predicate": { "type": "string", "default": "type == 'XCUIElementTypeTextView' OR ((type == 'XCUIElementTypeTextField' OR type == 'XCUIElementTypeOther') AND (label CONTAINS[c] 'Review' OR name CONTAINS[c] 'Review' OR value CONTAINS[c] 'Review'))" },
+    "review_title_field_predicate": { "type": "string", "default": "type == 'XCUIElementTypeTextField' AND (label == 'Title' OR name == 'Title')" },
+    "review_body_field_predicate": { "type": "string", "default": "type == 'XCUIElementTypeTextField' AND (label == 'Review' OR name == 'Review')" },
     "review_submit_button_predicate": { "type": "string", "default": "label == 'Submit' OR name == 'Submit' OR label == 'Send' OR name == 'Send'" },
     "review_success_predicate": { "type": "string", "default": "label CONTAINS[c] 'thank' OR name CONTAINS[c] 'thank' OR label CONTAINS[c] 'submitted' OR name CONTAINS[c] 'submitted' OR label CONTAINS[c] 'posted' OR name CONTAINS[c] 'posted'" },
     "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
@@ -294,10 +296,10 @@
       }
     },
     {
-      "id": "wait_star_buttons",
+      "id": "wait_rating_control",
       "tool": "ios.action.wait",
       "arguments": {
-        "target": { "using": "-ios predicate string", "value": "{{star_button_predicate}}", "index": 4 },
+        "target": { "using": "-ios predicate string", "value": "{{rating_control_predicate}}" },
         "timeoutMs": 20000
       },
       "retries": 1
@@ -306,7 +308,19 @@
       "id": "set_five_star_rating",
       "tool": "ios.action.tap",
       "arguments": {
-        "target": { "using": "-ios predicate string", "value": "{{star_button_predicate}}", "index": 4 }
+        "target": {
+          "using": "-ios predicate string",
+          "value": "{{rating_star_predicate}}",
+          "index": 4
+        }
+      }
+    },
+    {
+      "id": "wait_five_star_selected",
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{five_star_selected_predicate}}" },
+        "timeoutMs": 20000
       }
     },
     {
