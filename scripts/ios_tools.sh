@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+PARSED_ARGS=()
 
 usage() {
   cat <<'EOF'
@@ -168,7 +169,10 @@ parse_global_flags() {
     esac
   done
 
-  PARSED_ARGS=("${filtered[@]}")
+  PARSED_ARGS=()
+  if ((${#filtered[@]})); then
+    PARSED_ARGS=("${filtered[@]}")
+  fi
 }
 
 build_shutdown_args_json() {
@@ -583,7 +587,11 @@ merge_arg_override() {
 cmd="${1:-help}"
 shift || true
 parse_global_flags "$@"
-set -- "${PARSED_ARGS[@]}"
+if ((${#PARSED_ARGS[@]})); then
+  set -- "${PARSED_ARGS[@]}"
+else
+  set --
+fi
 
 case "$cmd" in
   build)
@@ -1581,10 +1589,7 @@ JSON
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
 
-    if jq -e 'select(.id=="wf-1") | .result.isError == true' "$RAW_OUT" >/dev/null; then
-      jq -r 'select(.id=="wf-1") | .result.content[]?.text // "appstore-typeahead failed"' "$RAW_OUT" >&2
-      exit 1
-    fi
+    ensure_workflow_success "$RAW_OUT" "appstore-typeahead failed" || exit 1
 
     jq -c 'select(.id=="wf-1") | .result.structuredContent' "$RAW_OUT" | jq . > "$OUT_DIR/result.json"
     SCREENSHOT_B64="$(jq -r 'select(.id=="wf-1") | .result.structuredContent.screenshot.data // empty' "$RAW_OUT")"
@@ -1702,10 +1707,7 @@ JSON
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
 
-    if jq -e 'select(.id=="wf-1") | .result.isError == true' "$RAW_OUT" >/dev/null; then
-      jq -r 'select(.id=="wf-1") | .result.content[]?.text // "appstore-search-results failed"' "$RAW_OUT" >&2
-      exit 1
-    fi
+    ensure_workflow_success "$RAW_OUT" "appstore-search-results failed" || exit 1
 
     jq -c 'select(.id=="wf-1") | .result.structuredContent' "$RAW_OUT" | jq . > "$OUT_DIR/result.json"
     SCREENSHOT_B64="$(jq -r 'select(.id=="wf-1") | .result.structuredContent.screenshot.data // empty' "$RAW_OUT")"
