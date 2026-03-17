@@ -43,7 +43,7 @@ Reviews workflow behavior:
 - Sorting is best-effort: non-default modes attempt to select from the UI if available.
 
 Review-posting workflow behavior:
-- `appstore.post_review` first launches the installed target app by bundle id, captures a proof screenshot, then switches to App Store and searches by `app_title`.
+- `appstore.post_review` first launches the installed target app by bundle id, captures a proof screenshot, then switches to App Store and searches by `search_query` while still matching the result against the exact `app_title`.
 - App Store deep-link navigation via `app_url` is not yet a first-class workflow primitive, so the wrapper carries `app_url`/`app_id` for bookkeeping while the on-device path uses native search.
 - Review submission is dual-gated: workflow arg `execute_submit=true` plus runner `commit=true`.
 

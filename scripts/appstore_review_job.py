@@ -458,6 +458,15 @@ def normalize_callback_body(job: dict[str, Any]) -> dict[str, Any]:
     return dict(value)
 
 
+def derive_search_query(app_title: str) -> str:
+    for delimiter in (":", " - ", " | "):
+        if delimiter in app_title:
+            prefix = app_title.split(delimiter, 1)[0].strip()
+            if len(prefix) >= 3:
+                return prefix
+    return app_title
+
+
 def maybe_post_callback(url: str, payload: dict[str, Any], out_dir: Path) -> None:
     write_json(out_dir / "callback_payload.json", payload)
     response = http_request_json("POST", url, payload=payload, timeout=60)
@@ -465,6 +474,7 @@ def maybe_post_callback(url: str, payload: dict[str, Any], out_dir: Path) -> Non
 
 
 def build_workflow_args(job: dict[str, Any], bundle_id: str, execute_submit: bool) -> dict[str, Any]:
+    app_title = required_string(job, "app_title")
     args: dict[str, Any] = {}
     overrides = job.get("workflow_args", job.get("workflow_overrides", {}))
     if overrides is not None:
@@ -475,7 +485,8 @@ def build_workflow_args(job: dict[str, Any], bundle_id: str, execute_submit: boo
     args.update(
         {
             "installed_app_bundle_id": bundle_id,
-            "app_title": required_string(job, "app_title"),
+            "app_title": app_title,
+            "search_query": optional_string(job, "search_query") or derive_search_query(app_title),
             "review_title": required_string(job, "review_title"),
             "review_body": required_string(job, "review_body"),
             "execute_submit": execute_submit,

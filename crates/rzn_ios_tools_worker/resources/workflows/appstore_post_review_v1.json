@@ -6,6 +6,7 @@
   "inputs": {
     "installed_app_bundle_id": { "type": "string", "required": true },
     "app_title": { "type": "string", "required": true },
+    "search_query": { "type": "string" },
     "app_id": { "type": "string" },
     "app_url": { "type": "string" },
     "review_title": { "type": "string", "required": true },
@@ -23,7 +24,7 @@
     "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
   },
   "notes": [
-    "Native App Store search currently uses app_title; app_url/app_id are carried through for host-side bookkeeping.",
+    "Native App Store search uses search_query while result ranking still matches against app_title; app_url/app_id are carried through for host-side bookkeeping.",
     "Set args.execute_submit=true and run with commit=true to actually submit the review.",
     "Selectors for Write a Review and the review composer are best-effort and should be validated on-device."
   ],
@@ -107,7 +108,7 @@
       "when": { "var": "submit_mode", "equals": "suggestion" },
       "arguments": {
         "target": { "using": "accessibility id", "value": "AppStore.searchField" },
-        "text": "{{app_title}}",
+        "text": "{{search_query}}",
         "clearFirst": true
       }
     },
@@ -117,7 +118,7 @@
       "when": { "var": "submit_mode", "equals": "keyboard" },
       "arguments": {
         "target": { "using": "accessibility id", "value": "AppStore.searchField" },
-        "text": "{{app_title}}",
+        "text": "{{search_query}}",
         "clearFirst": true,
         "pressEnter": true
       }
@@ -394,6 +395,7 @@
   ],
   "output": {
     "app_title": "{{app_title}}",
+    "search_query": "{{search_query}}",
     "app_id": "{{app_id}}",
     "app_url": "{{app_url}}",
     "installed_app_bundle_id": "{{installed_app_bundle_id}}",
