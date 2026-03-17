@@ -4196,8 +4196,9 @@ async fn workflow_run(state: &AppState, arguments: &Value) -> Result<Value> {
         .unwrap_or(false);
 
     let output_result = if let Some(def) = workflows::load_file_workflow(name) {
-        if let Some(steps) = def.steps {
-            let vars = build_workflow_vars(arguments);
+        if let Some(ref steps) = def.steps {
+            let mut vars = build_workflow_vars(arguments);
+            workflows::merge_input_defaults(&def, &mut vars)?;
             run_steps(state, &steps, commit, &vars, def.output.as_ref()).await
         } else {
             bail!("workflow '{name}' has no executable steps")
@@ -6111,7 +6112,11 @@ async fn util_rank_by_name(arguments: &Value) -> Result<Value> {
     }
 
     Ok(tool_success(
-        json!({ "ok": true, "rank": rank }),
+        json!({
+            "ok": true,
+            "rank": rank,
+            "index": rank.map(|value| value.saturating_sub(1))
+        }),
         "rank computed",
     ))
 }

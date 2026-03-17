@@ -50,7 +50,7 @@ Current implementation status:
 - Deterministic runner: `ios.script.run`
 - Utilities: `util.list.length`, `util.list.first`, `util.list.nth`, `util.rank_by_name`, `util.date.bucket_counts`, `util.sleep`
 - Safari primitives: `ios.web.goto`, `ios.web.wait_css`, `ios.web.click_css`, `ios.web.type_css`, `ios.web.press_key`, `ios.web.page_source`, `ios.web.screenshot`, `ios.web.eval_js`
-- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `phone_messages.find_recent_otp`, `reddit.read_first_post`, `reddit.comment_first_post`, `reddit.open_post`, `reddit.daily_scroll_digest`, `reddit.like_post`, `reddit.comment_post`, `reddit.reply_to_comment`, `reddit.open_inbox`, `reddit.open_dm_thread`, `reddit.send_dm`, `reddit.send_dm_by_username`, `reddit.reply_dm_thread`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `linkedin.read_feed`, `linkedin.open_post`, `linkedin.daily_scroll_digest`, `linkedin.like_post`, `linkedin.comment_post`, `linkedin.reply_to_comment`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
+- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `phone_messages.find_recent_otp`, `reddit.read_first_post`, `reddit.comment_first_post`, `reddit.open_post`, `reddit.daily_scroll_digest`, `reddit.like_post`, `reddit.comment_post`, `reddit.reply_to_comment`, `reddit.open_inbox`, `reddit.open_dm_thread`, `reddit.send_dm`, `reddit.send_dm_by_username`, `reddit.reply_dm_thread`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `appstore.post_review`, `linkedin.read_feed`, `linkedin.open_post`, `linkedin.daily_scroll_digest`, `linkedin.like_post`, `linkedin.comment_post`, `linkedin.reply_to_comment`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
 
 ## Safety notes
 
@@ -59,7 +59,7 @@ Current implementation status:
 - `ios.workflow.run` supports `commit`; mutating workflows enforce `requiresCommit` at step level.
 - `ios.workflow.run` supports post-run controls: `disconnectOnFinish`, `stopAppiumOnFinish`, `backgroundAppOnFinish`, and `lockDeviceOnFinish`.
 - Reddit and LinkedIn engagement workflows use a dual gate: action arg (`execute_*`/`submit`) plus `commit=true`.
-- App Store workflows in this repo are read-only (no purchase/install/review actions).
+- `appstore.post_review` is commit-gated and also requires `execute_submit=true`; the browse-oriented App Store workflows remain read-only.
 - LinkedIn write/delete/interaction workflows use `requiresCommit` on mutating taps; run dry with `--commit 0` first.
 - Reddit write/interaction/DM workflows use `requiresCommit` on mutating taps; run dry with `--commit 0` first.
 
@@ -250,6 +250,13 @@ App Store smoke (asserts at least 1 suggestion + 1 result row):
 
 ```bash
 ./scripts/ios_tools.sh appstore-smoke <udid> "voice notes"
+```
+
+App Store review job wrapper:
+
+```bash
+python3 scripts/appstore_review_job.py <udid> /path/to/job.json
+python3 scripts/appstore_review_job.py <udid> /path/to/job.json --dry-run --skip-upload
 ```
 
 Messages OTP lookup:

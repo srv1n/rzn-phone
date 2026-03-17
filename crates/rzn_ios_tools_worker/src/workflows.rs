@@ -20,15 +20,52 @@ pub async fn run_workflow(_name: &str) -> Result<Value> {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+pub struct WorkflowInputDefinition {
+    #[serde(rename = "type")]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default)]
+    pub default: Option<Value>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct FileWorkflowDefinition {
     pub name: String,
     pub version: String,
     #[serde(default)]
     pub description: String,
     #[serde(default)]
+    pub inputs: HashMap<String, WorkflowInputDefinition>,
+    #[serde(default)]
     pub steps: Option<Vec<Value>>,
     #[serde(default)]
     pub output: Option<Value>,
+}
+
+pub fn merge_input_defaults(def: &FileWorkflowDefinition, vars: &mut Value) -> Result<()> {
+    let Some(vars_obj) = vars.as_object_mut() else {
+        bail!("workflow vars must be an object");
+    };
+
+    for (name, input) in &def.inputs {
+        let missing =
+            vars_obj.get(name).is_none() || vars_obj.get(name).is_some_and(Value::is_null);
+        if !missing {
+            continue;
+        }
+
+        if let Some(default) = &input.default {
+            vars_obj.insert(name.clone(), default.clone());
+            continue;
+        }
+
+        if input.required {
+            bail!("workflow input '{name}' is required");
+        }
+    }
+
+    Ok(())
 }
 
 pub fn load_file_workflow(name: &str) -> Option<FileWorkflowDefinition> {
@@ -60,6 +97,49 @@ pub fn load_file_workflow(name: &str) -> Option<FileWorkflowDefinition> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{merge_input_defaults, FileWorkflowDefinition};
+    use serde_json::json;
+
+    #[test]
+    fn merge_input_defaults_injects_missing_values() {
+        let def: FileWorkflowDefinition = serde_json::from_value(json!({
+            "name": "test.workflow",
+            "version": "1.0.0",
+            "inputs": {
+                "flag": { "type": "boolean", "default": false },
+                "maxScrolls": { "type": "integer", "default": 8 }
+            },
+            "steps": []
+        }))
+        .expect("workflow definition");
+
+        let mut vars = json!({});
+        merge_input_defaults(&def, &mut vars).expect("defaults merged");
+
+        assert_eq!(vars.get("flag"), Some(&json!(false)));
+        assert_eq!(vars.get("maxScrolls"), Some(&json!(8)));
+    }
+
+    #[test]
+    fn merge_input_defaults_rejects_missing_required_inputs() {
+        let def: FileWorkflowDefinition = serde_json::from_value(json!({
+            "name": "test.workflow",
+            "version": "1.0.0",
+            "inputs": {
+                "review_title": { "type": "string", "required": true }
+            },
+            "steps": []
+        }))
+        .expect("workflow definition");
+
+        let mut vars = json!({});
+        let err = merge_input_defaults(&def, &mut vars).expect_err("required input error");
+        assert!(err.to_string().contains("review_title"));
+    }
 }
 
 fn list_file_workflows() -> Vec<WorkflowInfo> {
@@ -116,7 +196,9 @@ fn workflow_search_dirs() -> Vec<PathBuf> {
     }
 
     // Dev fallback (repo root as cwd in claude_plugin/.mcp.json).
-    dirs.push(PathBuf::from("crates/rzn_ios_tools_worker/resources/workflows"));
+    dirs.push(PathBuf::from(
+        "crates/rzn_ios_tools_worker/resources/workflows",
+    ));
 
     if let Ok(extra) = env::var("RZN_IOS_WORKFLOW_DIRS") {
         for raw in extra.split(':') {

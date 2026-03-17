@@ -1,0 +1,411 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "appstore.post_review",
+  "version": "0.1.0",
+  "description": "Launch an installed iOS app, open its App Store listing, draft a 5-star review, and optionally submit it with proof screenshots.",
+  "inputs": {
+    "installed_app_bundle_id": { "type": "string", "required": true },
+    "app_title": { "type": "string", "required": true },
+    "app_id": { "type": "string" },
+    "app_url": { "type": "string" },
+    "review_title": { "type": "string", "required": true },
+    "review_body": { "type": "string", "required": true },
+    "execute_submit": { "type": "boolean", "default": false },
+    "result_index": { "type": "integer", "default": 0, "min": 0, "max": 25 },
+    "submit_mode": { "type": "string", "default": "keyboard" },
+    "write_review_scrolls": { "type": "integer", "default": 5, "min": 0, "max": 12 },
+    "star_button_predicate": { "type": "string", "default": "label CONTAINS[c] 'star' OR name CONTAINS[c] 'star'" },
+    "write_review_predicate": { "type": "string", "default": "label == 'Write a Review' OR name == 'Write a Review' OR value == 'Write a Review'" },
+    "review_title_field_predicate": { "type": "string", "default": "type == 'XCUIElementTypeTextField' AND (label CONTAINS[c] 'Title' OR name CONTAINS[c] 'Title' OR value CONTAINS[c] 'Title')" },
+    "review_body_field_predicate": { "type": "string", "default": "type == 'XCUIElementTypeTextView' OR ((type == 'XCUIElementTypeTextField' OR type == 'XCUIElementTypeOther') AND (label CONTAINS[c] 'Review' OR name CONTAINS[c] 'Review' OR value CONTAINS[c] 'Review'))" },
+    "review_submit_button_predicate": { "type": "string", "default": "label == 'Submit' OR name == 'Submit' OR label == 'Send' OR name == 'Send'" },
+    "review_success_predicate": { "type": "string", "default": "label CONTAINS[c] 'thank' OR name CONTAINS[c] 'thank' OR label CONTAINS[c] 'submitted' OR name CONTAINS[c] 'submitted' OR label CONTAINS[c] 'posted' OR name CONTAINS[c] 'posted'" },
+    "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Native App Store search currently uses app_title; app_url/app_id are carried through for host-side bookkeeping.",
+    "Set args.execute_submit=true and run with commit=true to actually submit the review.",
+    "Selectors for Write a Review and the review composer are best-effort and should be validated on-device."
+  ],
+  "steps": [
+    { "id": "ensure_appium", "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "id": "launch_installed_app",
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "{{installed_app_bundle_id}}",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    { "id": "wait_after_app_launch", "tool": "util.sleep", "arguments": { "minMs": 2200, "maxMs": 3200 } },
+    { "id": "capture_app_launch", "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "appLaunchedScreenshot" },
+    { "id": "capture_app_launch_source", "tool": "ios.ui.source", "arguments": {}, "saveAs": "appLaunchedUiSource" },
+    {
+      "id": "open_app_store",
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.apple.AppStore",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "id": "wait_search_tab",
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "AppStore.tabBar.search" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "id": "tap_search_tab",
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "AppStore.tabBar.search" }
+      }
+    },
+    {
+      "id": "tap_search_field",
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "AppStore.searchField" }
+      }
+    },
+    {
+      "id": "type_query_suggestion",
+      "tool": "ios.action.type",
+      "when": { "var": "submit_mode", "equals": "suggestion" },
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "AppStore.searchField" },
+        "text": "{{app_title}}",
+        "clearFirst": true
+      }
+    },
+    {
+      "id": "type_query_keyboard",
+      "tool": "ios.action.type",
+      "when": { "var": "submit_mode", "equals": "keyboard" },
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "AppStore.searchField" },
+        "text": "{{app_title}}",
+        "clearFirst": true,
+        "pressEnter": true
+      }
+    },
+    {
+      "id": "extract_keyboard_hints",
+      "tool": "ios.ui.extract_text",
+      "when": { "var": "submit_mode", "equals": "keyboard" },
+      "saveAs": "keyboardHints",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeCell", "ancestorName": "AppStore.searchHints", "max": 2 },
+        "limit": 2,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "id": "select_first_keyboard_hint",
+      "tool": "util.list.first",
+      "when": { "var": "submit_mode", "equals": "keyboard" },
+      "saveAs": "keyboardHintFirst",
+      "arguments": { "list": "{{steps.keyboardHints.texts}}" }
+    },
+    {
+      "id": "tap_first_keyboard_hint",
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.keyboardHintFirst.found", "truthy": true },
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCollectionView[@name='AppStore.searchHints']//XCUIElementTypeCell[1]" }
+      }
+    },
+    {
+      "id": "wait_first_suggestion",
+      "tool": "ios.action.wait",
+      "when": { "var": "submit_mode", "equals": "suggestion" },
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCollectionView[@name='AppStore.searchHints']//XCUIElementTypeCell[1]" },
+        "timeoutMs": 10000
+      },
+      "retries": 1
+    },
+    {
+      "id": "tap_first_suggestion",
+      "tool": "ios.action.tap",
+      "when": { "var": "submit_mode", "equals": "suggestion" },
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCollectionView[@name='AppStore.searchHints']//XCUIElementTypeCell[1]" }
+      }
+    },
+    {
+      "id": "wait_search_results",
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.searchResult')]" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "id": "extract_search_results",
+      "tool": "ios.ui.extract_rows",
+      "saveAs": "searchResults",
+      "arguments": {
+        "row": {
+          "type": "XCUIElementTypeCell",
+          "namePrefix": "AppStore.shelfItem.searchResult"
+        },
+        "primary": {
+          "type": "XCUIElementTypeButton",
+          "attr": "label",
+          "pick": "longest"
+        },
+        "split": {
+          "delimiter": ",",
+          "fields": ["name", "subtitle", "developer"],
+          "skipMetricLike": true
+        },
+        "limit": 12
+      }
+    },
+    {
+      "id": "rank_target_result",
+      "tool": "util.rank_by_name",
+      "saveAs": "targetResultRank",
+      "arguments": {
+        "items": "{{steps.searchResults.rows}}",
+        "field": "name",
+        "target": "{{app_title}}"
+      }
+    },
+    {
+      "id": "tap_target_result_exact",
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.targetResultRank.index", "exists": true },
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.searchResult')]", "index": "{{steps.targetResultRank.index}}" }
+      }
+    },
+    {
+      "id": "tap_target_result_fallback",
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.targetResultRank.index", "exists": false },
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.searchResult')]", "index": "{{result_index}}" }
+      }
+    },
+    {
+      "id": "extract_dismiss_buttons",
+      "tool": "ios.ui.extract_text",
+      "saveAs": "dismissButtons",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "AppStore.dismissButton", "max": 2 },
+        "limit": 2,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "id": "pick_dismiss_button",
+      "tool": "util.list.first",
+      "saveAs": "dismissFirst",
+      "arguments": { "list": "{{steps.dismissButtons.texts}}" }
+    },
+    {
+      "id": "tap_dismiss_button",
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.dismissFirst.found", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "AppStore.dismissButton" } }
+    },
+    {
+      "id": "wait_product_page",
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeCell[starts-with(@name, 'AppStore.shelfItem.productTopLockup')]" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "id": "settle_on_product_page", "tool": "util.sleep", "arguments": { "minMs": 700, "maxMs": 1600 } },
+    {
+      "id": "open_ratings_and_reviews",
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "AppStore.productPage.badge.rating" }
+      }
+    },
+    {
+      "id": "wait_reviews_surface",
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "name CONTAINS 'parentId=productRatings' OR label CONTAINS[c] 'Write a Review' OR name CONTAINS[c] 'Write a Review'" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "id": "scroll_to_write_review",
+      "tool": "ios.action.scroll_until",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{write_review_predicate}}" },
+        "direction": "down",
+        "distance": 0.58,
+        "maxScrolls": "{{write_review_scrolls}}",
+        "timeoutMs": 45000,
+        "settleMs": 350
+      }
+    },
+    {
+      "id": "tap_write_review",
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{write_review_predicate}}" }
+      }
+    },
+    {
+      "id": "wait_star_buttons",
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{star_button_predicate}}", "index": 4 },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    {
+      "id": "set_five_star_rating",
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{star_button_predicate}}", "index": 4 }
+      }
+    },
+    {
+      "id": "wait_review_title_field",
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{review_title_field_predicate}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    {
+      "id": "type_review_title",
+      "tool": "ios.action.type",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{review_title_field_predicate}}" },
+        "text": "{{review_title}}",
+        "clearFirst": true
+      }
+    },
+    {
+      "id": "wait_review_body_field",
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{review_body_field_predicate}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    {
+      "id": "type_review_body",
+      "tool": "ios.action.type",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{review_body_field_predicate}}" },
+        "text": "{{review_body}}",
+        "clearFirst": true
+      }
+    },
+    { "id": "capture_review_draft", "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "draftReviewScreenshot" },
+    { "id": "capture_review_draft_source", "tool": "ios.ui.source", "arguments": {}, "saveAs": "draftReviewUiSource" },
+    {
+      "id": "capture_review_draft_compact",
+      "tool": "ios.ui.observe_compact",
+      "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+      "saveAs": "draftReviewCompactSnapshot"
+    },
+    {
+      "id": "tap_submit_review",
+      "tool": "ios.action.tap",
+      "when": { "var": "execute_submit", "truthy": true },
+      "requiresCommit": true,
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{review_submit_button_predicate}}" }
+      }
+    },
+    {
+      "id": "wait_after_submit",
+      "tool": "util.sleep",
+      "when": { "var": "execute_submit", "truthy": true },
+      "arguments": { "minMs": 900, "maxMs": 1800 }
+    },
+    {
+      "id": "wait_submit_confirmation",
+      "tool": "ios.action.wait",
+      "when": { "var": "execute_submit", "truthy": true },
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{review_success_predicate}}" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "id": "capture_review_posted",
+      "tool": "ios.ui.screenshot",
+      "when": { "var": "execute_submit", "truthy": true },
+      "arguments": {},
+      "saveAs": "reviewPostedScreenshot"
+    },
+    {
+      "id": "capture_review_posted_source",
+      "tool": "ios.ui.source",
+      "when": { "var": "execute_submit", "truthy": true },
+      "arguments": {},
+      "saveAs": "reviewPostedUiSource"
+    }
+  ],
+  "output": {
+    "app_title": "{{app_title}}",
+    "app_id": "{{app_id}}",
+    "app_url": "{{app_url}}",
+    "installed_app_bundle_id": "{{installed_app_bundle_id}}",
+    "requestedSubmit": "{{execute_submit}}",
+    "matchedResultRank": "{{steps.targetResultRank.rank}}",
+    "matchedResultIndex": "{{steps.targetResultRank.index}}",
+    "appLaunchedScreenshot": "{{steps.appLaunchedScreenshot}}",
+    "appLaunchedUiSource": "{{steps.appLaunchedUiSource}}",
+    "draftReviewScreenshot": "{{steps.draftReviewScreenshot}}",
+    "draftReviewUiSource": "{{steps.draftReviewUiSource}}",
+    "draftReviewCompactSnapshot": "{{steps.draftReviewCompactSnapshot}}",
+    "reviewPostedScreenshot": "{{steps.reviewPostedScreenshot}}",
+    "reviewPostedUiSource": "{{steps.reviewPostedUiSource}}"
+  }
+}
