@@ -1946,6 +1946,20 @@ async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
         .map(|(idx, row)| {
             let mut obj = serde_json::Map::new();
             obj.insert("position".to_string(), json!(idx + 1));
+            obj.insert("x".to_string(), json!(row.x));
+            obj.insert("y".to_string(), json!(row.y));
+            obj.insert("width".to_string(), json!(row.width));
+            obj.insert("height".to_string(), json!(row.height));
+            obj.insert("centerX".to_string(), json!(row.x + (row.width / 2.0)));
+            obj.insert("centerY".to_string(), json!(row.y + (row.height / 2.0)));
+            obj.insert(
+                "tapX".to_string(),
+                json!(preferred_row_tap_x(row.x, row.width)),
+            );
+            obj.insert(
+                "tapY".to_string(),
+                json!(preferred_row_tap_y(row.y, row.height)),
+            );
             for (k, v) in row.fields {
                 obj.insert(k, json!(v));
             }
@@ -2995,6 +3009,8 @@ struct SplitConfig {
 struct RowMatch {
     x: f64,
     y: f64,
+    width: f64,
+    height: f64,
     raw_label: String,
     fields: Vec<(String, String)>,
     extra_fields: Vec<(String, String)>,
@@ -3463,7 +3479,16 @@ fn extract_rows_from_source(
     reader.config_mut().check_end_names = false;
     let mut buf = Vec::new();
     let mut stack: Vec<(String, Option<String>)> = Vec::new();
-    let mut current: Option<(usize, f64, f64, Vec<String>, Vec<String>, Vec<Vec<String>>)> = None;
+    let mut current: Option<(
+        usize,
+        f64,
+        f64,
+        f64,
+        f64,
+        Vec<String>,
+        Vec<String>,
+        Vec<Vec<String>>,
+    )> = None;
     let mut out = Vec::new();
 
     let mut depth = 0usize;
@@ -3481,13 +3506,17 @@ fn extract_rows_from_source(
                         depth,
                         attr_f64(&e, "x").unwrap_or(0.0),
                         attr_f64(&e, "y").unwrap_or(0.0),
+                        attr_f64(&e, "width").unwrap_or(0.0),
+                        attr_f64(&e, "height").unwrap_or(0.0),
                         Vec::new(),
                         Vec::new(),
                         field_matches,
                     ));
                 }
 
-                if let Some((_row_depth, _x, _y, labels, tags, field_matches)) = current.as_mut() {
+                if let Some((_row_depth, _x, _y, _width, _height, labels, tags, field_matches)) =
+                    current.as_mut()
+                {
                     collect_primary_label(&elem_type, &e, primary_query, labels);
                     collect_tag_value(&e, tag_query, tags);
                     collect_field_matches(&elem_type, &e, field_queries, field_matches, &stack);
@@ -3501,6 +3530,8 @@ fn extract_rows_from_source(
                     let row = finalize_row(
                         attr_f64(&e, "x").unwrap_or(0.0),
                         attr_f64(&e, "y").unwrap_or(0.0),
+                        attr_f64(&e, "width").unwrap_or(0.0),
+                        attr_f64(&e, "height").unwrap_or(0.0),
                         Vec::new(),
                         Vec::new(),
                         Vec::new(),
@@ -3512,8 +3543,16 @@ fn extract_rows_from_source(
                     if let Some(row) = row {
                         out.push(row);
                     }
-                } else if let Some((_row_depth, _x, _y, labels, tags, field_matches)) =
-                    current.as_mut()
+                } else if let Some((
+                    _row_depth,
+                    _x,
+                    _y,
+                    _width,
+                    _height,
+                    labels,
+                    tags,
+                    field_matches,
+                )) = current.as_mut()
                 {
                     collect_primary_label(&elem_type, &e, primary_query, labels);
                     collect_tag_value(&e, tag_query, tags);
@@ -3521,11 +3560,15 @@ fn extract_rows_from_source(
                 }
             }
             Ok(Event::End(_)) => {
-                if let Some((row_depth, x, y, labels, tags, field_matches)) = current.take() {
+                if let Some((row_depth, x, y, width, height, labels, tags, field_matches)) =
+                    current.take()
+                {
                     if row_depth == depth {
                         if let Some(row) = finalize_row(
                             x,
                             y,
+                            width,
+                            height,
                             labels,
                             tags,
                             field_matches,
@@ -3537,7 +3580,8 @@ fn extract_rows_from_source(
                             out.push(row);
                         }
                     } else {
-                        current = Some((row_depth, x, y, labels, tags, field_matches));
+                        current =
+                            Some((row_depth, x, y, width, height, labels, tags, field_matches));
                     }
                 }
                 stack.pop();
@@ -3673,6 +3717,8 @@ fn collect_field_matches(
 fn finalize_row(
     x: f64,
     y: f64,
+    width: f64,
+    height: f64,
     labels: Vec<String>,
     tags: Vec<String>,
     field_matches: Vec<Vec<String>>,
@@ -3764,12 +3810,28 @@ fn finalize_row(
     Some(RowMatch {
         x,
         y,
+        width,
+        height,
         raw_label,
         fields,
         extra_fields,
         tag_field,
         tag_value,
     })
+}
+
+fn preferred_row_tap_x(x: f64, width: f64) -> f64 {
+    if width <= 0.0 {
+        return x;
+    }
+    x + (width * 0.18).clamp(16.0, 72.0)
+}
+
+fn preferred_row_tap_y(y: f64, height: f64) -> f64 {
+    if height <= 0.0 {
+        return y;
+    }
+    y + (height * 0.12).clamp(18.0, 56.0)
 }
 
 fn metric_like(value: &str) -> bool {
@@ -6861,6 +6923,51 @@ mod tests {
             3,
         );
         assert_eq!(parse_position_from_stable_id(&id), Some(3));
+    }
+
+    #[test]
+    fn extract_rows_captures_geometry_and_safe_tap_point() {
+        let source = r#"<?xml version="1.0" encoding="UTF-8"?>
+<AppiumAUT>
+  <XCUIElementTypeCell
+    type="XCUIElementTypeCell"
+    name="2033810430435667998"
+    label="Felix Rieseberg. Verified. Example post."
+    x="0"
+    y="138"
+    width="375"
+    height="488">
+    <XCUIElementTypeOther
+      type="XCUIElementTypeOther"
+      label="nested"
+      x="0"
+      y="138"
+      width="375"
+      height="488"/>
+  </XCUIElementTypeCell>
+</AppiumAUT>"#;
+
+        let row_query =
+            parse_row_query(Some(&json!({"type": "XCUIElementTypeCell"}))).expect("row query");
+        let primary_query = parse_primary_query(Some(
+            &json!({"type": "XCUIElementTypeCell", "attr": "label", "pick": "first"}),
+        ))
+        .expect("primary query");
+        let rows = extract_rows_from_source(
+            source,
+            &row_query,
+            &primary_query,
+            None,
+            &[],
+            &parse_split_config(None),
+        );
+
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(row.width, 375.0);
+        assert_eq!(row.height, 488.0);
+        assert!((preferred_row_tap_x(row.x, row.width) - 67.5).abs() < f64::EPSILON);
+        assert!((preferred_row_tap_y(row.y, row.height) - 194.0).abs() < f64::EPSILON);
     }
 
     #[tokio::test]

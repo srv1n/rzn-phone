@@ -1,0 +1,309 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "x.send_dm",
+  "version": "1.0.0",
+  "description": "Open an X DM thread, draft a message, and optionally send it with commit gating.",
+  "inputs": {
+    "message_text": { "type": "string", "required": true },
+    "execute_send": { "type": "boolean", "default": false },
+    "thread_position": { "type": "integer", "default": 1, "min": 1, "max": 30 },
+    "max_visible_threads": { "type": "integer", "default": 20, "min": 1, "max": 60 },
+    "message_field_predicate": { "type": "string", "default": "type == 'XCUIElementTypeTextView' OR type == 'XCUIElementTypeTextField' OR label CONTAINS[c] 'Message' OR name CONTAINS[c] 'Message' OR value CONTAINS[c] 'Message'" },
+    "send_button_predicate": { "type": "string", "default": "type == 'XCUIElementTypeButton' AND (name == 'Send' OR label == 'Send' OR name CONTAINS[c] 'Send' OR label CONTAINS[c] 'Send')" },
+    "maxNodes": { "type": "integer", "default": 260, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Dry-run by default.",
+    "When X Chat passcode setup is active, the workflow captures gate artifacts instead of attempting to send."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.atebits.Tweetie2",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "slideshowClose",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "CloseButton", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "slideshowCloseCount",
+      "arguments": { "list": "{{steps.slideshowClose.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.slideshowCloseCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "CloseButton" } }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.slideshowCloseCount.count", "truthy": true },
+      "arguments": { "minMs": 900, "maxMs": 900 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "timelineBack",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "Timeline", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "timelineBackCount",
+      "arguments": { "list": "{{steps.timelineBack.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.timelineBackCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "Timeline" } }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.timelineBackCount.count", "truthy": true },
+      "arguments": { "minMs": 1100, "maxMs": 1100 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "composeCancel",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "Cancel", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "composeCancelCount",
+      "arguments": { "list": "{{steps.composeCancel.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.composeCancelCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "Cancel" } }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.composeCancelCount.count", "truthy": true },
+      "arguments": { "minMs": 800, "maxMs": 800 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "saveDraftPrompt",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "labelContains": "Save", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "saveDraftPromptCount",
+      "arguments": { "list": "{{steps.saveDraftPrompt.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.saveDraftPromptCount.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (label CONTAINS[c] 'Save' OR name CONTAINS[c] 'Save')"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.saveDraftPromptCount.count", "truthy": true },
+      "arguments": { "minMs": 1000, "maxMs": 1000 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "dmTabVisible",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeOther", "name": "DM_tab", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "dmTabVisibleCount",
+      "arguments": { "list": "{{steps.dmTabVisible.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.dmTabVisibleCount.count", "truthy": true },
+      "arguments": { "point": { "x": 337, "y": 754 } }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 2200, "maxMs": 2200 } },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "passcodeHeader",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeStaticText",
+          "labelContains": "Welcome to the new X Chat",
+          "max": 1
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "passcodeCreate",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "Create Passcode", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "passcodeCreateCount",
+      "arguments": { "list": "{{steps.passcodeCreate.texts}}" }
+    },
+    {
+      "tool": "ios.ui.extract_rows",
+      "when": { "var": "steps.passcodeCreateCount.count", "truthy": false },
+      "saveAs": "threadListRows",
+      "arguments": {
+        "row": { "type": "XCUIElementTypeCell" },
+        "primary": {
+          "type": "XCUIElementTypeCell",
+          "attr": "label",
+          "pick": "first"
+        },
+        "fields": [
+          {
+            "name": "threadId",
+            "query": { "type": "XCUIElementTypeCell", "max": 1 },
+            "attr": "name",
+            "pick": "first"
+          }
+        ],
+        "limit": "{{max_visible_threads}}",
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.nth",
+      "when": { "var": "steps.passcodeCreateCount.count", "truthy": false },
+      "saveAs": "selectedThread",
+      "arguments": { "list": "{{steps.threadListRows.rows}}", "index": "{{thread_position}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.passcodeCreateCount.count", "truthy": false },
+      "arguments": {
+        "point": {
+          "x": "{{steps.selectedThread.value.tapX}}",
+          "y": "{{steps.selectedThread.value.tapY}}"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.passcodeCreateCount.count", "truthy": false },
+      "arguments": { "minMs": 2200, "maxMs": 2200 }
+    },
+    {
+      "tool": "ios.action.wait",
+      "when": { "var": "steps.passcodeCreateCount.count", "truthy": false },
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{message_field_predicate}}" },
+        "timeoutMs": 12000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.type",
+      "when": { "var": "steps.passcodeCreateCount.count", "truthy": false },
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{message_field_predicate}}" },
+        "text": "{{message_text}}",
+        "clearFirst": true
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "draftDmScreenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "draftDmUiSource" },
+    {
+      "tool": "ios.ui.observe_compact",
+      "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+      "saveAs": "draftDmCompactSnapshot"
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "when": { "var": "execute_send", "truthy": true },
+      "saveAs": "sendButtonVisible",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "labelContains": "Send", "max": 3 },
+        "limit": 3,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "when": { "var": "execute_send", "truthy": true },
+      "saveAs": "sendButtonVisibleCount",
+      "arguments": { "list": "{{steps.sendButtonVisible.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.sendButtonVisibleCount.count", "truthy": true },
+      "requiresCommit": true,
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{send_button_predicate}}" } }
+    },
+    {
+      "tool": "ios.ui.screenshot",
+      "when": { "var": "steps.sendButtonVisibleCount.count", "truthy": true },
+      "arguments": {},
+      "saveAs": "afterSendDmScreenshot"
+    }
+  ],
+  "output": {
+    "requestedSend": "{{execute_send}}",
+    "thread_position": "{{thread_position}}",
+    "passcodeGateCount": "{{steps.passcodeCreateCount.count}}",
+    "passcodeHeaderTexts": "{{steps.passcodeHeader.texts}}",
+    "selectedThread": "{{steps.selectedThread.value}}",
+    "sendButtonVisibleCount": "{{steps.sendButtonVisibleCount.count}}",
+    "draftDmScreenshot": "{{steps.draftDmScreenshot}}",
+    "draftDmUiSource": "{{steps.draftDmUiSource}}",
+    "draftDmCompactSnapshot": "{{steps.draftDmCompactSnapshot}}",
+    "afterSendDmScreenshot": "{{steps.afterSendDmScreenshot}}"
+  }
+}

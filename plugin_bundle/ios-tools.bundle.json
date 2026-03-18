@@ -52,6 +52,15 @@
     { "path": "resources/workflows/reddit_reply_to_comment_v1.json" },
     { "path": "resources/workflows/reddit_send_dm_by_username_v1.json" },
     { "path": "resources/workflows/reddit_send_dm_v1.json" },
+    { "path": "resources/workflows/x_create_post_v1.json" },
+    { "path": "resources/workflows/x_daily_scroll_digest_v1.json" },
+    { "path": "resources/workflows/x_like_post_v1.json" },
+    { "path": "resources/workflows/x_open_dm_thread_v1.json" },
+    { "path": "resources/workflows/x_open_inbox_v1.json" },
+    { "path": "resources/workflows/x_open_post_v1.json" },
+    { "path": "resources/workflows/x_reply_dm_thread_v1.json" },
+    { "path": "resources/workflows/x_reply_post_v1.json" },
+    { "path": "resources/workflows/x_send_dm_v1.json" },
     { "path": "resources/workflows/safari_google_search_v1.json" }
   ],
   "payloads": [

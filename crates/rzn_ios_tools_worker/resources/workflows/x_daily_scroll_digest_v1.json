@@ -1,0 +1,222 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "x.daily_scroll_digest",
+  "version": "1.0.0",
+  "description": "Scroll the native X Home timeline and extract visible post rows for browse/digest workflows.",
+  "inputs": {
+    "max_posts": { "type": "integer", "default": 30, "min": 1, "max": 90 },
+    "max_scrolls": { "type": "integer", "default": 8, "min": 0, "max": 25 },
+    "min_dwell_ms": { "type": "integer", "default": 700, "min": 0, "max": 60000 },
+    "max_dwell_ms": { "type": "integer", "default": 1800, "min": 0, "max": 60000 },
+    "maxNodes": { "type": "integer", "default": 260, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Read-only workflow for the native X app (`com.atebits.Tweetie2`).",
+    "Rows include tappable geometry (`tapX`/`tapY`) for follow-on open/engage workflows.",
+    "Best-effort cleanup closes slideshow/detail state before reading the Home feed."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.atebits.Tweetie2",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "slideshowClose",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "CloseButton", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "slideshowCloseCount",
+      "arguments": { "list": "{{steps.slideshowClose.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.slideshowCloseCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "CloseButton" } }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.slideshowCloseCount.count", "truthy": true },
+      "arguments": { "minMs": 900, "maxMs": 900 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "timelineBack",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "Timeline", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "timelineBackCount",
+      "arguments": { "list": "{{steps.timelineBack.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.timelineBackCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "Timeline" } }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.timelineBackCount.count", "truthy": true },
+      "arguments": { "minMs": 1100, "maxMs": 1100 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "composeCancel",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "Cancel", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "composeCancelCount",
+      "arguments": { "list": "{{steps.composeCancel.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.composeCancelCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "Cancel" } }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.composeCancelCount.count", "truthy": true },
+      "arguments": { "minMs": 800, "maxMs": 800 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "saveDraftPrompt",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "labelContains": "Save", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "saveDraftPromptCount",
+      "arguments": { "list": "{{steps.saveDraftPrompt.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.saveDraftPromptCount.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (label CONTAINS[c] 'Save' OR name CONTAINS[c] 'Save')"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.saveDraftPromptCount.count", "truthy": true },
+      "arguments": { "minMs": 1000, "maxMs": 1000 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "homeTabVisible",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeOther", "name": "Timelines_tab", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "homeTabVisibleCount",
+      "arguments": { "list": "{{steps.homeTabVisible.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.homeTabVisibleCount.count", "truthy": true },
+      "arguments": { "point": { "x": 38, "y": 754 } }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 2200, "maxMs": 2200 } },
+    {
+      "tool": "util.sleep",
+      "arguments": {
+        "minMs": "{{min_dwell_ms}}",
+        "maxMs": "{{max_dwell_ms}}"
+      }
+    },
+    {
+      "tool": "ios.ui.extract_rows",
+      "saveAs": "feedRows",
+      "arguments": {
+        "row": {
+          "type": "XCUIElementTypeCell",
+          "ancestorName": "THFHomeTimelineItems Table"
+        },
+        "primary": {
+          "type": "XCUIElementTypeCell",
+          "attr": "label",
+          "pick": "first"
+        },
+        "fields": [
+          {
+            "name": "postId",
+            "query": {
+              "type": "XCUIElementTypeCell",
+              "ancestorName": "THFHomeTimelineItems Table",
+              "max": 1
+            },
+            "attr": "name",
+            "pick": "first"
+          }
+        ],
+        "limit": "{{max_posts}}",
+        "maxScrolls": "{{max_scrolls}}",
+        "scroll": { "direction": "down", "distance": 0.62, "settleMs": 450 },
+        "order": "y"
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "screenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "uiSource" },
+    {
+      "tool": "ios.ui.observe_compact",
+      "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+      "saveAs": "compactSnapshot"
+    }
+  ],
+  "output": {
+    "rows": "{{steps.feedRows.rows}}",
+    "rowCount": "{{steps.feedRows.rowCount}}",
+    "scrolls": "{{steps.feedRows.scrolls}}",
+    "screenshot": "{{steps.screenshot}}",
+    "uiSource": "{{steps.uiSource}}",
+    "compactSnapshot": "{{steps.compactSnapshot}}"
+  }
+}

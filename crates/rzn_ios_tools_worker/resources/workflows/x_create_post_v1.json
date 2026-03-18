@@ -1,0 +1,231 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "x.create_post",
+  "version": "1.0.0",
+  "description": "Open the native X composer, draft a post, and optionally publish it with commit gating.",
+  "inputs": {
+    "post_text": { "type": "string", "required": true },
+    "execute_post": { "type": "boolean", "default": false },
+    "maxNodes": { "type": "integer", "default": 240, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Dry-run by default.",
+    "The workflow reuses an already-open composer when the `What's happening?` field is visible.",
+    "Publishing is guarded by both args.execute_post=true and commit=true."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.atebits.Tweetie2",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "slideshowClose",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "CloseButton", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "slideshowCloseCount",
+      "arguments": { "list": "{{steps.slideshowClose.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.slideshowCloseCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "CloseButton" } }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.slideshowCloseCount.count", "truthy": true },
+      "arguments": { "minMs": 900, "maxMs": 900 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "timelineBack",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "Timeline", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "timelineBackCount",
+      "arguments": { "list": "{{steps.timelineBack.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.timelineBackCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "Timeline" } }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.timelineBackCount.count", "truthy": true },
+      "arguments": { "minMs": 1100, "maxMs": 1100 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "composeCancel",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "Cancel", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "composeCancelCount",
+      "arguments": { "list": "{{steps.composeCancel.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.composeCancelCount.count", "truthy": true },
+      "arguments": { "target": { "using": "accessibility id", "value": "Cancel" } }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.composeCancelCount.count", "truthy": true },
+      "arguments": { "minMs": 800, "maxMs": 800 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "saveDraftPrompt",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "labelContains": "Save", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "saveDraftPromptCount",
+      "arguments": { "list": "{{steps.saveDraftPrompt.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.saveDraftPromptCount.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (label CONTAINS[c] 'Save' OR name CONTAINS[c] 'Save')"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.saveDraftPromptCount.count", "truthy": true },
+      "arguments": { "minMs": 1000, "maxMs": 1000 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "composerField",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeTextView",
+          "labelContains": "What\u2019s happening?",
+          "max": 1
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "composerFieldCount",
+      "arguments": { "list": "{{steps.composerField.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.composerFieldCount.count", "truthy": false },
+      "arguments": { "target": { "using": "accessibility id", "value": "FabComposeButton" } }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 1800, "maxMs": 1800 } },
+    {
+      "tool": "ios.action.type",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeTextView' AND (name == 'What\u2019s happening? ' OR label == 'What\u2019s happening? ')"
+        },
+        "text": "{{post_text}}",
+        "clearFirst": true
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "draftScreenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "draftUiSource" },
+    {
+      "tool": "ios.ui.observe_compact",
+      "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+      "saveAs": "draftCompactSnapshot"
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "when": { "var": "execute_post", "truthy": true },
+      "saveAs": "postButtonVisible",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "Post", "max": 1 },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "when": { "var": "execute_post", "truthy": true },
+      "saveAs": "postButtonVisibleCount",
+      "arguments": { "list": "{{steps.postButtonVisible.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.postButtonVisibleCount.count", "truthy": true },
+      "requiresCommit": true,
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (name == 'Post' OR label == 'Post')"
+        }
+      }
+    },
+    {
+      "tool": "ios.ui.screenshot",
+      "when": { "var": "steps.postButtonVisibleCount.count", "truthy": true },
+      "arguments": {},
+      "saveAs": "afterPostScreenshot"
+    }
+  ],
+  "output": {
+    "requestedPost": "{{execute_post}}",
+    "postButtonVisibleCount": "{{steps.postButtonVisibleCount.count}}",
+    "draftScreenshot": "{{steps.draftScreenshot}}",
+    "draftUiSource": "{{steps.draftUiSource}}",
+    "draftCompactSnapshot": "{{steps.draftCompactSnapshot}}",
+    "afterPostScreenshot": "{{steps.afterPostScreenshot}}"
+  }
+}
