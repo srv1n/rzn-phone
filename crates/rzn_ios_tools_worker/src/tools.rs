@@ -134,6 +134,20 @@ pub fn list_tool_definitions() -> Vec<Value> {
             json!({ "type": "object", "properties": {}, "additionalProperties": false }),
         ),
         tool(
+            "ios.app.activate",
+            "Activate a native iOS app by bundle id, optionally terminating it first for a clean relaunch.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string" },
+                    "bundleId": { "type": "string" },
+                    "terminateFirst": { "type": "boolean", "default": false }
+                },
+                "required": ["bundleId"],
+                "additionalProperties": false
+            }),
+        ),
+        tool(
             "ios.ui.source",
             "Get the current UI hierarchy source XML for the active session (native or web).",
             json!({
@@ -989,6 +1003,7 @@ pub async fn handle_tool_call(
         "ios.session.create" => session_create(state, &arguments).await,
         "ios.session.delete" => session_delete(state, &arguments).await,
         "ios.session.info" => session_info(state).await,
+        "ios.app.activate" => app_activate(state, &arguments).await,
         "ios.wda.shutdown" => wda_shutdown(state, &arguments).await,
         "ios.ui.source" => ui_source(state, &arguments).await,
         "ios.ui.screenshot" => ui_screenshot(state, &arguments).await,
@@ -3940,6 +3955,71 @@ async fn session_info(state: &AppState) -> Result<Value> {
             "session": snapshot.session
         }),
         "session info",
+    ))
+}
+
+async fn app_activate(state: &AppState, arguments: &Value) -> Result<Value> {
+    let session = state
+        .active_session()
+        .await
+        .ok_or_else(|| anyhow!("no active session; call ios.session.create first"))?;
+    if session.kind != "native_app" {
+        bail!(
+            "ios.app.activate requires a native_app session (current kind={})",
+            session.kind
+        );
+    }
+
+    let session_id = resolve_session_id(state, arguments).await?;
+    if session_id != session.session_id {
+        bail!("unknown sessionId (this worker supports a single active session)");
+    }
+
+    let bundle_id = required_str(arguments, "bundleId")?.trim().to_string();
+    if bundle_id.is_empty() {
+        bail!("bundleId is empty");
+    }
+    let terminate_first = arguments
+        .get("terminateFirst")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+
+    let driver = driver_from_state(state).await?;
+    let terminate_result = if terminate_first {
+        driver
+            .execute_script(
+                &session_id,
+                "mobile: terminateApp",
+                json!([{ "bundleId": &bundle_id }]),
+            )
+            .await?
+            .get("value")
+            .cloned()
+            .unwrap_or(Value::Null)
+    } else {
+        Value::Null
+    };
+    let activate_result = driver
+        .execute_script(
+            &session_id,
+            "mobile: activateApp",
+            json!([{ "bundleId": &bundle_id }]),
+        )
+        .await?
+        .get("value")
+        .cloned()
+        .unwrap_or(Value::Null);
+
+    Ok(tool_success(
+        json!({
+            "ok": true,
+            "sessionId": session_id,
+            "bundleId": bundle_id,
+            "terminateFirst": terminate_first,
+            "terminateResult": terminate_result,
+            "activateResult": activate_result
+        }),
+        "app activated",
     ))
 }
 
