@@ -1,0 +1,163 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "instagram.daily_scroll_digest",
+  "version": "1.0.0",
+  "description": "Scroll the native Instagram Home feed and extract visible post rows for browse/digest workflows.",
+  "inputs": {
+    "max_posts": { "type": "integer", "default": 30, "min": 1, "max": 90 },
+    "max_scrolls": { "type": "integer", "default": 8, "min": 0, "max": 25 },
+    "min_dwell_ms": { "type": "integer", "default": 700, "min": 0, "max": 60000 },
+    "max_dwell_ms": { "type": "integer", "default": 1800, "min": 0, "max": 60000 },
+    "maxNodes": { "type": "integer", "default": 260, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Read-only workflow for the native Instagram app (`com.burbn.instagram`).",
+    "The workflow force-relaunches Instagram after session creation to clear sticky composer, comments-sheet, overlay, and media-viewer states from prior runs.",
+    "Rows are source-derived and include geometry plus visible action metadata for downstream selection."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.burbn.instagram",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.app.activate",
+      "arguments": {
+        "bundleId": "com.burbn.instagram",
+        "terminateFirst": true
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "name == 'mainfeed-tab' OR name == 'main-feed-screen' OR name == 'main-feed' OR name == 'create'"
+        },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 2200, "maxMs": 2200 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "mainfeed-tab" }
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 900, "maxMs": 900 } },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "name == 'main-feed-screen' OR name == 'main-feed' OR name == 'create'"
+        },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "util.sleep",
+      "arguments": {
+        "minMs": "{{min_dwell_ms}}",
+        "maxMs": "{{max_dwell_ms}}"
+      }
+    },
+    {
+      "tool": "ios.ui.extract_rows",
+      "saveAs": "feedRows",
+      "arguments": {
+        "row": {
+          "type": "XCUIElementTypeCell",
+          "name": "media-cell",
+          "ancestorName": "main-feed"
+        },
+        "primary": {
+          "type": "XCUIElementTypeOther",
+          "attr": "value",
+          "pick": "longest"
+        },
+        "fields": [
+          {
+            "name": "username",
+            "query": {
+              "type": "XCUIElementTypeButton",
+              "name": "feed-item-header-user-button",
+              "max": 1
+            },
+            "attr": "label",
+            "pick": "first"
+          },
+          {
+            "name": "header",
+            "query": {
+              "type": "XCUIElementTypeOther",
+              "name": "header-view",
+              "max": 2
+            },
+            "attr": "value",
+            "pick": "first"
+          },
+          {
+            "name": "visibleActions",
+            "query": {
+              "type": "XCUIElementTypeButton",
+              "max": 12
+            },
+            "attr": "name",
+            "pick": "all",
+            "joinDelimiter": ", "
+          },
+          {
+            "name": "captionPreview",
+            "query": {
+              "type": "XCUIElementTypeStaticText",
+              "max": 12
+            },
+            "attr": "label",
+            "pick": "longest"
+          }
+        ],
+        "limit": "{{max_posts}}",
+        "maxScrolls": "{{max_scrolls}}",
+        "scroll": { "direction": "down", "distance": 0.58, "settleMs": 450 },
+        "order": "y"
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "screenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "uiSource" },
+    {
+      "tool": "ios.ui.observe_compact",
+      "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+      "saveAs": "compactSnapshot"
+    }
+  ],
+  "output": {
+    "rows": "{{steps.feedRows.rows}}",
+    "rowCount": "{{steps.feedRows.rowCount}}",
+    "scrolls": "{{steps.feedRows.scrolls}}",
+    "screenshot": "{{steps.screenshot}}",
+    "uiSource": "{{steps.uiSource}}",
+    "compactSnapshot": "{{steps.compactSnapshot}}"
+  }
+}

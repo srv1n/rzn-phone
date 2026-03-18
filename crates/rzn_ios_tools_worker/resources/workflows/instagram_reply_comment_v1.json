@@ -1,0 +1,348 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "instagram.reply_comment",
+  "version": "1.0.0",
+  "description": "Open a visible Instagram post, draft a reply to a comment, and optionally submit it with commit gating.",
+  "inputs": {
+    "reply_text": { "type": "string", "required": true },
+    "execute_reply": { "type": "boolean", "default": false },
+    "post_position": { "type": "integer", "default": 1, "min": 1, "max": 4 },
+    "reply_index": { "type": "integer", "default": 1, "min": 1, "max": 20 },
+    "max_comment_scrolls": { "type": "integer", "default": 6, "min": 0, "max": 25 },
+    "target_comment_contains": { "type": "string" },
+    "reply_field_predicate": { "type": "string", "default": "type == 'XCUIElementTypeTextView' AND (name == 'text-view' OR label CONTAINS[c] 'Add a comment' OR value CONTAINS[c] '@' OR label CONTAINS[c] 'Replying to')" },
+    "send_button_predicate": { "type": "string", "default": "type == 'XCUIElementTypeButton' AND name == 'send-button'" },
+    "maxNodes": { "type": "integer", "default": 240, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Dry-run by default.",
+    "Reply drafting preserves Instagram's prefilled `@username` prefix by typing with clearFirst=false.",
+    "When target_comment_contains is provided, the workflow scrolls until that comment text is visible before selecting the visible reply button by reply_index."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.burbn.instagram",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.app.activate",
+      "arguments": {
+        "bundleId": "com.burbn.instagram",
+        "terminateFirst": true
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "name == 'mainfeed-tab' OR name == 'main-feed-screen' OR name == 'main-feed' OR name == 'create'"
+        },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 2200, "maxMs": 2200 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "mainfeed-tab" }
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 900, "maxMs": 900 } },
+    {
+      "tool": "ios.action.scroll",
+      "arguments": { "direction": "down", "distance": 0.22 }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 850, "maxMs": 850 } },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "feedUiSource" },
+    {
+      "tool": "ios.ui.extract_rows",
+      "saveAs": "feedRows",
+      "arguments": {
+        "source": "{{steps.feedUiSource.source}}",
+        "row": {
+          "type": "XCUIElementTypeCell",
+          "name": "media-cell",
+          "ancestorName": "main-feed"
+        },
+        "primary": {
+          "type": "XCUIElementTypeOther",
+          "attr": "value",
+          "pick": "longest"
+        },
+        "fields": [
+          {
+            "name": "username",
+            "query": {
+              "type": "XCUIElementTypeButton",
+              "name": "feed-item-header-user-button",
+              "max": 1
+            },
+            "attr": "label",
+            "pick": "first"
+          }
+        ],
+        "limit": 4,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.nth",
+      "saveAs": "selectedPost",
+      "arguments": { "list": "{{steps.feedRows.rows}}", "index": "{{post_position}}" }
+    },
+    {
+      "tool": "util.rank_by_name",
+      "saveAs": "selectedPostRank",
+      "arguments": {
+        "items": "{{steps.feedRows.rows}}",
+        "field": "rawLabel",
+        "target": "{{steps.selectedPost.value.rawLabel}}"
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND name == 'comment-button'",
+          "index": "{{steps.selectedPostRank.index}}"
+        }
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 1800, "maxMs": 1800 } },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "name == 'text-view' OR label CONTAINS[c] 'Add a comment' OR value CONTAINS[c] 'Add a comment' OR label == 'Comments'"
+        },
+        "timeoutMs": 15000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "moreReplies1",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeButton",
+          "labelContains": "more repl",
+          "max": 1
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "moreRepliesCount1",
+      "arguments": { "list": "{{steps.moreReplies1.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.moreRepliesCount1.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (label CONTAINS[c] 'more repl' OR name CONTAINS[c] 'more repl')"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.moreRepliesCount1.count", "truthy": true },
+      "arguments": { "minMs": 650, "maxMs": 650 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "moreReplies2",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeButton",
+          "labelContains": "more repl",
+          "max": 1
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "moreRepliesCount2",
+      "arguments": { "list": "{{steps.moreReplies2.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.moreRepliesCount2.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (label CONTAINS[c] 'more repl' OR name CONTAINS[c] 'more repl')"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.moreRepliesCount2.count", "truthy": true },
+      "arguments": { "minMs": 650, "maxMs": 650 }
+    },
+    {
+      "tool": "ios.action.scroll_until",
+      "when": { "var": "target_comment_contains", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "label CONTAINS[c] '{{target_comment_contains}}' OR name CONTAINS[c] '{{target_comment_contains}}'"
+        },
+        "direction": "down",
+        "distance": 0.42,
+        "maxScrolls": "{{max_comment_scrolls}}",
+        "timeoutMs": 45000,
+        "settleMs": 350
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 600, "maxMs": 600 } },
+    {
+      "tool": "ios.ui.extract_rows",
+      "saveAs": "visibleCommentRows",
+      "arguments": {
+        "row": {
+          "type": "XCUIElementTypeCell",
+          "labelContains": "Commented"
+        },
+        "primary": {
+          "type": "XCUIElementTypeCell",
+          "attr": "label",
+          "pick": "first"
+        },
+        "fields": [
+          {
+            "name": "replyAction",
+            "query": {
+              "type": "XCUIElementTypeButton",
+              "labelContains": "Reply to This Comment",
+              "max": 1
+            },
+            "attr": "label",
+            "pick": "first"
+          }
+        ],
+        "limit": 20,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.nth",
+      "saveAs": "selectedComment",
+      "arguments": { "list": "{{steps.visibleCommentRows.rows}}", "index": "{{reply_index}}" }
+    },
+    {
+      "tool": "util.rank_by_name",
+      "saveAs": "selectedCommentRank",
+      "arguments": {
+        "items": "{{steps.visibleCommentRows.rows}}",
+        "field": "rawLabel",
+        "target": "{{steps.selectedComment.value.rawLabel}}"
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (label == 'Reply to This Comment' OR name == 'Reply to This Comment')",
+          "index": "{{steps.selectedCommentRank.index}}"
+        }
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 900, "maxMs": 900 } },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{reply_field_predicate}}" },
+        "timeoutMs": 15000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.type",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{reply_field_predicate}}" },
+        "text": "{{reply_text}}",
+        "clearFirst": false
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "draftReplyScreenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "draftReplyUiSource" },
+    {
+      "tool": "ios.ui.observe_compact",
+      "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+      "saveAs": "draftReplyCompactSnapshot"
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "sendButtonVisible",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "send-button", "max": 2 },
+        "limit": 2,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "sendButtonVisibleCount",
+      "arguments": { "list": "{{steps.sendButtonVisible.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.sendButtonVisibleCount.count", "truthy": true },
+      "requiresCommit": true,
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{send_button_predicate}}" } }
+    },
+    {
+      "tool": "ios.ui.screenshot",
+      "when": { "var": "steps.sendButtonVisibleCount.count", "truthy": true },
+      "arguments": {},
+      "saveAs": "afterReplyScreenshot"
+    }
+  ],
+  "output": {
+    "requestedReply": "{{execute_reply}}",
+    "selectedPost": "{{steps.selectedPost.value}}",
+    "selectedPostIndex": "{{steps.selectedPostRank.index}}",
+    "selectedComment": "{{steps.selectedComment.value}}",
+    "selectedCommentIndex": "{{steps.selectedCommentRank.index}}",
+    "replyExpandCount1": "{{steps.moreRepliesCount1.count}}",
+    "replyExpandCount2": "{{steps.moreRepliesCount2.count}}",
+    "sendButtonVisibleCount": "{{steps.sendButtonVisibleCount.count}}",
+    "screenshot": "{{steps.draftReplyScreenshot}}",
+    "uiSource": "{{steps.draftReplyUiSource}}",
+    "compactSnapshot": "{{steps.draftReplyCompactSnapshot}}",
+    "afterReplyScreenshot": "{{steps.afterReplyScreenshot}}"
+  }
+}

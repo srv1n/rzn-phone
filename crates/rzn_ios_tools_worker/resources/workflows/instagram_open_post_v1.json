@@ -1,0 +1,315 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "instagram.open_post",
+  "version": "1.0.0",
+  "description": "Open a visible Instagram feed post by entering its comments/read surface and collect readable thread rows.",
+  "inputs": {
+    "post_position": { "type": "integer", "default": 1, "min": 1, "max": 4 },
+    "max_comment_rows": { "type": "integer", "default": 60, "min": 1, "max": 150 },
+    "max_comment_scrolls": { "type": "integer", "default": 6, "min": 0, "max": 25 },
+    "maxNodes": { "type": "integer", "default": 260, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Read-only workflow.",
+    "Instagram detail-read is anchored on the native comments surface because it exposes comment-thread selectors more reliably than tapping arbitrary media chrome.",
+    "The workflow best-effort expands `View ... more replies` controls before collecting visible comment rows."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.burbn.instagram",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.app.activate",
+      "arguments": {
+        "bundleId": "com.burbn.instagram",
+        "terminateFirst": true
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "name == 'mainfeed-tab' OR name == 'main-feed-screen' OR name == 'main-feed' OR name == 'create'"
+        },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 2200, "maxMs": 2200 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "mainfeed-tab" }
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 900, "maxMs": 900 } },
+    {
+      "tool": "ios.action.scroll",
+      "arguments": { "direction": "down", "distance": 0.22 }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 850, "maxMs": 850 } },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "feedUiSource" },
+    {
+      "tool": "ios.ui.extract_rows",
+      "saveAs": "feedRows",
+      "arguments": {
+        "source": "{{steps.feedUiSource.source}}",
+        "row": {
+          "type": "XCUIElementTypeCell",
+          "name": "media-cell",
+          "ancestorName": "main-feed"
+        },
+        "primary": {
+          "type": "XCUIElementTypeOther",
+          "attr": "value",
+          "pick": "longest"
+        },
+        "fields": [
+          {
+            "name": "username",
+            "query": {
+              "type": "XCUIElementTypeButton",
+              "name": "feed-item-header-user-button",
+              "max": 1
+            },
+            "attr": "label",
+            "pick": "first"
+          },
+          {
+            "name": "header",
+            "query": {
+              "type": "XCUIElementTypeOther",
+              "name": "header-view",
+              "max": 2
+            },
+            "attr": "value",
+            "pick": "first"
+          }
+        ],
+        "limit": 4,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.nth",
+      "saveAs": "selectedPost",
+      "arguments": { "list": "{{steps.feedRows.rows}}", "index": "{{post_position}}" }
+    },
+    {
+      "tool": "util.rank_by_name",
+      "saveAs": "selectedPostRank",
+      "arguments": {
+        "items": "{{steps.feedRows.rows}}",
+        "field": "rawLabel",
+        "target": "{{steps.selectedPost.value.rawLabel}}"
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND name == 'comment-button'",
+          "index": "{{steps.selectedPostRank.index}}"
+        }
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 1800, "maxMs": 1800 } },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "name == 'text-view' OR label CONTAINS[c] 'Add a comment' OR value CONTAINS[c] 'Add a comment' OR label == 'Comments' OR name == 'comment-count-button'"
+        },
+        "timeoutMs": 15000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "moreReplies1",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeButton",
+          "labelContains": "more repl",
+          "max": 1
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "moreRepliesCount1",
+      "arguments": { "list": "{{steps.moreReplies1.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.moreRepliesCount1.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (label CONTAINS[c] 'more repl' OR name CONTAINS[c] 'more repl')"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.moreRepliesCount1.count", "truthy": true },
+      "arguments": { "minMs": 650, "maxMs": 650 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "moreReplies2",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeButton",
+          "labelContains": "more repl",
+          "max": 1
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "moreRepliesCount2",
+      "arguments": { "list": "{{steps.moreReplies2.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.moreRepliesCount2.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (label CONTAINS[c] 'more repl' OR name CONTAINS[c] 'more repl')"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.moreRepliesCount2.count", "truthy": true },
+      "arguments": { "minMs": 650, "maxMs": 650 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "moreReplies3",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeButton",
+          "labelContains": "more repl",
+          "max": 1
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "moreRepliesCount3",
+      "arguments": { "list": "{{steps.moreReplies3.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.moreRepliesCount3.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (label CONTAINS[c] 'more repl' OR name CONTAINS[c] 'more repl')"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.moreRepliesCount3.count", "truthy": true },
+      "arguments": { "minMs": 650, "maxMs": 650 }
+    },
+    {
+      "tool": "ios.ui.extract_rows",
+      "saveAs": "commentRows",
+      "arguments": {
+        "row": {
+          "type": "XCUIElementTypeCell",
+          "labelContains": "Commented"
+        },
+        "primary": {
+          "type": "XCUIElementTypeCell",
+          "attr": "label",
+          "pick": "first"
+        },
+        "fields": [
+          {
+            "name": "likeCount",
+            "query": {
+              "type": "XCUIElementTypeButton",
+              "name": "comment-like-count-button",
+              "max": 1
+            },
+            "attr": "label",
+            "pick": "first"
+          },
+          {
+            "name": "replyAction",
+            "query": {
+              "type": "XCUIElementTypeButton",
+              "labelContains": "Reply to This Comment",
+              "max": 1
+            },
+            "attr": "label",
+            "pick": "first"
+          }
+        ],
+        "limit": "{{max_comment_rows}}",
+        "maxScrolls": "{{max_comment_scrolls}}",
+        "scroll": { "direction": "down", "distance": 0.44, "settleMs": 350 },
+        "order": "y"
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "screenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "uiSource" },
+    {
+      "tool": "ios.ui.observe_compact",
+      "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+      "saveAs": "compactSnapshot"
+    }
+  ],
+  "output": {
+    "post_position": "{{post_position}}",
+    "selectedPost": "{{steps.selectedPost.value}}",
+    "selectedPostIndex": "{{steps.selectedPostRank.index}}",
+    "replyExpandCount1": "{{steps.moreRepliesCount1.count}}",
+    "replyExpandCount2": "{{steps.moreRepliesCount2.count}}",
+    "replyExpandCount3": "{{steps.moreRepliesCount3.count}}",
+    "commentRows": "{{steps.commentRows.rows}}",
+    "commentRowCount": "{{steps.commentRows.rowCount}}",
+    "commentScrolls": "{{steps.commentRows.scrolls}}",
+    "screenshot": "{{steps.screenshot}}",
+    "uiSource": "{{steps.uiSource}}",
+    "compactSnapshot": "{{steps.compactSnapshot}}"
+  }
+}

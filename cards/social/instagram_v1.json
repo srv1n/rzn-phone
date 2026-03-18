@@ -1,0 +1,161 @@
+{
+  "schema_version": "rzn.social.card.v1",
+  "catalog": "instagram",
+  "version": "1.0.0",
+  "cards": [
+    {
+      "id": "instagram.daily_scroll",
+      "title": "Browse Home feed",
+      "description": "Scroll the native Instagram Home feed and extract visible post rows with structured metadata.",
+      "app": "instagram",
+      "mode": "browse",
+      "workflow": "instagram.daily_scroll_digest",
+      "mutating": false,
+      "commitRequired": false,
+      "defaults": {
+        "max_posts": 30,
+        "max_scrolls": 8,
+        "min_dwell_ms": 700,
+        "max_dwell_ms": 1800
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "instagram.open_post",
+      "title": "Open feed post",
+      "description": "Open a visible Instagram feed post into the native comments/read surface and collect readable thread rows.",
+      "app": "instagram",
+      "mode": "read",
+      "workflow": "instagram.open_post",
+      "mutating": false,
+      "commitRequired": false,
+      "defaults": {
+        "post_position": 1,
+        "max_comment_rows": 60,
+        "max_comment_scrolls": 6
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "instagram.like_post",
+      "title": "Like post",
+      "description": "Optionally like a visible Instagram feed post with dual execute and commit gates.",
+      "app": "instagram",
+      "mode": "engage",
+      "workflow": "instagram.like_post",
+      "mutating": true,
+      "commitRequired": true,
+      "executeArg": "execute_like",
+      "defaults": {
+        "post_position": 1,
+        "execute_like": false
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "instagram.comment_post",
+      "title": "Comment on post",
+      "description": "Draft and optionally submit a comment on a visible Instagram feed post.",
+      "app": "instagram",
+      "mode": "engage",
+      "workflow": "instagram.comment_post",
+      "mutating": true,
+      "commitRequired": true,
+      "executeArg": "execute_comment",
+      "textArg": "comment_text",
+      "requiredArgs": ["comment_text"],
+      "defaults": {
+        "post_position": 1,
+        "execute_comment": false
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "instagram.reply_comment",
+      "title": "Reply to comment",
+      "description": "Draft and optionally submit a reply to a visible Instagram comment thread.",
+      "app": "instagram",
+      "mode": "engage",
+      "workflow": "instagram.reply_comment",
+      "mutating": true,
+      "commitRequired": true,
+      "executeArg": "execute_reply",
+      "textArg": "reply_text",
+      "requiredArgs": ["reply_text"],
+      "defaults": {
+        "post_position": 1,
+        "reply_index": 1,
+        "max_comment_scrolls": 6,
+        "execute_reply": false
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "instagram.open_inbox",
+      "title": "Open inbox",
+      "description": "Open the native Instagram inbox and report onboarding or empty-state gating when messaging is not available.",
+      "app": "instagram",
+      "mode": "read",
+      "workflow": "instagram.open_inbox",
+      "mutating": false,
+      "commitRequired": false,
+      "defaults": {
+        "max_visible_threads": 20
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "instagram.open_dm_thread",
+      "title": "Open DM thread",
+      "description": "Open a visible Instagram DM thread for read-only inspection when messaging is accessible.",
+      "app": "instagram",
+      "mode": "read",
+      "workflow": "instagram.open_dm_thread",
+      "mutating": false,
+      "commitRequired": false,
+      "defaults": {
+        "thread_position": 1,
+        "max_visible_threads": 20
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "instagram.send_dm",
+      "title": "Send DM",
+      "description": "Draft and optionally send an Instagram direct message when messaging is accessible.",
+      "app": "instagram",
+      "mode": "engage",
+      "workflow": "instagram.send_dm",
+      "mutating": true,
+      "commitRequired": true,
+      "executeArg": "execute_send",
+      "textArg": "message_text",
+      "requiredArgs": ["message_text"],
+      "defaults": {
+        "thread_position": 1,
+        "max_visible_threads": 20,
+        "execute_send": false
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "instagram.reply_dm",
+      "title": "Reply in DM",
+      "description": "Draft and optionally send a reply inside a visible Instagram DM thread when messaging is accessible.",
+      "app": "instagram",
+      "mode": "engage",
+      "workflow": "instagram.reply_dm_thread",
+      "mutating": true,
+      "commitRequired": true,
+      "executeArg": "execute_reply",
+      "textArg": "message_text",
+      "requiredArgs": ["message_text"],
+      "defaults": {
+        "thread_position": 1,
+        "max_visible_threads": 20,
+        "execute_reply": false
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    }
+  ]
+}
