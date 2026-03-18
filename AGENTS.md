@@ -12,6 +12,15 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
+## Specs And Patterns (Start Here For New Apps)
+
+- Mobile workflow format (portable): `docs/specs/rzn_mobile_workflow_v1.md`
+  - Completion/cleanup controls: see `### 1.5 Completion and cleanup (runner options)`
+- Social “card” layer (cross-app browse/read/engage): `docs/specs/rzn_social_card_v1.md`
+  - Completion controls guidance: see `## 4.1 Completion controls (close out of the app)`
+- Local CLI entrypoint for validating flows end-to-end: `scripts/ios_tools.sh`
+  - Global flags for optional close-out behavior: `--disconnect-on-finish`, `--background-on-exit`, `--lock-device-on-exit`
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
@@ -37,4 +46,3 @@ bd sync               # Sync with git
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
-

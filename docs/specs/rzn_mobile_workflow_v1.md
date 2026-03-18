@@ -57,6 +57,29 @@ Workflow steps may mark `requires_commit=true` for actions that can cause irreve
 
 Runners MUST refuse to execute these steps unless `commit=true` is supplied at runtime (or a future host-issued approval token).
 
+### 1.5 Completion and cleanup (runner options)
+
+This spec defines the **workflow file format** (what gets stored in a workflow pack). In practice, runners also need
+standardized **runtime options** for how to cleanup after a run.
+
+Runners SHOULD support these post-run controls (names shown match the current iOS worker implementation):
+
+- `disconnectOnFinish` (boolean, default `true`): end the automation session after the workflow run.
+  - Alias: `closeOnFinish` (same meaning).
+  - Set to `false` when you intentionally want to keep a session alive across multiple operations (for example, a
+    single-session sequence like open → like → comment).
+- `stopAppiumOnFinish` (boolean, default `false`): stop a spawned Appium server on completion (runner-specific).
+- `backgroundAppOnFinish` (boolean, default `false`): press the OS Home button before teardown (best-effort).
+  - This is the closest “close the app out” behavior that is portable: the app is sent to the background as a user would.
+- `lockDeviceOnFinish` (boolean, default `false`): lock the device before teardown (best-effort).
+
+Notes:
+
+- “Closing the app” on iOS is not a first-class automation primitive; the portable approach is (1) background-to-Home, and
+  (2) disconnect/teardown the session.
+- These are **runtime invocation options**, not part of the workflow JSON file itself. Workflow authors should not hardcode
+  teardown steps inside every workflow; prefer runner options so callers can choose per run.
+
 ---
 
 ## 2) Top-level workflow object
@@ -218,6 +241,29 @@ Conventions:
 - Any step with `save_as` / `saveAs` is available under `steps.<save_as>` in the template.
 - The runner should still include trace metadata even when `output` is provided.
 - If `output` is omitted, the runner returns a default `{ok, steps, trace}` envelope.
+
+---
+
+## 6) Runner invocation example (non-normative)
+
+Example call shape for a worker tool like `ios.workflow.run`:
+
+```jsonc
+{
+  "name": "ios.workflow.run",
+  "arguments": {
+    "name": "linkedin.daily_scroll_digest",
+    "session": { "udid": "..." },
+    "args": { "max_posts": 20 },
+
+    "commit": false,
+
+    "disconnectOnFinish": true,
+    "backgroundAppOnFinish": true,
+    "lockDeviceOnFinish": false
+  }
+}
+```
 
 ---
 

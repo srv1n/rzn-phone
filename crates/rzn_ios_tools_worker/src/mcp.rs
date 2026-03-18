@@ -48,9 +48,7 @@ pub async fn handle_request(
 
             match tools::handle_tool_call(state, name, arguments).await {
                 Ok(result) => Ok(result),
-                Err(err) => {
-                    Ok(tools::tool_error_from_anyhow(&err, name))
-                }
+                Err(err) => Ok(tools::tool_error_from_anyhow(&err, name)),
             }
         }
         "resources/list" => Ok(json!({ "resources": [] })),

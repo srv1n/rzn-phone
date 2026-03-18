@@ -1,0 +1,70 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "reddit.open_inbox",
+  "version": "1.0.0",
+  "description": "Open Reddit inbox/chat surface for read-only inspection.",
+  "inputs": {
+    "inbox_tab_predicate": { "type": "string", "default": "name CONTAINS[c] 'Inbox' OR label CONTAINS[c] 'Inbox' OR name CONTAINS[c] 'Chat' OR label CONTAINS[c] 'Chat' OR name CONTAINS[c] 'Messages' OR label CONTAINS[c] 'Messages'" },
+    "inbox_ready_predicate": { "type": "string", "default": "label CONTAINS[c] 'Message' OR label CONTAINS[c] 'Chat' OR name CONTAINS[c] 'Message' OR name CONTAINS[c] 'Chat' OR label CONTAINS[c] 'New'" },
+    "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Read-only workflow.",
+    "Use selector overrides when Reddit accessibility labels differ by locale/account build."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.reddit.Reddit",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{inbox_tab_predicate}}" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 450, "maxMs": 1250 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{inbox_tab_predicate}}" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{inbox_ready_predicate}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 650, "maxMs": 1600 } },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "inboxScreenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "inboxUiSource" },
+    { "tool": "ios.ui.observe_compact", "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" }, "saveAs": "inboxCompactSnapshot" }
+  ],
+  "output": {
+    "inboxScreenshot": "{{steps.inboxScreenshot}}",
+    "inboxUiSource": "{{steps.inboxUiSource}}",
+    "inboxCompactSnapshot": "{{steps.inboxCompactSnapshot}}"
+  }
+}

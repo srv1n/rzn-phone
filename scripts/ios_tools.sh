@@ -50,6 +50,16 @@ Commands:
                         Run reddit.comment_post. Default is dry-run draft (execute=0).
   reddit-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]
                         Run reddit.reply_to_comment. Default is dry-run draft (execute=0).
+  reddit-open-inbox <udid> [--out <dir>]
+                        Run reddit.open_inbox to open Reddit inbox/chat view (read-only).
+  reddit-open-dm-thread <udid> [--out <dir>] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]
+                        Run reddit.open_dm_thread for deterministic DM thread targeting (read-only).
+  reddit-send-dm <udid> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]
+                        Run reddit.send_dm. Default is dry-run draft (execute=0).
+  reddit-send-dm-user <udid> <username> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--max-thread-scrolls <n>]
+                        Run reddit.send_dm_by_username via Start Chatting username search (max-thread-scrolls ignored).
+  reddit-reply-dm <udid> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]
+                        Run reddit.reply_dm_thread. Default is dry-run draft (execute=0).
   reddit-engage-seq <udid> <comment> [--reply <text>] [--out <dir>] [--execute-like 0|1] [--execute-comment 0|1] [--execute-reply 0|1] [--commit 0|1] [--post-index <n>]
                         Run reddit open/like/comment/reply as a single operation reusing one iOS session.
   appstore-typeahead <udid> <query> [--out <dir>] [--limit <n>] [--typing-mode <full|char-by-char>] [--country <cc>] [--locale <locale>]
@@ -281,12 +291,18 @@ extract_workflow_artifacts() {
       .result.structuredContent.draftScreenshot.data //
       .result.structuredContent.readyScreenshot.data //
       .result.structuredContent.postScreenshot.data //
+      .result.structuredContent.inboxScreenshot.data //
+      .result.structuredContent.threadScreenshot.data //
       .result.structuredContent.beforeLikeScreenshot.data //
       .result.structuredContent.afterLikeScreenshot.data //
       .result.structuredContent.draftCommentScreenshot.data //
       .result.structuredContent.afterCommentScreenshot.data //
       .result.structuredContent.draftReplyScreenshot.data //
       .result.structuredContent.afterReplyScreenshot.data //
+      .result.structuredContent.draftDmScreenshot.data //
+      .result.structuredContent.afterSendDmScreenshot.data //
+      .result.structuredContent.draftReplyDmScreenshot.data //
+      .result.structuredContent.afterReplyDmScreenshot.data //
       empty
     )' "$raw_out")"
   if [[ -n "$screenshot_b64" ]]; then
@@ -299,9 +315,13 @@ extract_workflow_artifacts() {
       .result.structuredContent.draftUiSource.source //
       .result.structuredContent.readyUiSource.source //
       .result.structuredContent.postUiSource.source //
+      .result.structuredContent.inboxUiSource.source //
+      .result.structuredContent.threadUiSource.source //
       .result.structuredContent.beforeLikeUiSource.source //
       .result.structuredContent.draftCommentUiSource.source //
       .result.structuredContent.draftReplyUiSource.source //
+      .result.structuredContent.draftDmUiSource.source //
+      .result.structuredContent.draftReplyDmUiSource.source //
       empty
     )' "$raw_out")"
   if [[ -n "$ui_source" ]]; then
@@ -1292,6 +1312,389 @@ JSON
     ensure_workflow_success "$RAW_OUT" "reddit-reply-comment failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "reddit reply_to_comment saved artifacts to: $OUT_DIR"
+    ;;
+  reddit-open-inbox)
+    UDID="${1:-}"
+    if [[ "$#" -ge 1 ]]; then
+      shift 1
+    else
+      shift "$#"
+    fi
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for reddit-open-inbox: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh reddit-open-inbox <udid> [--out <dir>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/reddit-open-inbox.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --arg inbox_tab_predicate "${REDDIT_INBOX_TAB_PREDICATE:-}" \
+      --arg inbox_ready_predicate "${REDDIT_INBOX_READY_PREDICATE:-}" \
+      '{} 
+       + (if $inbox_tab_predicate == "" then {} else {inbox_tab_predicate:$inbox_tab_predicate} end)
+       + (if $inbox_ready_predicate == "" then {} else {inbox_ready_predicate:$inbox_ready_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "reddit.open_inbox" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "reddit-open-inbox failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "reddit open_inbox saved artifacts to: $OUT_DIR"
+    ;;
+  reddit-open-dm-thread)
+    UDID="${1:-}"
+    if [[ "$#" -ge 1 ]]; then
+      shift 1
+    else
+      shift "$#"
+    fi
+    THREAD_INDEX=0
+    MAX_THREAD_SCROLLS=8
+    THREAD_CONTAINS=""
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --thread-index)
+          THREAD_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --max-thread-scrolls)
+          MAX_THREAD_SCROLLS="${2:-8}"
+          shift 2
+          ;;
+        --thread-contains)
+          THREAD_CONTAINS="${2:-}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for reddit-open-dm-thread: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" ]]; then
+      echo "usage: scripts/ios_tools.sh reddit-open-dm-thread <udid> [--out <dir>] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/reddit-open-dm-thread.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --argjson thread_index "$THREAD_INDEX" \
+      --argjson max_thread_scrolls "$MAX_THREAD_SCROLLS" \
+      --arg thread_contains "$THREAD_CONTAINS" \
+      --arg inbox_tab_predicate "${REDDIT_INBOX_TAB_PREDICATE:-}" \
+      --arg thread_row_predicate "${REDDIT_DM_THREAD_ROW_PREDICATE:-}" \
+      --arg thread_ready_predicate "${REDDIT_DM_THREAD_READY_PREDICATE:-}" \
+      '{thread_index:$thread_index,max_thread_scrolls:$max_thread_scrolls}
+       + (if $thread_contains == "" then {} else {thread_contains:$thread_contains} end)
+       + (if $inbox_tab_predicate == "" then {} else {inbox_tab_predicate:$inbox_tab_predicate} end)
+       + (if $thread_row_predicate == "" then {} else {thread_row_predicate:$thread_row_predicate} end)
+       + (if $thread_ready_predicate == "" then {} else {thread_ready_predicate:$thread_ready_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "reddit.open_dm_thread" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "reddit-open-dm-thread failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "reddit open_dm_thread saved artifacts to: $OUT_DIR"
+    ;;
+  reddit-send-dm)
+    UDID="${1:-}"
+    MESSAGE_TEXT="${2:-}"
+    if [[ "$#" -ge 2 ]]; then
+      shift 2
+    else
+      shift "$#"
+    fi
+    EXECUTE=0
+    COMMIT=0
+    THREAD_INDEX=0
+    MAX_THREAD_SCROLLS=8
+    THREAD_CONTAINS=""
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --thread-index)
+          THREAD_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --max-thread-scrolls)
+          MAX_THREAD_SCROLLS="${2:-8}"
+          shift 2
+          ;;
+        --thread-contains)
+          THREAD_CONTAINS="${2:-}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for reddit-send-dm: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" || -z "$MESSAGE_TEXT" ]]; then
+      echo "usage: scripts/ios_tools.sh reddit-send-dm <udid> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/reddit-send-dm.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_JSON="$(bool_json "$EXECUTE")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --arg message_text "$MESSAGE_TEXT" \
+      --argjson execute_send "$EXECUTE_JSON" \
+      --argjson thread_index "$THREAD_INDEX" \
+      --argjson max_thread_scrolls "$MAX_THREAD_SCROLLS" \
+      --arg thread_contains "$THREAD_CONTAINS" \
+      --arg inbox_tab_predicate "${REDDIT_INBOX_TAB_PREDICATE:-}" \
+      --arg thread_row_predicate "${REDDIT_DM_THREAD_ROW_PREDICATE:-}" \
+      --arg message_field_predicate "${REDDIT_DM_MESSAGE_FIELD_PREDICATE:-}" \
+      --arg send_button_predicate "${REDDIT_DM_SEND_BUTTON_PREDICATE:-}" \
+      '{message_text:$message_text,execute_send:$execute_send,thread_index:$thread_index,max_thread_scrolls:$max_thread_scrolls}
+       + (if $thread_contains == "" then {} else {thread_contains:$thread_contains} end)
+       + (if $inbox_tab_predicate == "" then {} else {inbox_tab_predicate:$inbox_tab_predicate} end)
+       + (if $thread_row_predicate == "" then {} else {thread_row_predicate:$thread_row_predicate} end)
+       + (if $message_field_predicate == "" then {} else {message_field_predicate:$message_field_predicate} end)
+       + (if $send_button_predicate == "" then {} else {send_button_predicate:$send_button_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "reddit.send_dm" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "reddit-send-dm failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "reddit send_dm saved artifacts to: $OUT_DIR"
+    ;;
+  reddit-send-dm-user)
+    UDID="${1:-}"
+    USERNAME="${2:-}"
+    MESSAGE_TEXT="${3:-}"
+    if [[ "$#" -ge 3 ]]; then
+      shift 3
+    else
+      shift "$#"
+    fi
+    EXECUTE=0
+    COMMIT=0
+    MAX_THREAD_SCROLLS=8
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --max-thread-scrolls)
+          MAX_THREAD_SCROLLS="${2:-8}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for reddit-send-dm-user: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" || -z "$USERNAME" || -z "$MESSAGE_TEXT" ]]; then
+      echo "usage: scripts/ios_tools.sh reddit-send-dm-user <udid> <username> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--max-thread-scrolls <n>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/reddit-send-dm-user.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_JSON="$(bool_json "$EXECUTE")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    INBOX_TAB_PREDICATE="${REDDIT_INBOX_TAB_PREDICATE:-name == 'reddit_tab_bar__chat_button' OR label == 'Chat' OR name CONTAINS[c] 'Inbox' OR label CONTAINS[c] 'Inbox' OR name CONTAINS[c] 'Chat' OR label CONTAINS[c] 'Chat'}"
+    START_CHAT_BUTTON_PREDICATE="${REDDIT_DM_START_CHAT_BUTTON_PREDICATE:-name == 'Start Chatting' OR label == 'Start Chatting'}"
+    USERNAME_SEARCH_FIELD_PREDICATE="${REDDIT_DM_USERNAME_SEARCH_FIELD_PREDICATE:-name == 'Search for a username' OR label == 'Search for a username' OR value == 'Search for a username'}"
+    CREATE_BUTTON_PREDICATE="${REDDIT_DM_CREATE_BUTTON_PREDICATE:-(name == 'Create' OR label == 'Create') AND enabled == 1}"
+    MESSAGE_FIELD_PREDICATE="${REDDIT_DM_MESSAGE_FIELD_PREDICATE:-name CONTAINS 'reddit_chat__message_input_field' OR label == 'Message' OR name CONTAINS[c] 'Send message' OR label CONTAINS[c] 'Send message'}"
+    SEND_BUTTON_PREDICATE="${REDDIT_DM_SEND_BUTTON_PREDICATE:-label == 'Send' OR name == 'Send' OR label CONTAINS[c] 'Send' OR name CONTAINS[c] 'Send'}"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --arg username "$USERNAME" \
+      --arg message_text "$MESSAGE_TEXT" \
+      --argjson execute_send "$EXECUTE_JSON" \
+      --argjson max_thread_scrolls "$MAX_THREAD_SCROLLS" \
+      --arg inbox_tab_predicate "$INBOX_TAB_PREDICATE" \
+      --arg start_chat_button_predicate "$START_CHAT_BUTTON_PREDICATE" \
+      --arg username_search_field_predicate "$USERNAME_SEARCH_FIELD_PREDICATE" \
+      --arg create_button_predicate "$CREATE_BUTTON_PREDICATE" \
+      --arg message_field_predicate "$MESSAGE_FIELD_PREDICATE" \
+      --arg send_button_predicate "$SEND_BUTTON_PREDICATE" \
+      '{username:$username,message_text:$message_text,execute_send:$execute_send,max_thread_scrolls:$max_thread_scrolls,inbox_tab_predicate:$inbox_tab_predicate,start_chat_button_predicate:$start_chat_button_predicate,username_search_field_predicate:$username_search_field_predicate,create_button_predicate:$create_button_predicate,message_field_predicate:$message_field_predicate,send_button_predicate:$send_button_predicate}')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "reddit.send_dm_by_username" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "reddit-send-dm-user failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "reddit send_dm_by_username saved artifacts to: $OUT_DIR"
+    ;;
+  reddit-reply-dm)
+    UDID="${1:-}"
+    MESSAGE_TEXT="${2:-}"
+    if [[ "$#" -ge 2 ]]; then
+      shift 2
+    else
+      shift "$#"
+    fi
+    EXECUTE=0
+    COMMIT=0
+    THREAD_INDEX=0
+    MAX_THREAD_SCROLLS=8
+    THREAD_CONTAINS=""
+    OUT_DIR=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --out)
+          OUT_DIR="${2:-}"
+          shift 2
+          ;;
+        --execute)
+          EXECUTE="${2:-0}"
+          shift 2
+          ;;
+        --commit)
+          COMMIT="${2:-0}"
+          shift 2
+          ;;
+        --thread-index)
+          THREAD_INDEX="${2:-0}"
+          shift 2
+          ;;
+        --max-thread-scrolls)
+          MAX_THREAD_SCROLLS="${2:-8}"
+          shift 2
+          ;;
+        --thread-contains)
+          THREAD_CONTAINS="${2:-}"
+          shift 2
+          ;;
+        *)
+          echo "unknown option for reddit-reply-dm: $1" >&2
+          exit 1
+          ;;
+      esac
+    done
+    if [[ -z "$UDID" || -z "$MESSAGE_TEXT" ]]; then
+      echo "usage: scripts/ios_tools.sh reddit-reply-dm <udid> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]" >&2
+      exit 1
+    fi
+    if [[ -z "$OUT_DIR" ]]; then
+      OUT_DIR="$(mktemp -d /tmp/reddit-reply-dm.XXXXXX)"
+    fi
+    mkdir -p "$OUT_DIR"
+
+    load_ios_session_env
+    SHOW_XCODE_LOG_JSON="$(bool_json "$IOS_SHOW_XCODE_LOG")"
+    ALLOW_PROVISIONING_UPDATES_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_UPDATES")"
+    ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON="$(bool_json "$IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION")"
+    STOP_APPIUM_ON_EXIT_JSON="$(bool_json "$IOS_STOP_APPIUM_ON_EXIT")"
+    SIGNING_JSON="$(build_signing_json)"
+
+    EXECUTE_JSON="$(bool_json "$EXECUTE")"
+    COMMIT_JSON="$(bool_json "$COMMIT")"
+    SESSION_JSON="$(build_session_json "$UDID")"
+    ARGS_JSON="$(jq -nc \
+      --arg message_text "$MESSAGE_TEXT" \
+      --argjson execute_reply "$EXECUTE_JSON" \
+      --argjson thread_index "$THREAD_INDEX" \
+      --argjson max_thread_scrolls "$MAX_THREAD_SCROLLS" \
+      --arg thread_contains "$THREAD_CONTAINS" \
+      --arg inbox_tab_predicate "${REDDIT_INBOX_TAB_PREDICATE:-}" \
+      --arg thread_row_predicate "${REDDIT_DM_THREAD_ROW_PREDICATE:-}" \
+      --arg message_field_predicate "${REDDIT_DM_MESSAGE_FIELD_PREDICATE:-}" \
+      --arg send_button_predicate "${REDDIT_DM_SEND_BUTTON_PREDICATE:-}" \
+      '{message_text:$message_text,execute_reply:$execute_reply,thread_index:$thread_index,max_thread_scrolls:$max_thread_scrolls}
+       + (if $thread_contains == "" then {} else {thread_contains:$thread_contains} end)
+       + (if $inbox_tab_predicate == "" then {} else {inbox_tab_predicate:$inbox_tab_predicate} end)
+       + (if $thread_row_predicate == "" then {} else {thread_row_predicate:$thread_row_predicate} end)
+       + (if $message_field_predicate == "" then {} else {message_field_predicate:$message_field_predicate} end)
+       + (if $send_button_predicate == "" then {} else {send_button_predicate:$send_button_predicate} end)')"
+
+    BIN="$(worker_bin)"
+    RAW_OUT="$OUT_DIR/.raw.jsonl"
+    run_workflow_rpc "$BIN" "reddit.reply_dm_thread" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    ensure_workflow_success "$RAW_OUT" "reddit-reply-dm failed" || exit 1
+    extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
+    echo "reddit reply_dm_thread saved artifacts to: $OUT_DIR"
     ;;
   reddit-engage-seq)
     UDID="${1:-}"

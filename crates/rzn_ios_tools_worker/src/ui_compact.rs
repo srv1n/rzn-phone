@@ -117,8 +117,7 @@ pub fn build_compact_snapshot(
 
                 for attr in e.attributes().with_checks(false) {
                     let attr = attr.context("invalid XML attribute")?;
-                    let key =
-                        str::from_utf8(attr.key.as_ref()).context("invalid attribute key")?;
+                    let key = str::from_utf8(attr.key.as_ref()).context("invalid attribute key")?;
                     let val = attr
                         .unescape_value()
                         .context("invalid attribute value")?
@@ -170,7 +169,9 @@ pub fn build_compact_snapshot(
                         continue;
                     }
                 } else if role == "text" {
-                    if label.as_deref().unwrap_or("").is_empty() && value.as_deref().unwrap_or("").is_empty() {
+                    if label.as_deref().unwrap_or("").is_empty()
+                        && value.as_deref().unwrap_or("").is_empty()
+                    {
                         buf.clear();
                         continue;
                     }

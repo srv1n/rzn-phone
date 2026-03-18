@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.social.card.v1",
   "catalog": "reddit",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "cards": [
     {
       "id": "reddit.daily_scroll",
@@ -85,6 +85,89 @@
         "post_index": 0,
         "reply_index": 0,
         "max_comment_scrolls": 6,
+        "execute_reply": false
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "reddit.open_inbox",
+      "title": "Open inbox",
+      "description": "Open Reddit inbox/chat surface for read-only inspection.",
+      "app": "reddit",
+      "mode": "read",
+      "workflow": "reddit.open_inbox",
+      "mutating": false,
+      "commitRequired": false,
+      "defaults": {},
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "reddit.open_dm_thread",
+      "title": "Open DM thread",
+      "description": "Open a Reddit DM thread for read-only inspection.",
+      "app": "reddit",
+      "mode": "read",
+      "workflow": "reddit.open_dm_thread",
+      "mutating": false,
+      "commitRequired": false,
+      "defaults": {
+        "thread_index": 0,
+        "max_thread_scrolls": 8
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "reddit.send_dm",
+      "title": "Send DM",
+      "description": "Draft and optionally send a direct message in a Reddit thread.",
+      "app": "reddit",
+      "mode": "engage",
+      "workflow": "reddit.send_dm",
+      "mutating": true,
+      "commitRequired": true,
+      "executeArg": "execute_send",
+      "textArg": "message_text",
+      "requiredArgs": ["message_text"],
+      "defaults": {
+        "thread_index": 0,
+        "max_thread_scrolls": 8,
+        "execute_send": false
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "reddit.send_dm_user",
+      "title": "Send DM by username",
+      "description": "Draft and optionally send a direct message targeting an existing chat thread by username.",
+      "app": "reddit",
+      "mode": "engage",
+      "workflow": "reddit.send_dm_by_username",
+      "mutating": true,
+      "commitRequired": true,
+      "executeArg": "execute_send",
+      "textArg": "message_text",
+      "requiredArgs": ["username", "message_text"],
+      "defaults": {
+        "max_thread_scrolls": 8,
+        "execute_send": false
+      },
+      "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]
+    },
+    {
+      "id": "reddit.reply_dm",
+      "title": "Reply in DM",
+      "description": "Draft and optionally send a reply inside an existing Reddit DM thread.",
+      "app": "reddit",
+      "mode": "engage",
+      "workflow": "reddit.reply_dm_thread",
+      "mutating": true,
+      "commitRequired": true,
+      "executeArg": "execute_reply",
+      "textArg": "message_text",
+      "requiredArgs": ["message_text"],
+      "defaults": {
+        "thread_index": 0,
+        "max_thread_scrolls": 8,
         "execute_reply": false
       },
       "artifacts": ["result.json", "screenshot.png", "ui_source.xml"]

@@ -252,10 +252,16 @@ impl WebDriverClient {
     }
 
     pub async fn find_elements_css(&self, session_id: &str, selector: &str) -> Result<Vec<String>> {
-        self.find_elements(session_id, "css selector", selector).await
+        self.find_elements(session_id, "css selector", selector)
+            .await
     }
 
-    pub async fn find_elements(&self, session_id: &str, using: &str, value: &str) -> Result<Vec<String>> {
+    pub async fn find_elements(
+        &self,
+        session_id: &str,
+        using: &str,
+        value: &str,
+    ) -> Result<Vec<String>> {
         let using = using.trim();
         let value = value.trim();
         if using.is_empty() {
@@ -499,7 +505,8 @@ impl WebDriverClient {
     pub async fn alert_text(&self, session_id: &str) -> Result<String> {
         let path = format!("/session/{session_id}/alert/text");
         let response = self.get_json(&path).await?;
-        extract_value_as_string(&response).ok_or_else(|| anyhow!("missing alert text from response"))
+        extract_value_as_string(&response)
+            .ok_or_else(|| anyhow!("missing alert text from response"))
     }
 
     pub async fn alert_accept(&self, session_id: &str) -> Result<()> {

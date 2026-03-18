@@ -9,6 +9,11 @@ This repo now includes first-pass Reddit workflows for iOS real devices:
 - `reddit.like_post`
 - `reddit.comment_post`
 - `reddit.reply_to_comment`
+- `reddit.open_inbox`
+- `reddit.open_dm_thread`
+- `reddit.send_dm`
+- `reddit.send_dm_by_username`
+- `reddit.reply_dm_thread`
 
 These are data-only workflows loaded from `crates/rzn_ios_tools_worker/resources/workflows/`.
 
@@ -33,6 +38,16 @@ Interaction targeting (dry-run first):
 ./scripts/ios_tools.sh reddit-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-like-dry
 ./scripts/ios_tools.sh reddit-comment-post <udid> "Interesting perspective." --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-comment-dry
 ./scripts/ios_tools.sh reddit-reply-comment <udid> "Good point." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/reddit-reply-dry
+```
+
+DM targeting + send/reply (dry-run first):
+
+```bash
+./scripts/ios_tools.sh reddit-open-inbox <udid> --out /tmp/reddit-open-inbox
+./scripts/ios_tools.sh reddit-open-dm-thread <udid> --thread-index 0 --out /tmp/reddit-open-dm-thread
+./scripts/ios_tools.sh reddit-send-dm <udid> "Hey there" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-send-dm-dry
+./scripts/ios_tools.sh reddit-send-dm-user <udid> "chorefit" "Hey there" --execute 0 --commit 0 --out /tmp/reddit-send-dm-user-dry
+./scripts/ios_tools.sh reddit-reply-dm <udid> "Following up" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-reply-dm-dry
 ```
 
 Single-session operation (reduces repeated session bootstrap between actions):
@@ -70,6 +85,17 @@ REDDIT_REPLY_SUBMIT_PREDICATE="label == 'Reply' OR label == 'Send'" \
 ./scripts/ios_tools.sh reddit-comment-post <udid> "Nice write-up." --execute 1 --commit 1
 ```
 
+DM flows support additional overrides:
+
+```bash
+REDDIT_INBOX_TAB_PREDICATE="label CONTAINS[c] 'Inbox' OR label CONTAINS[c] 'Chat'" \
+REDDIT_DM_THREAD_ROW_PREDICATE="type == 'XCUIElementTypeCell'" \
+REDDIT_DM_THREAD_READY_PREDICATE="label CONTAINS[c] 'Message' OR value CONTAINS[c] 'Message'" \
+REDDIT_DM_MESSAGE_FIELD_PREDICATE="label CONTAINS[c] 'Message' OR value CONTAINS[c] 'Message'" \
+REDDIT_DM_SEND_BUTTON_PREDICATE="label == 'Send'" \
+./scripts/ios_tools.sh reddit-send-dm <udid> "hello" --execute 1 --commit 1 --thread-index 0
+```
+
 If the app is already inside a post detail view, you can broaden `REDDIT_POST_CELL_PREDICATE` to include title nodes:
 `name CONTAINS 'reddit_feed__post__title_text' OR name CONTAINS 'reddit_feed__post__post_cell'`.
 
@@ -81,10 +107,19 @@ If the app is already inside a post detail view, you can broaden `REDDIT_POST_CE
 4. Re-run with `--execute 1 --commit 1` only for approved actions.
 5. Keep artifacts for audit (`result.json`, screenshot, XML source).
 
+DM pattern:
+
+1. Run `reddit-open-inbox` or `reddit-open-dm-thread` to verify thread targeting.
+2. Dry-run `reddit-send-dm` / `reddit-reply-dm` (`--execute 0 --commit 0`).
+3. Re-run with `--execute 1 --commit 1` only after explicit approval.
+
 ## Safety Notes
 
-- `reddit.daily_scroll_digest` and `reddit.open_post` are read-only.
+- `reddit.daily_scroll_digest`, `reddit.open_post`, `reddit.open_inbox`, and `reddit.open_dm_thread` are read-only.
 - `reddit.like_post` uses `requiresCommit` and only mutates when `execute_like=true`.
 - `reddit.comment_post` uses `requiresCommit` and only mutates when `execute_comment=true`.
 - `reddit.reply_to_comment` uses `requiresCommit` and only mutates when `execute_reply=true`.
+- `reddit.send_dm` uses `requiresCommit` and only mutates when `execute_send=true`.
+- `reddit.send_dm_by_username` uses `requiresCommit` and only mutates when `execute_send=true`.
+- `reddit.reply_dm_thread` uses `requiresCommit` and only mutates when `execute_reply=true`.
 - Keep the phone unlocked during session bootstrap and run execution.

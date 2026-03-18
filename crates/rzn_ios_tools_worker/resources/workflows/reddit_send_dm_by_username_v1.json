@@ -1,0 +1,161 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "reddit.send_dm_by_username",
+  "version": "1.2.0",
+  "description": "Open Reddit chat, search for a username, draft a message, and optionally send it (commit-gated).",
+  "inputs": {
+    "username": { "type": "string", "required": true },
+    "message_text": { "type": "string", "required": true },
+    "execute_send": { "type": "boolean", "default": false },
+    "inbox_tab_predicate": { "type": "string", "default": "name == 'reddit_tab_bar__chat_button' OR label == 'Chat' OR name CONTAINS[c] 'Inbox' OR label CONTAINS[c] 'Inbox' OR name CONTAINS[c] 'Chat' OR label CONTAINS[c] 'Chat'" },
+    "start_chat_button_predicate": { "type": "string", "default": "name == 'Start Chatting' OR label == 'Start Chatting'" },
+    "username_search_field_predicate": { "type": "string", "default": "name == 'Search for a username' OR label == 'Search for a username' OR value == 'Search for a username'" },
+    "create_button_predicate": { "type": "string", "default": "(name == 'Create' OR label == 'Create') AND enabled == 1" },
+    "message_field_predicate": { "type": "string", "default": "name CONTAINS 'reddit_chat__message_input_field' OR label == 'Message' OR name CONTAINS[c] 'Send message' OR label CONTAINS[c] 'Send message'" },
+    "send_button_predicate": { "type": "string", "default": "label == 'Send' OR name == 'Send' OR label CONTAINS[c] 'Send' OR name CONTAINS[c] 'Send'" },
+    "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Searches username via Start Chatting flow.",
+    "Set args.execute_send=true and run with commit=true to send the drafted DM.",
+    "Submit tap is commit-gated via requiresCommit."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.reddit.Reddit",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{inbox_tab_predicate}}" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 400, "maxMs": 1200 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{inbox_tab_predicate}}" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{start_chat_button_predicate}}" },
+        "timeoutMs": 25000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{start_chat_button_predicate}}" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{username_search_field_predicate}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.type",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{username_search_field_predicate}}" },
+        "text": "{{username}}",
+        "clearFirst": true
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "name == '{{username}}' OR label == '{{username}}' OR name BEGINSWITH '{{username}},' OR label BEGINSWITH '{{username}},' OR name CONTAINS[c] '{{username}}' OR label CONTAINS[c] '{{username}}'"
+        },
+        "timeoutMs": 25000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "name == '{{username}}' OR label == '{{username}}' OR name BEGINSWITH '{{username}},' OR label BEGINSWITH '{{username}},' OR name CONTAINS[c] '{{username}}' OR label CONTAINS[c] '{{username}}'"
+        }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{create_button_predicate}}" },
+        "timeoutMs": 15000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{create_button_predicate}}" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{message_field_predicate}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 500, "maxMs": 1400 } },
+    {
+      "tool": "ios.action.type",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{message_field_predicate}}" },
+        "text": "{{message_text}}",
+        "clearFirst": true
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "draftDmScreenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "draftDmUiSource" },
+    { "tool": "ios.ui.observe_compact", "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" }, "saveAs": "draftDmCompactSnapshot" },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "execute_send", "truthy": true },
+      "requiresCommit": true,
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{send_button_predicate}}" } }
+    },
+    {
+      "tool": "ios.ui.screenshot",
+      "when": { "var": "execute_send", "truthy": true },
+      "arguments": {},
+      "saveAs": "afterSendDmScreenshot"
+    }
+  ],
+  "output": {
+    "username": "{{username}}",
+    "requestedSend": "{{execute_send}}",
+    "draftDmScreenshot": "{{steps.draftDmScreenshot}}",
+    "draftDmUiSource": "{{steps.draftDmUiSource}}",
+    "draftDmCompactSnapshot": "{{steps.draftDmCompactSnapshot}}",
+    "afterSendDmScreenshot": "{{steps.afterSendDmScreenshot}}"
+  }
+}

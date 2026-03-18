@@ -1,0 +1,99 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "reddit.open_dm_thread",
+  "version": "1.0.0",
+  "description": "Open Reddit inbox, target a DM thread, and capture read-only artifacts.",
+  "inputs": {
+    "thread_index": { "type": "integer", "default": 0, "min": 0, "max": 40 },
+    "max_thread_scrolls": { "type": "integer", "default": 8, "min": 0, "max": 25 },
+    "thread_contains": { "type": "string" },
+    "inbox_tab_predicate": { "type": "string", "default": "name CONTAINS[c] 'Inbox' OR label CONTAINS[c] 'Inbox' OR name CONTAINS[c] 'Chat' OR label CONTAINS[c] 'Chat' OR name CONTAINS[c] 'Messages' OR label CONTAINS[c] 'Messages'" },
+    "thread_row_predicate": { "type": "string", "default": "type == 'XCUIElementTypeCell' OR (type == 'XCUIElementTypeOther' AND (label CONTAINS[c] 'ago' OR label CONTAINS[c] 'chat' OR label CONTAINS[c] 'message'))" },
+    "thread_ready_predicate": { "type": "string", "default": "type == 'XCUIElementTypeTextView' OR type == 'XCUIElementTypeTextField' OR label CONTAINS[c] 'Message' OR value CONTAINS[c] 'Message' OR label CONTAINS[c] 'Send message'" },
+    "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Read-only workflow.",
+    "When thread_contains is provided, the workflow scrolls the inbox list to find a matching thread label."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.reddit.Reddit",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{inbox_tab_predicate}}" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 450, "maxMs": 1250 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{inbox_tab_predicate}}" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{thread_row_predicate}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.scroll_until",
+      "when": { "var": "thread_contains", "truthy": true },
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "label CONTAINS[c] '{{thread_contains}}' OR name CONTAINS[c] '{{thread_contains}}'" },
+        "direction": "down",
+        "distance": 0.58,
+        "maxScrolls": "{{max_thread_scrolls}}",
+        "timeoutMs": 45000,
+        "settleMs": 350
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 550, "maxMs": 1450 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{thread_row_predicate}}", "index": "{{thread_index}}" } }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{thread_ready_predicate}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 650, "maxMs": 1600 } },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "threadScreenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "threadUiSource" },
+    { "tool": "ios.ui.observe_compact", "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" }, "saveAs": "threadCompactSnapshot" }
+  ],
+  "output": {
+    "threadScreenshot": "{{steps.threadScreenshot}}",
+    "threadUiSource": "{{steps.threadUiSource}}",
+    "threadCompactSnapshot": "{{steps.threadCompactSnapshot}}"
+  }
+}
