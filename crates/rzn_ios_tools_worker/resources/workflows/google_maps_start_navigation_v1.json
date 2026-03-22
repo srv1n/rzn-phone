@@ -1,0 +1,172 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "google_maps.start_navigation",
+  "version": "1.0.0",
+  "description": "Open a Google Maps place sheet and optionally tap Start to begin navigation (commit-gated).",
+  "inputs": {
+    "query": { "type": "string", "required": true },
+    "execute_start": { "type": "boolean", "default": false },
+    "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "By default this workflow only opens the place sheet and captures artifacts.",
+    "Set args.execute_start=true and run with commit=true to tap Start.",
+    "Best-effort: current Google Maps builds may require additional on-screen confirmation after Start."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.google.Maps",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.app.activate",
+      "arguments": {
+        "bundleId": "com.google.Maps",
+        "terminateFirst": true
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "SearchHeaderSearchTxtView" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 400, "maxMs": 900 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "SearchHeaderSearchTxtView" }
+      }
+    },
+    {
+      "tool": "ios.action.type",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "SearchHeaderSearchTxtView" },
+        "text": "{{query}}",
+        "clearFirst": true,
+        "pressEnter": true
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeButton[@name='Start' or @label='Start']" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 1200, "maxMs": 2200 } },
+    {
+      "tool": "ios.element.text",
+      "saveAs": "placeTitle",
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeTextView[1]" }
+      }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "beforeOtherTexts",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeOther", "max": 20 },
+        "limit": 10,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "ios.element.attribute",
+      "saveAs": "beforeSummaryLine",
+      "arguments": {
+        "target": {
+          "using": "xpath",
+          "value": "//XCUIElementTypeOther[contains(@name,'reviews') or contains(@label,'reviews') or contains(@name,' km') or contains(@label,' km') or contains(@name,' min') or contains(@label,' min') or contains(@name,'Driving') or contains(@label,'Driving') or contains(@name,'Walking') or contains(@label,'Walking') or contains(@name,'Transit') or contains(@label,'Transit')][1]"
+        },
+        "name": "name"
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "execute_start", "truthy": true },
+      "requiresCommit": true,
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeButton[@name='Start' or @label='Start']" }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "execute_start", "truthy": true },
+      "arguments": { "minMs": 1500, "maxMs": 3000 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "afterOtherTexts",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeOther", "max": 20 },
+        "limit": 10,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "ios.element.attribute",
+      "saveAs": "afterSummaryLine",
+      "arguments": {
+        "target": {
+          "using": "xpath",
+          "value": "//XCUIElementTypeOther[contains(@name,'reviews') or contains(@label,'reviews') or contains(@name,' km') or contains(@label,' km') or contains(@name,' min') or contains(@label,' min') or contains(@name,'Driving') or contains(@label,'Driving') or contains(@name,'Walking') or contains(@label,'Walking') or contains(@name,'Transit') or contains(@label,'Transit')][1]"
+        },
+        "name": "name"
+      }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "buttonTexts",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "max": 20 },
+        "limit": 12,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "screenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "uiSource" },
+    {
+      "tool": "ios.ui.observe_compact",
+      "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+      "saveAs": "compactSnapshot"
+    }
+  ],
+  "output": {
+    "query": "{{query}}",
+    "requestedStart": "{{execute_start}}",
+    "title": "{{steps.placeTitle.text}}",
+    "beforeSummaryLine": "{{steps.beforeSummaryLine.value}}",
+    "afterSummaryLine": "{{steps.afterSummaryLine.value}}",
+    "afterOtherTexts": "{{steps.afterOtherTexts.texts}}",
+    "buttonTexts": "{{steps.buttonTexts.texts}}",
+    "screenshot": "{{steps.screenshot}}",
+    "uiSource": "{{steps.uiSource}}",
+    "compactSnapshot": "{{steps.compactSnapshot}}"
+  }
+}
