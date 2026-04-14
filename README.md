@@ -45,6 +45,20 @@ Current repo-local equivalents:
 ./scripts/rzn_phone.sh workflow-smoke <udid> "best headphones 2026" 5
 ```
 
+Installed runtime shape:
+
+```text
+make install
+   |
+   +--> ~/.local/share/rzn-phone/releases/<version>/
+   |      |- bin/rzn-phone
+   |      |- libexec/rzn-phone-worker
+   |      |- resources/workflows/*.json
+   |      `- examples/*
+   |
+   `--> <writable-bin-dir>/rzn-phone   # global shim
+```
+
 ## Naming boundary
 
 `rzn-phone` is the public repo/package/CLI name.
@@ -125,7 +139,41 @@ appium driver install xcuitest
 
 If you launch RZN from Finder and PATH is minimal, `RZN_IOS_APPIUM_URL` is the most reliable setup.
 
-## Build
+## Install
+
+Install a self-contained runtime locally and expose `rzn-phone` from a writable bin dir:
+
+```bash
+make install
+rzn-phone version
+rzn-phone workflow list
+```
+
+What `make install` actually does:
+
+- builds the universal release worker
+- stages a versioned runtime under `~/.local/share/rzn-phone/releases/<version>`
+- installs a global `rzn-phone` shim into the first writable bin dir it finds (`~/.local/bin`, `~/bin`, `/opt/homebrew/bin`, `/usr/local/bin`)
+- seeds examples + workflows into the installed runtime
+- records a local workflow-pack source so `rzn-phone workflows update` can pull fresh packaged workflows later
+
+Useful overrides:
+
+```bash
+RZN_PHONE_INSTALL_ROOT=/custom/runtime/root RZN_PHONE_BIN_DIR=/custom/bin make install
+```
+
+Installed runtime commands:
+
+```bash
+rzn-phone doctor
+rzn-phone devices
+rzn-phone workflow list
+rzn-phone workflows update
+rzn-phone examples path
+```
+
+## Repo Dev Build
 
 Build release worker:
 
@@ -201,6 +249,42 @@ Or via unified CLI:
 ./scripts/rzn_phone.sh package
 ```
 
+## Installable Release Artifacts
+
+Build the release assets meant for machine-wide install and workflow/example refresh:
+
+```bash
+make install-artifacts
+```
+
+That writes:
+
+| Artifact | Path | Purpose |
+| --- | --- | --- |
+| Runtime archive | `dist/releases/rzn-phone/<version>/macos_universal/rzn-phone-<version>-macos_universal.tar.gz` | self-contained installable runtime |
+| Workflow pack | `dist/releases/rzn-phone/<version>/macos_universal/rzn-phone-workflows-<version>.tar.gz` | examples + workflows refresh payload |
+| Shell installer | `dist/releases/rzn-phone/<version>/macos_universal/install.sh` | `sh` entrypoint for end-user installs |
+| Checksums | `dist/releases/rzn-phone/<version>/macos_universal/SHA256SUMS` | artifact verification |
+
+Release/install flow:
+
+```bash
+BASE_URL="https://downloads.example.com/rzn-phone/0.1.0/macos_universal"
+curl -fsSL "$BASE_URL/install.sh" | sh -s -- --source "$BASE_URL"
+```
+
+Why the extra `--source`? Because once a script is piped into `sh`, it does not know where it came from. Shell is many things; clairvoyant is not one of them.
+
+Workflow/example refresh from an installed runtime:
+
+```bash
+rzn-phone workflows update
+```
+
+For a local `make install`, that command defaults to the repo-built release directory under `dist/releases/...`.
+
+## Package Signed Plugin Bundle
+
 This writes and verifies:
 
 - `dist/plugins/rzn-phone/0.1.0/macos_universal/rzn-phone-0.1.0-macos_universal.zip`
@@ -215,6 +299,12 @@ The resulting ZIP now also includes:
 - `examples/phone_messages/...`
 - `examples/phone_calls/...`
 - `examples/phone_notifications/...`
+
+To build both the installable runtime artifacts and the signed plugin ZIP in one shot:
+
+```bash
+make release-artifacts
+```
 
 ## Backend Publish Contract
 

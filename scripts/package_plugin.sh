@@ -23,8 +23,8 @@ resolve_devkit() {
     command -v rzn-plugin-devkit
     return 0
   fi
-  if [[ -x "/Users/sarav/Downloads/side/rzn/rzn-browser-native/target/release/rzn-plugin-devkit" ]]; then
-    echo "/Users/sarav/Downloads/side/rzn/rzn-browser-native/target/release/rzn-plugin-devkit"
+  if [[ -x "/Users/sarav/Downloads/side/rzn/rzn-browser/target/release/rzn-plugin-devkit" ]]; then
+    echo "/Users/sarav/Downloads/side/rzn/rzn-browser/target/release/rzn-plugin-devkit"
     return 0
   fi
   if [[ -x "/Users/sarav/Downloads/side/rzn/rzn-python-sandbox/target/release/rzn-plugin-devkit" ]]; then

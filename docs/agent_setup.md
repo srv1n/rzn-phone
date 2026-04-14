@@ -1,7 +1,7 @@
 # rzn-phone Agent Setup Guide
 
 This guide is for agents that need to set up, diagnose, or safely operate the shipped `rzn-phone`
-plugin on a local macOS machine.
+runtime on a local macOS machine.
 
 Use it when the user asks an agent to:
 
@@ -14,18 +14,28 @@ Prefer read-only verification first. Do not run mutating Reddit or LinkedIn work
 
 ## What the agent is setting up
 
-The shipped artifact contains:
+The shipped release now has two install surfaces:
+
+- installable runtime archive: `rzn-phone-<version>-macos_universal.tar.gz`
+- refreshable workflow/examples pack: `rzn-phone-workflows-<version>.tar.gz`
+
+Once installed, the runtime contains:
 
 - the `rzn-phone-worker` MCP binary
-- the full shipped workflow pack
-- social card catalogs for higher-level orchestration
+- the shipped workflow pack under `resources/workflows/`
+- examples under `examples/`
+- the `rzn-phone` CLI wrapper for `doctor`, `devices`, `workflow list`, `workflow run`, and `workflows update`
 
-The current shipped workflow pack includes 28 workflows across:
+The current packaged set includes 51 workflows across:
 
 - Safari
 - App Store
+- Google Maps
 - Reddit
 - LinkedIn
+- Instagram
+- X
+- Phone Messages
 
 ## Setup order
 
@@ -41,17 +51,22 @@ Follow this sequence in order:
 3. Confirm Appium is installed.
 4. Confirm the Appium `xcuitest` driver is installed.
 5. Confirm a trusted/unlocked physical iPhone is visible in `xcrun xctrace list devices`.
-6. Unpack the shipped plugin artifact.
-7. Configure the MCP client:
-   - `command`: `bin/macos/universal/rzn-phone-worker`
-   - `RZN_PLUGIN_DIR`: unpacked plugin root
+6. Install the shipped runtime:
+   - local repo path: `make install`
+   - release artifact path: `sh install.sh --source <release-dir-or-base-url>`
+7. Verify the installed CLI:
+   - `rzn-phone version`
+   - `rzn-phone workflow list`
+8. Configure the MCP client:
+   - `command`: `/absolute/path/to/rzn-phone`
+   - `args`: `["worker"]`
    - `RZN_IOS_APPIUM_URL`: typically `http://127.0.0.1:4723`
-8. Start Appium if needed.
-9. Call:
+9. Start Appium if needed.
+10. Call:
    - `ios.env.doctor`
    - `ios.device.list`
    - `ios.workflow.list`
-10. Run exactly one read-only workflow.
+11. Run exactly one read-only workflow.
 
 If any prerequisite fails, stop and fix it before attempting workflow execution.
 
@@ -66,9 +81,14 @@ If the user received the generated tester kit ZIP:
 ./scripts/tester_doctor.sh
 ```
 
-3. If the doctor passes, unpack `artifacts/rzn-phone-<version>-macos_universal.zip`.
-4. Use `examples/rzn-phone.mcp.json` as the MCP template.
-5. Keep this guide and `examples/agent-handoff.md` next to the unpacked artifact for future agents.
+3. If the doctor passes, install the runtime from the shipped release directory:
+
+```bash
+sh install.sh --source /absolute/path/to/release-dir
+```
+
+4. Use `rzn-phone info` to confirm the runtime root, workflow dir, and examples dir.
+5. Keep this guide and `examples/agent-handoff.md` next to the installed runtime for future agents.
 
 ## MCP requirements
 
@@ -78,10 +98,9 @@ Use this minimum MCP server shape:
 {
   "mcpServers": {
     "rzn-phone": {
-      "command": "/absolute/path/to/unpacked/bin/macos/universal/rzn-phone-worker",
-      "args": [],
+      "command": "/absolute/path/to/rzn-phone",
+      "args": ["worker"],
       "env": {
-        "RZN_PLUGIN_DIR": "/absolute/path/to/unpacked",
         "RZN_IOS_APPIUM_URL": "http://127.0.0.1:4723"
       }
     }
@@ -89,7 +108,8 @@ Use this minimum MCP server shape:
 }
 ```
 
-If `RZN_PLUGIN_DIR` is wrong or missing, the worker may start but fail to load the shipped workflow pack.
+The installed `rzn-phone worker` wrapper sets `RZN_PLUGIN_DIR` itself. If an agent bypasses the
+wrapper and launches `rzn-phone-worker` directly, it must still provide `RZN_PLUGIN_DIR`.
 
 ## Safe first-run workflow sequence
 
@@ -168,22 +188,23 @@ Agents should describe this as an Apple signing/provisioning issue, not a workfl
 
 Check:
 
-- `RZN_PLUGIN_DIR` points at the unpacked plugin root
-- the unpacked directory contains `resources/workflows/*.json`
+- the installed runtime root contains `resources/workflows/*.json`
+- `rzn-phone workflow list` returns the shipped set
 - `ios.workflow.list` returns the shipped set
+- if workflows were refreshed separately, rerun `rzn-phone workflows update`
 
 ## Suggested prompts for agents
 
 ### Setup
 
 ```text
-Set up the rzn-phone capability on this machine. Public docs may say `rzn-phone ...` or `rzn phone ...`; this packaged build still uses the shipped MCP worker. Verify local prerequisites, confirm the connected iPhone is visible, ensure the workflow pack is loaded, and stop after one read-only workflow succeeds. Do not run mutating Reddit or LinkedIn workflows.
+Set up the installed rzn-phone capability on this machine. Verify local prerequisites, confirm the connected iPhone is visible, ensure the shipped workflow pack is loaded, and stop after one read-only workflow succeeds. Do not run mutating Reddit or LinkedIn workflows.
 ```
 
 ### Diagnose
 
 ```text
-Diagnose why rzn-phone is not working on this machine. Check Appium, the XCUITest driver, device visibility, MCP config, RZN_PLUGIN_DIR, and WebDriverAgent signing. Fix local setup issues where possible and clearly report any remaining Apple-signing blockers.
+Diagnose why rzn-phone is not working on this machine. Check Appium, the XCUITest driver, device visibility, the installed rzn-phone runtime, MCP config, RZN_PLUGIN_DIR handling, and WebDriverAgent signing. Fix local setup issues where possible and clearly report any remaining Apple-signing blockers.
 ```
 
 ### Safe exploration

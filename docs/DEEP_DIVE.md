@@ -152,14 +152,28 @@ Treat workflows as “content packs”:
 - optionally signed
 - discoverable by the worker at runtime
 
-### 4.2 Suggested layout
+### 4.2 Shipped layout
 
+The repo now emits a real workflow-pack artifact alongside the installable runtime:
+
+```text
+dist/releases/rzn-phone/<version>/macos_universal/
+├── install.sh
+├── rzn-phone-<version>-macos_universal.tar.gz
+├── rzn-phone-workflows-<version>.tar.gz
+├── package/
+└── workflow-pack/
 ```
+
+The workflow pack itself looks like this:
+
+```text
 pack.json
-workflows/
-  safari.google_search.json
-  reddit.read_first_post.json
-  reddit.post_comment.json
+VERSION
+resources/
+  workflows/*.json
+  systems/**/*
+examples/**/*
 ```
 
 `pack.json` should include:
@@ -172,11 +186,17 @@ workflows/
 
 ### 4.3 Installation / discovery
 
-The worker should load packs from:
+Installed discovery path:
 
-1. built-ins under `crates/rzn_phone_worker/resources/workflows/` (always available)
-2. user-provided directories (env-configured), e.g.:
-   - `RZN_IOS_WORKFLOW_DIRS=/path/one:/path/two`
+1. the installed runtime root via `RZN_PLUGIN_DIR=<install-root>`
+2. packaged workflows under `<install-root>/resources/workflows/`
+3. optional extra directories from `RZN_IOS_WORKFLOW_DIRS=/path/one:/path/two`
+
+Operationally that means:
+
+- `make install` installs a self-contained runtime and seeds workflows/examples into it
+- `rzn-phone workflows update` swaps the installed `resources/` + `examples/` tree from `rzn-phone-workflows-<version>.tar.gz`
+- the worker stays generic; only the data pack changes
 
 ### 4.4 Signing
 
@@ -207,7 +227,7 @@ Use a combination of:
 2. Run it via `scripts/rzn_phone.sh workflow-smoke ...` or host dev-mount
 3. Tighten selectors (prefer accessibility id)
 4. Add commit gates for destructive steps
-5. Publish as workflow pack (or bundle into plugin for now)
+5. Build/publish the workflow pack and refresh with `rzn-phone workflows update`
 
 ### 5.3 Migrating compiled workflows (legacy → data-only)
 

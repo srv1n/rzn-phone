@@ -146,7 +146,7 @@ def resolve_devkit_bin(explicit: str) -> str:
 
     candidates = [
         shutil.which("rzn-plugin-devkit"),
-        "/Users/sarav/Downloads/side/rzn/rzn-browser-native/target/release/rzn-plugin-devkit",
+        "/Users/sarav/Downloads/side/rzn/rzn-browser/target/release/rzn-plugin-devkit",
         "/Users/sarav/Downloads/side/rzn/rzn-python-sandbox/target/release/rzn-plugin-devkit",
     ]
     for candidate in candidates:
