@@ -12,10 +12,10 @@ Reddit workflow notes are documented in `docs/reddit_workflows.md`.
 
 ## What this repo contains
 
-- Rust MCP stdio worker (`crates/rzn_ios_tools_worker`)
+- Rust MCP stdio worker (`crates/rzn_phone_worker`)
 - Dev-mountable Claude-compatible plugin config (`claude_plugin/rzn-phone`)
 - Signed bundle config for `rzn-plugin-devkit` (`plugin_bundle/rzn-phone.bundle.json`)
-- System metadata for phone-facing surfaces (`crates/rzn_ios_tools_worker/resources/systems/*`)
+- System metadata for phone-facing surfaces (`crates/rzn_phone_worker/resources/systems/*`)
 - Starter phone-system examples (`examples/phone_messages`, `examples/phone_calls`, `examples/phone_notifications`)
 - Build/package/smoke scripts (`scripts/*`)
 
@@ -49,7 +49,7 @@ Current repo-local equivalents:
 
 `rzn-phone` is the public repo/package/CLI name.
 
-Internal Rust crate paths still use `rzn_ios_tools_worker` for now. That is an implementation detail, not a supported external contract.
+Internal Rust crate/package naming is aligned on `rzn_phone_worker`.
 
 ## Phone system surface
 
@@ -130,7 +130,7 @@ If you launch RZN from Finder and PATH is minimal, `RZN_IOS_APPIUM_URL` is the m
 Build release worker:
 
 ```bash
-cargo build -p rzn_ios_tools_worker --release
+cargo build -p rzn_phone_worker --release
 ```
 
 Build universal macOS binary:
@@ -151,9 +151,9 @@ Unified local CLI:
 
 Binary build behavior:
 
-- Default: reuse existing `target/release/rzn_ios_tools_worker`; build only if missing.
-- `IOS_TOOLS_FORCE_BUILD=1`: force rebuild before command.
-- `IOS_TOOLS_SKIP_BUILD=1`: never build (fails if binary is missing).
+- Default: reuse existing `target/release/rzn-phone-worker`; build only if missing.
+- `RZN_PHONE_FORCE_BUILD=1`: force rebuild before command.
+- `RZN_PHONE_SKIP_BUILD=1`: never build (fails if binary is missing).
 
 ## Smoke test (stdin/stdout MCP)
 
@@ -358,7 +358,7 @@ Reddit DM flows (LM-safe dry-run first):
 Single-session Reddit operation (open + like + comment + optional reply in one worker run):
 
 ```bash
-IOS_TOOLS_SKIP_BUILD=1 \
+RZN_PHONE_SKIP_BUILD=1 \
 ./scripts/rzn_phone.sh reddit-engage-seq <udid> "Draft comment text" \
   --execute-like 0 --execute-comment 0 --commit 0 --out /tmp/reddit-engage-seq
 ```

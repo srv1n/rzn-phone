@@ -15,7 +15,7 @@ This repo now includes first-pass Reddit workflows for iOS real devices:
 - `reddit.send_dm_by_username`
 - `reddit.reply_dm_thread`
 
-These are data-only workflows loaded from `crates/rzn_ios_tools_worker/resources/workflows/`.
+These are data-only workflows loaded from `crates/rzn_phone_worker/resources/workflows/`.
 
 ## Run Commands
 
@@ -53,7 +53,7 @@ DM targeting + send/reply (dry-run first):
 Single-session operation (reduces repeated session bootstrap between actions):
 
 ```bash
-IOS_TOOLS_SKIP_BUILD=1 \
+RZN_PHONE_SKIP_BUILD=1 \
 ./scripts/rzn_phone.sh reddit-engage-seq <udid> "Test dry-run comment" \
   --execute-like 0 --execute-comment 0 --commit 0 --out /tmp/reddit-engage-seq
 ```

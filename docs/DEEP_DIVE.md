@@ -174,7 +174,7 @@ workflows/
 
 The worker should load packs from:
 
-1. built-ins under `crates/rzn_ios_tools_worker/resources/workflows/` (always available)
+1. built-ins under `crates/rzn_phone_worker/resources/workflows/` (always available)
 2. user-provided directories (env-configured), e.g.:
    - `RZN_IOS_WORKFLOW_DIRS=/path/one:/path/two`
 

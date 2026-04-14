@@ -197,7 +197,7 @@ fn workflow_search_dirs() -> Vec<PathBuf> {
 
     // Dev fallback (repo root as cwd in claude_plugin/.mcp.json).
     dirs.push(PathBuf::from(
-        "crates/rzn_ios_tools_worker/resources/workflows",
+        "crates/rzn_phone_worker/resources/workflows",
     ));
 
     if let Ok(extra) = env::var("RZN_IOS_WORKFLOW_DIRS") {

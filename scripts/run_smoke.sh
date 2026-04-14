@@ -4,9 +4,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-BIN="$ROOT/target/release/rzn_ios_tools_worker"
+BIN="$ROOT/target/release/rzn-phone-worker"
 echo "[build] compiling release worker"
-cargo build -p rzn_ios_tools_worker --release >/dev/null
+cargo build -p rzn_phone_worker --release >/dev/null
 
 echo "[smoke] initialize + tools/list"
 cat <<'JSON' | "$BIN"

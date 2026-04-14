@@ -101,13 +101,13 @@ EOF
 }
 
 worker_bin() {
-  local bin="$ROOT/target/release/rzn_ios_tools_worker"
-  local force_build="${IOS_TOOLS_FORCE_BUILD:-0}"
-  local skip_build="${IOS_TOOLS_SKIP_BUILD:-0}"
+  local bin="$ROOT/target/release/rzn-phone-worker"
+  local force_build="${RZN_PHONE_FORCE_BUILD:-0}"
+  local skip_build="${RZN_PHONE_SKIP_BUILD:-0}"
 
   if [[ "$skip_build" == "1" ]]; then
     if [[ ! -x "$bin" ]]; then
-      echo "missing worker binary at $bin (run scripts/rzn_phone.sh build or unset IOS_TOOLS_SKIP_BUILD)" >&2
+      echo "missing worker binary at $bin (run scripts/rzn_phone.sh build or unset RZN_PHONE_SKIP_BUILD)" >&2
       exit 1
     fi
     echo "$bin"
@@ -115,7 +115,7 @@ worker_bin() {
   fi
 
   if [[ "$force_build" == "1" || ! -x "$bin" ]]; then
-    cargo build -p rzn_ios_tools_worker --release >/dev/null
+    cargo build -p rzn_phone_worker --release >/dev/null
   fi
   echo "$bin"
 }
@@ -621,13 +621,13 @@ fi
 
 case "$cmd" in
   build)
-    cargo build -p rzn_ios_tools_worker --release
+    cargo build -p rzn_phone_worker --release
     ;;
   build-universal)
     "$ROOT/scripts/build_universal.sh"
     ;;
   test)
-    cargo test -p rzn_ios_tools_worker
+    cargo test -p rzn_phone_worker
     ;;
   smoke)
     "$ROOT/scripts/run_smoke.sh"

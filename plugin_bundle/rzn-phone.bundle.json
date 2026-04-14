@@ -80,13 +80,13 @@
       "mode": "755"
     },
     {
-      "source": "$RZN_PHONE_ROOT/crates/rzn_ios_tools_worker/resources/workflows",
+      "source": "$RZN_PHONE_ROOT/crates/rzn_phone_worker/resources/workflows",
       "dest": "resources/workflows",
       "platforms": ["macos_universal"],
       "mode": "644"
     },
     {
-      "source": "$RZN_PHONE_ROOT/crates/rzn_ios_tools_worker/resources/systems",
+      "source": "$RZN_PHONE_ROOT/crates/rzn_phone_worker/resources/systems",
       "dest": "resources/systems",
       "platforms": ["macos_universal"],
       "mode": "644"

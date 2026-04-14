@@ -12,7 +12,7 @@ This repo now includes first-pass LinkedIn workflows for iOS real devices:
 - `linkedin.update_latest_post`
 - `linkedin.delete_latest_post`
 
-These are data-only workflows loaded from `crates/rzn_ios_tools_worker/resources/workflows/`.
+These are data-only workflows loaded from `crates/rzn_phone_worker/resources/workflows/`.
 
 ## Selector Baseline (Observed)
 
@@ -37,7 +37,7 @@ List workflows:
 
 ```bash
 ./scripts/rzn_phone.sh build >/dev/null
-./target/release/rzn_ios_tools_worker <<'JSON'
+./target/release/rzn-phone-worker <<'JSON'
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-list-1","method":"tools/call","params":{"name":"ios.workflow.list","arguments":{}}}

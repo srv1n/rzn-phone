@@ -29,7 +29,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKER_BIN = ROOT / "target" / "release" / "rzn_ios_tools_worker"
+WORKER_BIN = ROOT / "target" / "release" / "rzn-phone-worker"
 WORKFLOW_NAME = "appstore.post_review"
 
 
@@ -150,14 +150,14 @@ def resolve_bundle_id(job: dict[str, Any]) -> str:
 
 
 def resolve_worker_bin() -> Path:
-    if bool_env("IOS_TOOLS_SKIP_BUILD", False):
+    if bool_env("RZN_PHONE_SKIP_BUILD", False):
         if not WORKER_BIN.exists():
             raise RuntimeError(f"missing worker binary at {WORKER_BIN}")
         return WORKER_BIN
 
-    if bool_env("IOS_TOOLS_FORCE_BUILD", False) or not WORKER_BIN.exists():
+    if bool_env("RZN_PHONE_FORCE_BUILD", False) or not WORKER_BIN.exists():
         subprocess.run(
-            ["cargo", "build", "-p", "rzn_ios_tools_worker", "--release"],
+            ["cargo", "build", "-p", "rzn_phone_worker", "--release"],
             cwd=ROOT,
             check=True,
         )
