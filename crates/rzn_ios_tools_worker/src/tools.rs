@@ -24,7 +24,7 @@ pub fn list_tool_definitions() -> Vec<Value> {
     vec![
         tool(
             "rzn.worker.health",
-            "Health check and runtime status for ios-tools worker.",
+            "Health check and runtime status for the rzn-phone worker runtime.",
             json!({ "type": "object", "properties": {}, "additionalProperties": false }),
         ),
         tool(
@@ -1187,7 +1187,7 @@ async fn worker_health(state: &AppState) -> Result<Value> {
     Ok(tool_success(
         json!({
             "ok": true,
-            "id": "ios-tools/ios",
+            "id": "rzn-phone/ios",
             "plugin_version": std::env::var("RZN_PLUGIN_VERSION").unwrap_or_else(|_| "dev".to_string()),
             "mcp_protocol_version": "2025-06-18",
             "ready": true,

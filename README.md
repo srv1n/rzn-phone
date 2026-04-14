@@ -1,6 +1,8 @@
-# ios-tools (RZN Worker Plugin)
+# rzn-phone
 
-`ios-tools` is a standalone signed worker plugin that adds iOS real-device automation to RZN via Appium/XCUITest.
+`rzn-phone` is the public RZN capability/package for iOS real-device automation via Appium/XCUITest.
+The shipped implementation is still backed by the `rzn-ios-tools-worker` binary plus a few repo-local
+`ios_tools` helper scripts, but those are implementation details, not the primary contract.
 
 For the next-phase design (compact snapshots, encoded ids, deterministic runner, and workflow packs), see `docs/DEEP_DIVE.md`.
 Workflow format standardization is described in `docs/specs/rzn_mobile_workflow_v1.md`.
@@ -12,11 +14,44 @@ Reddit workflow notes are documented in `docs/reddit_workflows.md`.
 ## What this repo contains
 
 - Rust MCP stdio worker (`crates/rzn_ios_tools_worker`)
-- Dev-mountable Claude-compatible plugin config (`claude_plugin/ios-tools`)
-- Signed bundle config for `rzn-plugin-devkit` (`plugin_bundle/ios-tools.bundle.json`)
+- Dev-mountable Claude-compatible plugin config (`claude_plugin/rzn-phone`)
+- Signed bundle config for `rzn-plugin-devkit` (`plugin_bundle/rzn-phone.bundle.json`)
 - System metadata for phone-facing surfaces (`crates/rzn_ios_tools_worker/resources/systems/*`)
 - Starter phone-system examples (`examples/phone_messages`, `examples/phone_calls`, `examples/phone_notifications`)
 - Build/package/smoke scripts (`scripts/*`)
+
+## Capability contract
+
+Public docs and operator examples should lead with the capability name, not the worker implementation:
+
+| Surface | Canonical form | Notes |
+| --- | --- | --- |
+| Standalone command | `rzn-phone ...` | public standalone capability grammar |
+| Umbrella command | `rzn phone ...` | same capability under the `rzn` umbrella |
+| Repo-local helper today | `./scripts/ios_tools.sh ...` | internal helper script retained for compatibility |
+
+Examples:
+
+```bash
+rzn-phone doctor
+rzn-phone workflow run safari.google_search --udid <udid>
+rzn phone doctor
+rzn phone workflow run safari.google_search --udid <udid>
+```
+
+Current repo-local equivalents:
+
+```bash
+./scripts/ios_tools.sh doctor
+./scripts/ios_tools.sh workflow-smoke <udid> "best headphones 2026" 5
+```
+
+## Naming boundary
+
+| Keep public/canonical | Keep internal/compat | Why |
+| --- | --- | --- |
+| `rzn-phone` bundle id, docs, examples, tester kit | `rzn-ios-tools-worker`, `ios_tools.sh`, `publish_ios_tools_release.py` | changing every plumbing name right now buys churn, not value |
+| `rzn-phone ...` and `rzn phone ...` command grammar | legacy alias files under `ios-tools` paths | existing local tooling should not explode during the rename |
 
 ## Phone system surface
 
@@ -55,7 +90,7 @@ Current implementation status:
 ## Safety notes
 
 - `ios.web.eval_js` is intentionally exposed and high-risk. It can mutate page state.
-- Use host approval controls for `mcp:plugin.ios-tools.ios:*` when running in autonomous flows.
+- Use host approval controls for `mcp:plugin.rzn-phone.ios:*` when running in autonomous flows.
 - `ios.workflow.run` supports `commit`; mutating workflows enforce `requiresCommit` at step level.
 - `ios.workflow.run` supports post-run controls: `disconnectOnFinish`, `stopAppiumOnFinish`, `backgroundAppOnFinish`, and `lockDeviceOnFinish`.
 - Reddit and LinkedIn engagement workflows use a dual gate: action arg (`execute_*`/`submit`) plus `commit=true`.
@@ -141,7 +176,7 @@ rzn-host --port 18789
 Mount this plugin directory:
 
 ```bash
-rznctl claude plugins dev-mount /Users/sarav/Downloads/side/rzn/phone/claude_plugin/ios-tools
+rznctl claude plugins dev-mount /Users/sarav/Downloads/side/rzn/rzn-phone/claude_plugin/rzn-phone
 ```
 
 List tools:
@@ -170,9 +205,9 @@ Or via unified CLI:
 
 This writes and verifies:
 
-- `dist/plugins/ios-tools/0.1.0/macos_universal/ios-tools-0.1.0-macos_universal.zip`
-- `dist/plugins/ios-tools/0.1.0/macos_universal/plugin.json`
-- `dist/plugins/ios-tools/0.1.0/macos_universal/plugin.sig`
+- `dist/plugins/rzn-phone/0.1.0/macos_universal/rzn-phone-0.1.0-macos_universal.zip`
+- `dist/plugins/rzn-phone/0.1.0/macos_universal/plugin.json`
+- `dist/plugins/rzn-phone/0.1.0/macos_universal/plugin.sig`
 
 The resulting ZIP now also includes:
 
@@ -182,6 +217,36 @@ The resulting ZIP now also includes:
 - `examples/phone_messages/...`
 - `examples/phone_calls/...`
 - `examples/phone_notifications/...`
+
+## Backend Publish Contract
+
+Building the ZIP is only the packaging half of the release.
+
+If the bundle should become visible through the backend-served plugin catalog, complete the
+backend publish contract from:
+
+- `/Users/sarav/Downloads/side/rzn/backend/docs/runbook/plugin_team_release_guide.md`
+
+Recommended release pass:
+
+```bash
+python3 scripts/publish_ios_tools_release.py --channel stable --targets all
+```
+
+That command:
+
+- publishes to local `http://localhost:8082` first,
+- then publishes to cloud `https://cloud.rzn.ai`,
+- verifies `/plugins/index.json`, `/plugins/index.sig`, and the served artifact path after publish.
+
+Legacy `prod` target naming is still accepted as an alias for the cloud target when older shells or
+CI jobs are still using `_PROD` environment variables.
+
+Compatibility aliases kept on purpose:
+
+- `plugin_bundle/ios-tools.bundle.json` -> `plugin_bundle/rzn-phone.bundle.json`
+- `examples/ios-tools.mcp.json` -> `examples/rzn-phone.mcp.json`
+- `claude_plugin/ios-tools/` -> `claude_plugin/rzn-phone/`
 
 ## Example `tools/call`
 

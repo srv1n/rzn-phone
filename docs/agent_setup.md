@@ -1,10 +1,11 @@
-# iOS Tools Agent Setup Guide
+# rzn-phone Agent Setup Guide
 
-This guide is for agents that need to set up, diagnose, or safely operate the shipped `ios-tools` plugin on a local macOS machine.
+This guide is for agents that need to set up, diagnose, or safely operate the shipped `rzn-phone`
+plugin on a local macOS machine.
 
 Use it when the user asks an agent to:
 
-- set up ios-tools locally
+- set up rzn-phone locally
 - connect an iPhone and get workflows running
 - diagnose why the worker or workflows are failing
 - use Codex, Cloud Code, or another MCP-capable agent client to drive the plugin
@@ -58,15 +59,15 @@ If any prerequisite fails, stop and fix it before attempting workflow execution.
 
 If the user received the generated tester kit ZIP:
 
-1. Unzip `ios-tools-tester-kit-<version>.zip`.
+1. Unzip `rzn-phone-tester-kit-<version>.zip`.
 2. Run:
 
 ```bash
 ./scripts/tester_doctor.sh
 ```
 
-3. If the doctor passes, unpack `artifacts/ios-tools-<version>-macos_universal.zip`.
-4. Use `examples/ios-tools.mcp.json` as the MCP template.
+3. If the doctor passes, unpack `artifacts/rzn-phone-<version>-macos_universal.zip`.
+4. Use `examples/rzn-phone.mcp.json` as the MCP template.
 5. Keep this guide and `examples/agent-handoff.md` next to the unpacked artifact for future agents.
 
 ## MCP requirements
@@ -76,7 +77,7 @@ Use this minimum MCP server shape:
 ```json
 {
   "mcpServers": {
-    "ios-tools": {
+    "rzn-phone": {
       "command": "/absolute/path/to/unpacked/bin/macos/universal/rzn-ios-tools-worker",
       "args": [],
       "env": {
@@ -176,19 +177,19 @@ Check:
 ### Setup
 
 ```text
-Set up the ios-tools MCP server on this machine. Use the shipped plugin artifact, verify local prerequisites, confirm the connected iPhone is visible, ensure the workflow pack is loaded, and stop after one read-only workflow succeeds. Do not run mutating Reddit or LinkedIn workflows.
+Set up the rzn-phone capability on this machine. Public docs may say `rzn-phone ...` or `rzn phone ...`; this packaged build still uses the shipped MCP worker. Verify local prerequisites, confirm the connected iPhone is visible, ensure the workflow pack is loaded, and stop after one read-only workflow succeeds. Do not run mutating Reddit or LinkedIn workflows.
 ```
 
 ### Diagnose
 
 ```text
-Diagnose why ios-tools is not working on this machine. Check Appium, the XCUITest driver, device visibility, MCP config, RZN_PLUGIN_DIR, and WebDriverAgent signing. Fix local setup issues where possible and clearly report any remaining Apple-signing blockers.
+Diagnose why rzn-phone is not working on this machine. Check Appium, the XCUITest driver, device visibility, MCP config, RZN_PLUGIN_DIR, and WebDriverAgent signing. Fix local setup issues where possible and clearly report any remaining Apple-signing blockers.
 ```
 
 ### Safe exploration
 
 ```text
-Use ios-tools in read-only mode on this machine. Start with ios.env.doctor, ios.device.list, and ios.workflow.list, then run one read-only workflow. Do not use commit=true.
+Use rzn-phone in read-only mode on this machine. Start with ios.env.doctor, ios.device.list, and ios.workflow.list, then run one read-only workflow. Do not use commit=true.
 ```
 
 ## What the agent should report back

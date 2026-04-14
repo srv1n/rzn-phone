@@ -20,8 +20,8 @@ capability_groups:
 setup_steps:
   - id: "install_plugin"
     kind: "install"
-    label: "Install phone automation plugin"
-    description: "Install the signed phone automation bundle."
+    label: "Install rzn-phone plugin"
+    description: "Install the signed rzn-phone bundle."
   - id: "pair_device"
     kind: "runtime"
     label: "Pair device"
@@ -33,7 +33,7 @@ setup_steps:
   - id: "test_connection"
     kind: "connectivity"
     label: "Verify device connection"
-    description: "Confirm the worker can create a session and reach the paired phone."
+    description: "Confirm the worker can create a session and reach the paired iPhone."
 
 context_parameters:
   - id: "device_id"

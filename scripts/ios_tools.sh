@@ -266,10 +266,10 @@ run_workflow_rpc() {
   lock_on_finish_json="$(bool_json "${IOS_WORKFLOW_LOCK_ON_FINISH:-${IOS_LOCK_DEVICE_ON_EXIT:-0}}")"
   shutdown_after_run_json="$(bool_json "${IOS_WORKFLOW_SHUTDOWN_AFTER_RUN:-1}")"
   shutdown_args_json="$(build_shutdown_args_json "$stop_appium_json")"
-  req_file="$(mktemp /tmp/ios-tools-workflow-rpc.XXXXXX.jsonl)"
+  req_file="$(mktemp /tmp/rzn-phone-workflow-rpc.XXXXXX.jsonl)"
 
   cat <<JSON > "$req_file"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"$workflow_name","session":$session_json,"args":$args_json,"commit":$commit_json,"disconnectOnFinish":$disconnect_on_finish_json,"closeOnFinish":$disconnect_on_finish_json,"stopAppiumOnFinish":$stop_appium_on_finish_json,"backgroundAppOnFinish":$background_on_finish_json,"lockDeviceOnFinish":$lock_on_finish_json}}}
 JSON
@@ -635,7 +635,7 @@ case "$cmd" in
   doctor)
     BIN="$(worker_bin)"
     cat <<'JSON' | "$BIN"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"doctor-1","method":"tools/call","params":{"name":"ios.env.doctor","arguments":{}}}
 JSON
@@ -643,7 +643,7 @@ JSON
   devices)
     BIN="$(worker_bin)"
     cat <<'JSON' | "$BIN"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"devices-1","method":"tools/call","params":{"name":"ios.device.list","arguments":{"includeSimulators":false}}}
 JSON
@@ -657,7 +657,7 @@ JSON
     SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_JSON")"
     BIN="$(worker_bin)"
     cat <<JSON | "$BIN"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
@@ -666,7 +666,7 @@ JSON
     PORT="${1:-8100}"
     BIN="$(worker_bin)"
     cat <<JSON | "$BIN"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wda-1","method":"tools/call","params":{"name":"ios.wda.shutdown","arguments":{"port":$PORT}}}
 JSON
@@ -721,7 +721,7 @@ JSON
     fi
     SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_ON_EXIT_JSON")"
     cat <<JSON | "$BIN"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"safari.google_search","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{"query":"$QUERY","limit":$LIMIT},"commit":false}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
@@ -875,7 +875,7 @@ JSON
     fi
     SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_ON_EXIT_JSON")"
     cat <<JSON | "$BIN"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.read_first_post","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{},"commit":false}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
@@ -926,7 +926,7 @@ JSON
     fi
     SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_ON_EXIT_JSON")"
     cat <<JSON | "$BIN"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.comment_first_post","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{"commentText":"$COMMENT_TEXT"},"commit":$COMMIT_JSON}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
@@ -1875,7 +1875,7 @@ JSON
 
     REQ_FILE="$OUT_DIR/.requests.jsonl"
     cat <<JSON > "$REQ_FILE"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-open","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.open_post","session":$SESSION_JSON,"args":$OPEN_ARGS_JSON,"commit":false,"closeOnFinish":false,"stopAppiumOnFinish":false}}}
 {"jsonrpc":"2.0","id":"wf-like","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.like_post","session":$SESSION_JSON,"args":$LIKE_ARGS_JSON,"commit":$COMMIT_JSON,"closeOnFinish":false,"stopAppiumOnFinish":false}}}
@@ -1992,7 +1992,7 @@ JSON
     RAW_OUT="$OUT_DIR/.raw.jsonl"
     SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_ON_EXIT_JSON")"
     cat <<JSON | "$BIN" > "$RAW_OUT"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"appstore.typeahead","session":$SESSION_JSON,"args":$ARGS_JSON,"commit":false}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
@@ -2110,7 +2110,7 @@ JSON
     RAW_OUT="$OUT_DIR/.raw.jsonl"
     SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_ON_EXIT_JSON")"
     cat <<JSON | "$BIN" > "$RAW_OUT"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"appstore.search_results","session":$SESSION_JSON,"args":$ARGS_JSON,"commit":false}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}

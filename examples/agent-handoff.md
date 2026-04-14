@@ -1,10 +1,10 @@
-# Agent Handoff For ios-tools
+# Agent Handoff For rzn-phone
 
-Use this file when an agent is asked to set up or diagnose the local `ios-tools` worker.
+Use this file when an agent is asked to set up or diagnose the local `rzn-phone` capability.
 
 ## Objective
 
-Set up the shipped `ios-tools` plugin on this machine and validate it with one read-only workflow.
+Set up the shipped `rzn-phone` plugin on this machine and validate it with one read-only workflow.
 
 ## Required steps
 

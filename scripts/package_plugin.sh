@@ -11,7 +11,7 @@ DEFAULT_PUB_KEY="/Users/sarav/Downloads/side/rzn/rznapp/.secrets/plugin-signing/
 PRIV_KEY="${1:-$DEFAULT_PRIV_KEY}"
 PUB_KEY="${2:-$DEFAULT_PUB_KEY}"
 PLATFORM="macos_universal"
-CONFIG="$ROOT/plugin_bundle/ios-tools.bundle.json"
+CONFIG="$ROOT/plugin_bundle/rzn-phone.bundle.json"
 OUT_DIR="$ROOT/dist/plugins"
 
 resolve_devkit() {
@@ -27,8 +27,8 @@ resolve_devkit() {
     echo "/Users/sarav/Downloads/side/rzn/rzn-browser-native/target/release/rzn-plugin-devkit"
     return 0
   fi
-  if [[ -x "/Users/sarav/Downloads/side/rzn/pysandbox-rs/target/release/rzn-plugin-devkit" ]]; then
-    echo "/Users/sarav/Downloads/side/rzn/pysandbox-rs/target/release/rzn-plugin-devkit"
+  if [[ -x "/Users/sarav/Downloads/side/rzn/rzn-python-sandbox/target/release/rzn-plugin-devkit" ]]; then
+    echo "/Users/sarav/Downloads/side/rzn/rzn-python-sandbox/target/release/rzn-plugin-devkit"
     return 0
   fi
   return 1
@@ -98,17 +98,17 @@ if [[ "$(is_valid_seed_key "$PRIV_KEY")" != "1" ]]; then
   fi
 fi
 
-echo "[build] packaging signed plugin bundle"
+echo "[build] packaging signed rzn-phone bundle"
 python3 "$ROOT/scripts/build_bundle.py" \
-  --config "$ROOT/plugin_bundle/ios-tools.bundle.json" \
+  --config "$CONFIG" \
   --platform "$PLATFORM" \
   --key "$PRIV_KEY" \
   --out "$OUT_DIR" \
   --devkit "$DEVKIT" >/dev/null
 
-ZIP_PATH="$(ls -1 "$OUT_DIR"/ios-tools/0.1.0/"$PLATFORM"/ios-tools-0.1.0-"$PLATFORM".zip | head -n1)"
-PLUGIN_JSON="$(ls -1 "$OUT_DIR"/ios-tools/0.1.0/"$PLATFORM"/plugin.json | head -n1)"
-PLUGIN_SIG="$(ls -1 "$OUT_DIR"/ios-tools/0.1.0/"$PLATFORM"/plugin.sig | head -n1)"
+ZIP_PATH="$(ls -1 "$OUT_DIR"/rzn-phone/0.1.0/"$PLATFORM"/rzn-phone-0.1.0-"$PLATFORM".zip | head -n1)"
+PLUGIN_JSON="$(ls -1 "$OUT_DIR"/rzn-phone/0.1.0/"$PLATFORM"/plugin.json | head -n1)"
+PLUGIN_SIG="$(ls -1 "$OUT_DIR"/rzn-phone/0.1.0/"$PLATFORM"/plugin.sig | head -n1)"
 
 echo "[verify] verifying plugin bundle"
 "$DEVKIT" verify --public "$PUB_KEY" --input "$PLUGIN_JSON" --sig "$PLUGIN_SIG"

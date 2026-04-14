@@ -34,7 +34,7 @@ WORKFLOW_NAME = "appstore.post_review"
 
 
 def parse_args() -> argparse.Namespace:
-    ap = argparse.ArgumentParser(description="Run an App Store review job through ios-tools.")
+    ap = argparse.ArgumentParser(description="Run an App Store review job through rzn-phone.")
     ap.add_argument("udid", help="Target device UDID")
     ap.add_argument("job", help="Path to review job JSON")
     ap.add_argument("--out", help="Output directory for raw/result/artifacts")

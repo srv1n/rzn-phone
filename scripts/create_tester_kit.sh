@@ -8,21 +8,21 @@ VERSION="$(
   python3 - <<'PY'
 import json
 from pathlib import Path
-config = json.loads(Path("plugin_bundle/ios-tools.bundle.json").read_text(encoding="utf-8"))
+config = json.loads(Path("plugin_bundle/rzn-phone.bundle.json").read_text(encoding="utf-8"))
 print(config["version"])
 PY
 )"
 
 PLATFORM="macos_universal"
-PLUGIN_DIR="$ROOT/dist/plugins/ios-tools/$VERSION/$PLATFORM"
-PLUGIN_ZIP="$PLUGIN_DIR/ios-tools-$VERSION-$PLATFORM.zip"
-KIT_NAME="ios-tools-tester-kit-$VERSION"
+PLUGIN_DIR="$ROOT/dist/plugins/rzn-phone/$VERSION/$PLATFORM"
+PLUGIN_ZIP="$PLUGIN_DIR/rzn-phone-$VERSION-$PLATFORM.zip"
+KIT_NAME="rzn-phone-tester-kit-$VERSION"
 STAGE_DIR="$ROOT/dist/tester-kit/$KIT_NAME"
 ZIP_PATH="$ROOT/dist/tester-kit/$KIT_NAME.zip"
 
 mkdir -p "$ROOT/dist/tester-kit"
 
-echo "[build] packaging signed plugin bundle"
+echo "[build] packaging signed rzn-phone bundle"
 "$ROOT/scripts/package_plugin.sh"
 
 if [[ ! -f "$PLUGIN_ZIP" ]]; then
@@ -40,7 +40,7 @@ cp "$PLUGIN_ZIP" "$STAGE_DIR/artifacts/"
 cp "$ROOT/scripts/tester_doctor.sh" "$STAGE_DIR/scripts/"
 cp "$ROOT/docs/tester_kit.md" "$STAGE_DIR/INSTALL.md"
 cp "$ROOT/docs/agent_setup.md" "$STAGE_DIR/AGENT_SETUP.md"
-cp "$ROOT/examples/ios-tools.mcp.json" "$STAGE_DIR/examples/"
+cp "$ROOT/examples/rzn-phone.mcp.json" "$STAGE_DIR/examples/"
 cp "$ROOT/examples/agent-handoff.md" "$STAGE_DIR/examples/"
 cp -R "$ROOT/cards/social" "$STAGE_DIR/cards/"
 

@@ -1,4 +1,4 @@
-# ios-tools deep dive (primitives, workflows, publishing)
+# rzn-phone deep dive (ios-tools runtime, workflows, publishing)
 
 This doc is a practical guide for scaling iOS automation in RZN with:
 

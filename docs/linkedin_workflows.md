@@ -38,7 +38,7 @@ List workflows:
 ```bash
 ./scripts/ios_tools.sh build >/dev/null
 ./target/release/rzn_ios_tools_worker <<'JSON'
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-list-1","method":"tools/call","params":{"name":"ios.workflow.list","arguments":{}}}
 JSON

@@ -21,7 +21,7 @@ class PayloadFile:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build and sign an ios-tools plugin ZIP.")
+    parser = argparse.ArgumentParser(description="Build and sign the rzn-phone plugin ZIP.")
     parser.add_argument("--config", required=True, help="Path to bundle config JSON.")
     parser.add_argument("--platform", required=True, help="Target platform key.")
     parser.add_argument("--key", required=True, help="Path to Ed25519 private key (base64 seed).")
@@ -147,7 +147,7 @@ def resolve_devkit_bin(explicit: str) -> str:
     candidates = [
         shutil.which("rzn-plugin-devkit"),
         "/Users/sarav/Downloads/side/rzn/rzn-browser-native/target/release/rzn-plugin-devkit",
-        "/Users/sarav/Downloads/side/rzn/pysandbox-rs/target/release/rzn-plugin-devkit",
+        "/Users/sarav/Downloads/side/rzn/rzn-python-sandbox/target/release/rzn-plugin-devkit",
     ]
     for candidate in candidates:
         if candidate and Path(candidate).exists():

@@ -1,4 +1,4 @@
-# iOS Tools Tester Kit
+# rzn-phone Tester Kit
 
 This kit is the easiest way to hand the current build to a friend for evaluation.
 
@@ -15,14 +15,14 @@ Send the generated ZIP from:
 That produces:
 
 ```text
-dist/tester-kit/ios-tools-tester-kit-<version>.zip
+dist/tester-kit/rzn-phone-tester-kit-<version>.zip
 ```
 
 The tester kit contains:
 
-- `artifacts/ios-tools-<version>-macos_universal.zip`: signed plugin bundle with the worker binary and workflow JSON files
+- `artifacts/rzn-phone-<version>-macos_universal.zip`: signed plugin bundle with the worker binary and workflow JSON files
 - `scripts/tester_doctor.sh`: local environment/device preflight
-- `examples/ios-tools.mcp.json`: sample MCP server config for Codex/Claude-style local clients
+- `examples/rzn-phone.mcp.json`: sample MCP server config for Codex/Claude-style local clients
 - `examples/agent-handoff.md`: compact agent-facing setup and diagnosis instructions
 - `AGENT_SETUP.md`: full agent playbook for setup, safe execution, and troubleshooting
 - `cards/social/`: reference card catalogs for higher-level workflow orchestration
@@ -98,7 +98,7 @@ There are two good ways to let a friend test this.
 Use this if they already have the RZN host/runtime that accepts plugin bundles.
 
 1. Unzip the tester kit.
-2. Import or install `artifacts/ios-tools-<version>-macos_universal.zip` into the host.
+2. Import or install `artifacts/rzn-phone-<version>-macos_universal.zip` into the host.
 3. Start Appium locally, or set `RZN_IOS_APPIUM_URL` to an already-running Appium endpoint.
 4. Run the host and call the shipped tools/workflows.
 
@@ -113,12 +113,12 @@ Use this if they want an agent to orchestrate the shipped flows on their own mac
 3. Set `RZN_PLUGIN_DIR` to the unpacked plugin root so the worker can find `resources/workflows`.
 4. Set `RZN_IOS_APPIUM_URL=http://127.0.0.1:4723` unless they use a different Appium endpoint.
 
-The sample config in `examples/ios-tools.mcp.json` shows the shape:
+The sample config in `examples/rzn-phone.mcp.json` shows the shape:
 
 ```json
 {
   "mcpServers": {
-    "ios-tools": {
+    "rzn-phone": {
       "command": "/absolute/path/to/unpacked/bin/macos/universal/rzn-ios-tools-worker",
       "args": [],
       "env": {
@@ -179,7 +179,7 @@ Suggested starter workflows:
 If the tester is using a local coding/agent client, give them a prompt like:
 
 ```text
-Use the ios-tools MCP server on this machine. Start with ios.env.doctor and ios.device.list. If the device is healthy, run a read-only workflow such as safari.google_search or appstore.search_results. Do not use mutating Reddit or LinkedIn workflows unless I explicitly ask.
+Use the rzn-phone capability on this machine. Public command docs may say `rzn-phone ...` or `rzn phone ...`, but this packaged build still runs through the shipped MCP worker. Start with ios.env.doctor and ios.device.list. If the device is healthy, run a read-only workflow such as safari.google_search or appstore.search_results. Do not use mutating Reddit or LinkedIn workflows unless I explicitly ask.
 ```
 
 That is enough to get safe exploration started without teaching them the full tool surface up front.
