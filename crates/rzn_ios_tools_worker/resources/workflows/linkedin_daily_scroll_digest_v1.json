@@ -10,7 +10,7 @@
   },
   "notes": [
     "Read-only workflow for daily feed sweeps.",
-    "Rows contain raw LinkedIn feed card labels; parsing into thread-ready fields is handled by scripts/ios_tools.sh.",
+    "Rows contain raw LinkedIn feed card labels; parsing into thread-ready fields is handled by scripts/rzn_phone.sh.",
     "Best-effort cleanup handles common overlays (left nav panel, Premium upsell, open composer draft)."
   ],
   "steps": [

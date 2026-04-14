@@ -1,8 +1,7 @@
 # rzn-phone
 
 `rzn-phone` is the public RZN capability/package for iOS real-device automation via Appium/XCUITest.
-The shipped implementation is still backed by the `rzn-ios-tools-worker` binary plus a few repo-local
-`ios_tools` helper scripts, but those are implementation details, not the primary contract.
+The shipped implementation is still backed by the repo worker runtime and repo-local `rzn_phone` helper scripts.
 
 For the next-phase design (compact snapshots, encoded ids, deterministic runner, and workflow packs), see `docs/DEEP_DIVE.md`.
 Workflow format standardization is described in `docs/specs/rzn_mobile_workflow_v1.md`.
@@ -28,7 +27,7 @@ Public docs and operator examples should lead with the capability name, not the 
 | --- | --- | --- |
 | Standalone command | `rzn-phone ...` | public standalone capability grammar |
 | Umbrella command | `rzn phone ...` | same capability under the `rzn` umbrella |
-| Repo-local helper today | `./scripts/ios_tools.sh ...` | internal helper script retained for compatibility |
+| Repo-local helper today | `./scripts/rzn_phone.sh ...` | repo-local CLI for build/test/package/device workflows |
 
 Examples:
 
@@ -42,16 +41,15 @@ rzn phone workflow run safari.google_search --udid <udid>
 Current repo-local equivalents:
 
 ```bash
-./scripts/ios_tools.sh doctor
-./scripts/ios_tools.sh workflow-smoke <udid> "best headphones 2026" 5
+./scripts/rzn_phone.sh doctor
+./scripts/rzn_phone.sh workflow-smoke <udid> "best headphones 2026" 5
 ```
 
 ## Naming boundary
 
-| Keep public/canonical | Keep internal/compat | Why |
-| --- | --- | --- |
-| `rzn-phone` bundle id, docs, examples, tester kit | `rzn-ios-tools-worker`, `ios_tools.sh`, `publish_ios_tools_release.py` | changing every plumbing name right now buys churn, not value |
-| `rzn-phone ...` and `rzn phone ...` command grammar | legacy alias files under `ios-tools` paths | existing local tooling should not explode during the rename |
+`rzn-phone` is the public repo/package/CLI name.
+
+Internal Rust crate paths still use `rzn_ios_tools_worker` for now. That is an implementation detail, not a supported external contract.
 
 ## Phone system surface
 
@@ -144,11 +142,11 @@ Build universal macOS binary:
 Unified local CLI:
 
 ```bash
-./scripts/ios_tools.sh build
-./scripts/ios_tools.sh test
-./scripts/ios_tools.sh smoke
-./scripts/ios_tools.sh doctor
-./scripts/ios_tools.sh devices
+./scripts/rzn_phone.sh build
+./scripts/rzn_phone.sh test
+./scripts/rzn_phone.sh smoke
+./scripts/rzn_phone.sh doctor
+./scripts/rzn_phone.sh devices
 ```
 
 Binary build behavior:
@@ -200,7 +198,7 @@ Optional key overrides:
 Or via unified CLI:
 
 ```bash
-./scripts/ios_tools.sh package
+./scripts/rzn_phone.sh package
 ```
 
 This writes and verifies:
@@ -230,7 +228,7 @@ backend publish contract from:
 Recommended release pass:
 
 ```bash
-python3 scripts/publish_ios_tools_release.py --channel stable --targets all
+python3 scripts/publish_rzn_phone_release.py --channel stable --targets all
 ```
 
 That command:
@@ -241,12 +239,6 @@ That command:
 
 Legacy `prod` target naming is still accepted as an alias for the cloud target when older shells or
 CI jobs are still using `_PROD` environment variables.
-
-Compatibility aliases kept on purpose:
-
-- `plugin_bundle/ios-tools.bundle.json` -> `plugin_bundle/rzn-phone.bundle.json`
-- `examples/ios-tools.mcp.json` -> `examples/rzn-phone.mcp.json`
-- `claude_plugin/ios-tools/` -> `claude_plugin/rzn-phone/`
 
 ## Example `tools/call`
 
@@ -291,30 +283,30 @@ Run workflow:
 - Single active session
 - Native automation is best-effort (depends heavily on accessibility ids)
 - No resource store for large artifacts (screenshots are returned inline)
-- If iOS shows **"Automation Running (hold volume buttons to stop)"**, the worker will attempt `GET /wda/shutdown` on cleanup. If it persists, run `./scripts/ios_tools.sh wda-shutdown` (or `./scripts/ios_tools.sh shutdown`) and ensure the device stays unlocked.
+- If iOS shows **"Automation Running (hold volume buttons to stop)"**, the worker will attempt `GET /wda/shutdown` on cleanup. If it persists, run `./scripts/rzn_phone.sh wda-shutdown` (or `./scripts/rzn_phone.sh shutdown`) and ensure the device stays unlocked.
 
 ## Real-device workflow smoke
 
 ```bash
-./scripts/ios_tools.sh workflow-smoke <udid> "best headphones 2026" 5
+./scripts/rzn_phone.sh workflow-smoke <udid> "best headphones 2026" 5
 ```
 
 App Store typeahead + artifact export:
 
 ```bash
-./scripts/ios_tools.sh appstore-typeahead <udid> "voice notes" --out /tmp/appstore-typeahead
+./scripts/rzn_phone.sh appstore-typeahead <udid> "voice notes" --out /tmp/appstore-typeahead
 ```
 
 App Store search results + rank spot-check:
 
 ```bash
-./scripts/ios_tools.sh appstore-search-results <udid> "voice notes" --target-app-name "Voicenotes AI Notes & Meetings" --out /tmp/appstore-results
+./scripts/rzn_phone.sh appstore-search-results <udid> "voice notes" --target-app-name "Voicenotes AI Notes & Meetings" --out /tmp/appstore-results
 ```
 
 App Store smoke (asserts at least 1 suggestion + 1 result row):
 
 ```bash
-./scripts/ios_tools.sh appstore-smoke <udid> "voice notes"
+./scripts/rzn_phone.sh appstore-smoke <udid> "voice notes"
 ```
 
 App Store review job wrapper:
@@ -327,87 +319,87 @@ python3 scripts/appstore_review_job.py <udid> /path/to/job.json --dry-run --skip
 Messages OTP lookup:
 
 ```bash
-./scripts/ios_tools.sh messages-find-otp <udid> --thread-contains "OpenAI"
+./scripts/rzn_phone.sh messages-find-otp <udid> --thread-contains "OpenAI"
 ```
 
 Reddit (read-only):
 
 ```bash
-./scripts/ios_tools.sh reddit-read-smoke <udid>
+./scripts/rzn_phone.sh reddit-read-smoke <udid>
 ```
 
 Reddit (comment submit requires commit=1):
 
 ```bash
-./scripts/ios_tools.sh reddit-comment-smoke <udid> "Nice post — thanks for sharing." 0  # dry run
-./scripts/ios_tools.sh reddit-comment-smoke <udid> "Nice post — thanks for sharing." 1  # commit
+./scripts/rzn_phone.sh reddit-comment-smoke <udid> "Nice post — thanks for sharing." 0  # dry run
+./scripts/rzn_phone.sh reddit-comment-smoke <udid> "Nice post — thanks for sharing." 1  # commit
 ```
 
 Reddit interaction flows (LM-safe dry-run first):
 
 ```bash
-./scripts/ios_tools.sh reddit-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/reddit-daily
-./scripts/ios_tools.sh reddit-open-post <udid> --post-index 0 --out /tmp/reddit-open
-./scripts/ios_tools.sh reddit-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-like-dry
-./scripts/ios_tools.sh reddit-comment-post <udid> "Thanks for sharing this." --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-comment-dry
-./scripts/ios_tools.sh reddit-reply-comment <udid> "Great callout." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/reddit-reply-dry
+./scripts/rzn_phone.sh reddit-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/reddit-daily
+./scripts/rzn_phone.sh reddit-open-post <udid> --post-index 0 --out /tmp/reddit-open
+./scripts/rzn_phone.sh reddit-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-like-dry
+./scripts/rzn_phone.sh reddit-comment-post <udid> "Thanks for sharing this." --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-comment-dry
+./scripts/rzn_phone.sh reddit-reply-comment <udid> "Great callout." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/reddit-reply-dry
 ```
 
 Reddit DM flows (LM-safe dry-run first):
 
 ```bash
-./scripts/ios_tools.sh reddit-open-inbox <udid> --out /tmp/reddit-open-inbox
-./scripts/ios_tools.sh reddit-open-dm-thread <udid> --thread-index 0 --out /tmp/reddit-open-dm-thread
-./scripts/ios_tools.sh reddit-send-dm <udid> "Hey there" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-send-dm-dry
-./scripts/ios_tools.sh reddit-send-dm-user <udid> "chorefit" "Hey there" --execute 0 --commit 0 --out /tmp/reddit-send-dm-user-dry
-./scripts/ios_tools.sh reddit-reply-dm <udid> "Following up here" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-reply-dm-dry
+./scripts/rzn_phone.sh reddit-open-inbox <udid> --out /tmp/reddit-open-inbox
+./scripts/rzn_phone.sh reddit-open-dm-thread <udid> --thread-index 0 --out /tmp/reddit-open-dm-thread
+./scripts/rzn_phone.sh reddit-send-dm <udid> "Hey there" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-send-dm-dry
+./scripts/rzn_phone.sh reddit-send-dm-user <udid> "chorefit" "Hey there" --execute 0 --commit 0 --out /tmp/reddit-send-dm-user-dry
+./scripts/rzn_phone.sh reddit-reply-dm <udid> "Following up here" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-reply-dm-dry
 ```
 
 Single-session Reddit operation (open + like + comment + optional reply in one worker run):
 
 ```bash
 IOS_TOOLS_SKIP_BUILD=1 \
-./scripts/ios_tools.sh reddit-engage-seq <udid> "Draft comment text" \
+./scripts/rzn_phone.sh reddit-engage-seq <udid> "Draft comment text" \
   --execute-like 0 --execute-comment 0 --commit 0 --out /tmp/reddit-engage-seq
 ```
 
 LinkedIn read/create/update/delete:
 
 ```bash
-./scripts/ios_tools.sh linkedin-read-feed <udid> --limit 5 --out /tmp/linkedin-read
-./scripts/ios_tools.sh linkedin-create-post <udid> "Testing workflow draft" --submit 0 --commit 0 --out /tmp/linkedin-create-dry
-./scripts/ios_tools.sh linkedin-update-post <udid> "Updated text from workflow" --execute 0 --commit 0 --out /tmp/linkedin-update-dry
-./scripts/ios_tools.sh linkedin-delete-post <udid> --execute 0 --commit 0 --out /tmp/linkedin-delete-dry
+./scripts/rzn_phone.sh linkedin-read-feed <udid> --limit 5 --out /tmp/linkedin-read
+./scripts/rzn_phone.sh linkedin-create-post <udid> "Testing workflow draft" --submit 0 --commit 0 --out /tmp/linkedin-create-dry
+./scripts/rzn_phone.sh linkedin-update-post <udid> "Updated text from workflow" --execute 0 --commit 0 --out /tmp/linkedin-update-dry
+./scripts/rzn_phone.sh linkedin-delete-post <udid> --execute 0 --commit 0 --out /tmp/linkedin-delete-dry
 ```
 
 LinkedIn interaction flows (LM-safe dry-run first):
 
 ```bash
-./scripts/ios_tools.sh linkedin-open-post <udid> --post-index 0 --max-feed-scrolls 6 --out /tmp/linkedin-open
-./scripts/ios_tools.sh linkedin-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-like-dry
-./scripts/ios_tools.sh linkedin-comment-post <udid> "Nice perspective, thanks for sharing." --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-comment-dry
-./scripts/ios_tools.sh linkedin-reply-comment <udid> "Great point." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/linkedin-reply-dry
+./scripts/rzn_phone.sh linkedin-open-post <udid> --post-index 0 --max-feed-scrolls 6 --out /tmp/linkedin-open
+./scripts/rzn_phone.sh linkedin-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-like-dry
+./scripts/rzn_phone.sh linkedin-comment-post <udid> "Nice perspective, thanks for sharing." --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-comment-dry
+./scripts/rzn_phone.sh linkedin-reply-comment <udid> "Great point." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/linkedin-reply-dry
 ```
 
 LinkedIn daily scroll digest (thread-ready output):
 
 ```bash
-./scripts/ios_tools.sh linkedin-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/linkedin-daily
+./scripts/rzn_phone.sh linkedin-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/linkedin-daily
 ```
 
 Card-based social workflows (catalog-backed):
 
 ```bash
-./scripts/ios_tools.sh social-card-list
-./scripts/ios_tools.sh social-card-list --app linkedin
-./scripts/ios_tools.sh social-card-run linkedin.daily_scroll <udid> --set max_posts=20
-./scripts/ios_tools.sh social-card-run reddit.comment_post <udid> --text "Nice breakdown." --execute 0 --commit 0
+./scripts/rzn_phone.sh social-card-list
+./scripts/rzn_phone.sh social-card-list --app linkedin
+./scripts/rzn_phone.sh social-card-run linkedin.daily_scroll <udid> --set max_posts=20
+./scripts/rzn_phone.sh social-card-run reddit.comment_post <udid> --text "Nice breakdown." --execute 0 --commit 0
 ```
 
 Optional end-of-run cleanup on any workflow command:
 
 ```bash
-./scripts/ios_tools.sh linkedin-like-post <udid> --execute 1 --commit 1 \
+./scripts/rzn_phone.sh linkedin-like-post <udid> --execute 1 --commit 1 \
   --background-on-exit 1 --lock-device-on-exit 1
 ```
 
@@ -426,7 +418,7 @@ IOS_SESSION_CREATE_TIMEOUT_MS=600000 \
 IOS_WDA_LAUNCH_TIMEOUT_MS=240000 \
 IOS_WDA_CONNECTION_TIMEOUT_MS=120000 \
 IOS_STOP_APPIUM_ON_EXIT=1 \
-./scripts/ios_tools.sh workflow-smoke <udid> "best headphones 2026" 5
+./scripts/rzn_phone.sh workflow-smoke <udid> "best headphones 2026" 5
 ```
 
 `workflow-smoke` now sends a final `rzn.worker.shutdown` call to ensure any active XCTest/Appium session is terminated after the run.

@@ -1,4 +1,4 @@
-# rzn-phone deep dive (ios-tools runtime, workflows, publishing)
+# rzn-phone deep dive (runtime, workflows, publishing)
 
 This doc is a practical guide for scaling iOS automation in RZN with:
 
@@ -204,7 +204,7 @@ Use a combination of:
 ### 5.2 Recommended workflow build loop
 
 1. Implement a workflow in JSON (or inline via `ios.script.run`)
-2. Run it via `scripts/ios_tools.sh workflow-smoke ...` or host dev-mount
+2. Run it via `scripts/rzn_phone.sh workflow-smoke ...` or host dev-mount
 3. Tighten selectors (prefer accessibility id)
 4. Add commit gates for destructive steps
 5. Publish as workflow pack (or bundle into plugin for now)
@@ -217,7 +217,7 @@ If a workflow is still implemented in Rust, migrate it into JSON so app-specific
 2. **Map to primitives**: replace each action with the closest `ios.action.*` / `ios.web.*` tool call.
 3. **Add `saveAs` + `output`**: capture intermediate results and compose the final output in the workflow JSON.
 4. **Delete the handler**: remove the compiled workflow function and keep only generic primitives in the worker.
-5. **Validate**: run `scripts/ios_tools.sh workflow-smoke` or a device-specific smoke, then publish the JSON pack.
+5. **Validate**: run `scripts/rzn_phone.sh workflow-smoke` or a device-specific smoke, then publish the JSON pack.
 
 ---
 

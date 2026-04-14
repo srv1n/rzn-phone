@@ -8,7 +8,7 @@ CRATE="rzn_ios_tools_worker"
 AARCH64_BIN="target/aarch64-apple-darwin/release/${CRATE}"
 X86_BIN="target/x86_64-apple-darwin/release/${CRATE}"
 OUT_DIR="dist/bin/macos/universal"
-OUT_BIN="${OUT_DIR}/rzn-ios-tools-worker"
+OUT_BIN="${OUT_DIR}/rzn-phone-worker"
 
 echo "[build] building ${CRATE} for aarch64-apple-darwin"
 cargo build -p "$CRATE" --release --target aarch64-apple-darwin

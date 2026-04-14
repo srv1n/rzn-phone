@@ -2,7 +2,7 @@
   "id": "rzn-phone",
   "version": "0.1.0",
   "name": "RZN Phone",
-  "description": "Public phone automation capability for RZN, implemented by the ios-tools worker runtime",
+  "description": "Public phone automation capability for RZN, implemented by the rzn-phone worker runtime",
   "min_host_version": "0.1.0",
   "mcp_protocol_version": "2025-06-18",
   "requires_entitlement": false,
@@ -15,7 +15,7 @@
       "auto_start": false,
       "tools_namespace": "plugin:rzn-phone",
       "entrypoints": {
-        "macos_universal": "bin/macos/universal/rzn-ios-tools-worker"
+        "macos_universal": "bin/macos/universal/rzn-phone-worker"
       },
       "args": [],
       "env": {}
@@ -74,8 +74,8 @@
   ],
   "payloads": [
     {
-      "source": "$RZN_PHONE_ROOT/dist/bin/macos/universal/rzn-ios-tools-worker",
-      "dest": "bin/macos/universal/rzn-ios-tools-worker",
+      "source": "$RZN_PHONE_ROOT/dist/bin/macos/universal/rzn-phone-worker",
+      "dest": "bin/macos/universal/rzn-phone-worker",
       "platforms": ["macos_universal"],
       "mode": "755"
     },

@@ -22,7 +22,7 @@ Set up the shipped `rzn-phone` plugin on this machine and validate it with one r
 
 3. Configure the MCP client with:
 
-- `command`: `bin/macos/universal/rzn-ios-tools-worker`
+- `command`: `bin/macos/universal/rzn-phone-worker`
 - `RZN_PLUGIN_DIR`: the unpacked plugin root
 - `RZN_IOS_APPIUM_URL`: usually `http://127.0.0.1:4723`
 

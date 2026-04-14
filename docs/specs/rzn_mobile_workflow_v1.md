@@ -10,7 +10,7 @@ Capability naming contract:
 
 - standalone operator docs should use `rzn-phone ...`
 - umbrella/operator docs should use `rzn phone ...`
-- runner internals may still mention legacy implementation names like `ios-tools` where compatibility matters
+- runner internals may still use older implementation labels while repo internals finish converging on `rzn-phone`
 
 This is a **workflow format**, not a runner. A runner (host-side or worker-side) is expected to:
 

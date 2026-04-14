@@ -12,7 +12,7 @@
   },
   "notes": [
     "Read-only workflow for daily feed sweeps.",
-    "Rows contain raw Reddit post card labels; parsing into thread-ready fields is handled by scripts/ios_tools.sh.",
+    "Rows contain raw Reddit post card labels; parsing into thread-ready fields is handled by scripts/rzn_phone.sh.",
     "Pacing uses util.sleep with bounded jitter to avoid fixed interaction cadence."
   ],
   "steps": [

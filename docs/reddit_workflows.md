@@ -22,7 +22,7 @@ These are data-only workflows loaded from `crates/rzn_ios_tools_worker/resources
 Read-only sweep:
 
 ```bash
-./scripts/ios_tools.sh reddit-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/reddit-daily
+./scripts/rzn_phone.sh reddit-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/reddit-daily
 ```
 
 This command writes:
@@ -34,34 +34,34 @@ This command writes:
 Interaction targeting (dry-run first):
 
 ```bash
-./scripts/ios_tools.sh reddit-open-post <udid> --post-index 0 --out /tmp/reddit-open
-./scripts/ios_tools.sh reddit-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-like-dry
-./scripts/ios_tools.sh reddit-comment-post <udid> "Interesting perspective." --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-comment-dry
-./scripts/ios_tools.sh reddit-reply-comment <udid> "Good point." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/reddit-reply-dry
+./scripts/rzn_phone.sh reddit-open-post <udid> --post-index 0 --out /tmp/reddit-open
+./scripts/rzn_phone.sh reddit-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-like-dry
+./scripts/rzn_phone.sh reddit-comment-post <udid> "Interesting perspective." --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-comment-dry
+./scripts/rzn_phone.sh reddit-reply-comment <udid> "Good point." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/reddit-reply-dry
 ```
 
 DM targeting + send/reply (dry-run first):
 
 ```bash
-./scripts/ios_tools.sh reddit-open-inbox <udid> --out /tmp/reddit-open-inbox
-./scripts/ios_tools.sh reddit-open-dm-thread <udid> --thread-index 0 --out /tmp/reddit-open-dm-thread
-./scripts/ios_tools.sh reddit-send-dm <udid> "Hey there" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-send-dm-dry
-./scripts/ios_tools.sh reddit-send-dm-user <udid> "chorefit" "Hey there" --execute 0 --commit 0 --out /tmp/reddit-send-dm-user-dry
-./scripts/ios_tools.sh reddit-reply-dm <udid> "Following up" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-reply-dm-dry
+./scripts/rzn_phone.sh reddit-open-inbox <udid> --out /tmp/reddit-open-inbox
+./scripts/rzn_phone.sh reddit-open-dm-thread <udid> --thread-index 0 --out /tmp/reddit-open-dm-thread
+./scripts/rzn_phone.sh reddit-send-dm <udid> "Hey there" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-send-dm-dry
+./scripts/rzn_phone.sh reddit-send-dm-user <udid> "chorefit" "Hey there" --execute 0 --commit 0 --out /tmp/reddit-send-dm-user-dry
+./scripts/rzn_phone.sh reddit-reply-dm <udid> "Following up" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-reply-dm-dry
 ```
 
 Single-session operation (reduces repeated session bootstrap between actions):
 
 ```bash
 IOS_TOOLS_SKIP_BUILD=1 \
-./scripts/ios_tools.sh reddit-engage-seq <udid> "Test dry-run comment" \
+./scripts/rzn_phone.sh reddit-engage-seq <udid> "Test dry-run comment" \
   --execute-like 0 --execute-comment 0 --commit 0 --out /tmp/reddit-engage-seq
 ```
 
 Optional completion controls (any workflow command):
 
 ```bash
-./scripts/ios_tools.sh reddit-like-post <udid> --execute 1 --commit 1 \
+./scripts/rzn_phone.sh reddit-like-post <udid> --execute 1 --commit 1 \
   --background-on-exit 1 --lock-device-on-exit 1
 ```
 
@@ -82,7 +82,7 @@ REDDIT_COMMENT_SUBMIT_PREDICATE="label == 'Reply' OR label == 'Post'" \
 REDDIT_REPLY_BUTTON_PREDICATE="label CONTAINS[c] 'reply'" \
 REDDIT_REPLY_FIELD_PREDICATE="label CONTAINS[c] 'reply'" \
 REDDIT_REPLY_SUBMIT_PREDICATE="label == 'Reply' OR label == 'Send'" \
-./scripts/ios_tools.sh reddit-comment-post <udid> "Nice write-up." --execute 1 --commit 1
+./scripts/rzn_phone.sh reddit-comment-post <udid> "Nice write-up." --execute 1 --commit 1
 ```
 
 DM flows support additional overrides:
@@ -93,7 +93,7 @@ REDDIT_DM_THREAD_ROW_PREDICATE="type == 'XCUIElementTypeCell'" \
 REDDIT_DM_THREAD_READY_PREDICATE="label CONTAINS[c] 'Message' OR value CONTAINS[c] 'Message'" \
 REDDIT_DM_MESSAGE_FIELD_PREDICATE="label CONTAINS[c] 'Message' OR value CONTAINS[c] 'Message'" \
 REDDIT_DM_SEND_BUTTON_PREDICATE="label == 'Send'" \
-./scripts/ios_tools.sh reddit-send-dm <udid> "hello" --execute 1 --commit 1 --thread-index 0
+./scripts/rzn_phone.sh reddit-send-dm <udid> "hello" --execute 1 --commit 1 --thread-index 0
 ```
 
 If the app is already inside a post detail view, you can broaden `REDDIT_POST_CELL_PREDICATE` to include title nodes:

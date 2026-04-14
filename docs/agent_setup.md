@@ -16,7 +16,7 @@ Prefer read-only verification first. Do not run mutating Reddit or LinkedIn work
 
 The shipped artifact contains:
 
-- the `rzn-ios-tools-worker` MCP binary
+- the `rzn-phone-worker` MCP binary
 - the full shipped workflow pack
 - social card catalogs for higher-level orchestration
 
@@ -43,7 +43,7 @@ Follow this sequence in order:
 5. Confirm a trusted/unlocked physical iPhone is visible in `xcrun xctrace list devices`.
 6. Unpack the shipped plugin artifact.
 7. Configure the MCP client:
-   - `command`: `bin/macos/universal/rzn-ios-tools-worker`
+   - `command`: `bin/macos/universal/rzn-phone-worker`
    - `RZN_PLUGIN_DIR`: unpacked plugin root
    - `RZN_IOS_APPIUM_URL`: typically `http://127.0.0.1:4723`
 8. Start Appium if needed.
@@ -78,7 +78,7 @@ Use this minimum MCP server shape:
 {
   "mcpServers": {
     "rzn-phone": {
-      "command": "/absolute/path/to/unpacked/bin/macos/universal/rzn-ios-tools-worker",
+      "command": "/absolute/path/to/unpacked/bin/macos/universal/rzn-phone-worker",
       "args": [],
       "env": {
         "RZN_PLUGIN_DIR": "/absolute/path/to/unpacked",

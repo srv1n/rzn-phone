@@ -119,7 +119,7 @@ The sample config in `examples/rzn-phone.mcp.json` shows the shape:
 {
   "mcpServers": {
     "rzn-phone": {
-      "command": "/absolute/path/to/unpacked/bin/macos/universal/rzn-ios-tools-worker",
+      "command": "/absolute/path/to/unpacked/bin/macos/universal/rzn-phone-worker",
       "args": [],
       "env": {
         "RZN_PLUGIN_DIR": "/absolute/path/to/unpacked",

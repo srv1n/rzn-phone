@@ -7,7 +7,7 @@ PARSED_ARGS=()
 
 usage() {
   cat <<'EOF'
-Usage: scripts/ios_tools.sh <command> [args]
+Usage: scripts/rzn_phone.sh <command> [args]
 
 Global options (apply to workflow commands):
   --disconnect-on-finish 0|1       Keep/disconnect WebDriver session after each workflow (default: 1).
@@ -107,7 +107,7 @@ worker_bin() {
 
   if [[ "$skip_build" == "1" ]]; then
     if [[ ! -x "$bin" ]]; then
-      echo "missing worker binary at $bin (run scripts/ios_tools.sh build or unset IOS_TOOLS_SKIP_BUILD)" >&2
+      echo "missing worker binary at $bin (run scripts/rzn_phone.sh build or unset IOS_TOOLS_SKIP_BUILD)" >&2
       exit 1
     fi
     echo "$bin"
@@ -695,7 +695,7 @@ JSON
     IOS_WDA_CONNECTION_TIMEOUT_MS="${IOS_WDA_CONNECTION_TIMEOUT_MS:-120000}"
     IOS_STOP_APPIUM_ON_EXIT="${IOS_STOP_APPIUM_ON_EXIT:-1}"
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh workflow-smoke <udid> [query] [limit]" >&2
+      echo "usage: scripts/rzn_phone.sh workflow-smoke <udid> [query] [limit]" >&2
       exit 1
     fi
     BIN="$(worker_bin)"
@@ -788,7 +788,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh messages-find-otp <udid> [--out <dir>] [--max-threads <n>] [--max-messages <n>] [--thread-contains <text>] [--sender-contains <text>] [--message-contains <text>] [--code-length <n>] [--min-code-length <n>] [--max-code-length <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh messages-find-otp <udid> [--out <dir>] [--max-threads <n>] [--max-messages <n>] [--thread-contains <text>] [--sender-contains <text>] [--message-contains <text>] [--code-length <n>] [--min-code-length <n>] [--max-code-length <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -849,7 +849,7 @@ JSON
     IOS_WDA_CONNECTION_TIMEOUT_MS="${IOS_WDA_CONNECTION_TIMEOUT_MS:-120000}"
     IOS_STOP_APPIUM_ON_EXIT="${IOS_STOP_APPIUM_ON_EXIT:-1}"
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-read-smoke <udid>" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-read-smoke <udid>" >&2
       exit 1
     fi
     BIN="$(worker_bin)"
@@ -896,7 +896,7 @@ JSON
     IOS_WDA_CONNECTION_TIMEOUT_MS="${IOS_WDA_CONNECTION_TIMEOUT_MS:-120000}"
     IOS_STOP_APPIUM_ON_EXIT="${IOS_STOP_APPIUM_ON_EXIT:-1}"
     if [[ -z "$UDID" || -z "$COMMENT_TEXT" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-comment-smoke <udid> <commentText> [commit=0|1]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-comment-smoke <udid> <commentText> [commit=0|1]" >&2
       exit 1
     fi
     BIN="$(worker_bin)"
@@ -978,7 +978,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-daily-scroll <udid> [--out <dir>] [--max-posts <n>] [--max-scrolls <n>] [--min-engagement-score <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-daily-scroll <udid> [--out <dir>] [--max-posts <n>] [--max-scrolls <n>] [--min-engagement-score <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -1035,7 +1035,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-open-post <udid> [--out <dir>] [--post-index <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-open-post <udid> [--out <dir>] [--post-index <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -1104,7 +1104,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-like-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-like-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -1179,7 +1179,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$COMMENT_TEXT" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-comment-post <udid> <comment> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-comment-post <udid> <comment> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -1272,7 +1272,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$REPLY_TEXT" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -1340,7 +1340,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-open-inbox <udid> [--out <dir>]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-open-inbox <udid> [--out <dir>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -1406,7 +1406,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-open-dm-thread <udid> [--out <dir>] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-open-dm-thread <udid> [--out <dir>] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -1489,7 +1489,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$MESSAGE_TEXT" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-send-dm <udid> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-send-dm <udid> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -1569,7 +1569,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$USERNAME" || -z "$MESSAGE_TEXT" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-send-dm-user <udid> <username> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--max-thread-scrolls <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-send-dm-user <udid> <username> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--max-thread-scrolls <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -1660,7 +1660,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$MESSAGE_TEXT" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-reply-dm <udid> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-reply-dm <udid> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -1754,7 +1754,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$COMMENT_TEXT" ]]; then
-      echo "usage: scripts/ios_tools.sh reddit-engage-seq <udid> <comment> [--reply <text>] [--out <dir>] [--execute-like 0|1] [--execute-comment 0|1] [--execute-reply 0|1] [--commit 0|1] [--post-index <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh reddit-engage-seq <udid> <comment> [--reply <text>] [--out <dir>] [--execute-like 0|1] [--execute-comment 0|1] [--execute-reply 0|1] [--commit 0|1] [--post-index <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -1952,7 +1952,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$QUERY" ]]; then
-      echo "usage: scripts/ios_tools.sh appstore-typeahead <udid> <query> [--out <dir>] [--limit <n>] [--typing-mode <full|char-by-char>] [--country <cc>] [--locale <locale>]" >&2
+      echo "usage: scripts/rzn_phone.sh appstore-typeahead <udid> <query> [--out <dir>] [--limit <n>] [--typing-mode <full|char-by-char>] [--country <cc>] [--locale <locale>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2067,7 +2067,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$QUERY" ]]; then
-      echo "usage: scripts/ios_tools.sh appstore-search-results <udid> <query> [--out <dir>] [--limit <n>] [--target-app-name <name>] [--max-scrolls <n>] [--submit-mode <suggestion|keyboard>] [--country <cc>] [--locale <locale>]" >&2
+      echo "usage: scripts/rzn_phone.sh appstore-search-results <udid> <query> [--out <dir>] [--limit <n>] [--target-app-name <name>] [--max-scrolls <n>] [--submit-mode <suggestion|keyboard>] [--country <cc>] [--locale <locale>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2137,7 +2137,7 @@ JSON
     UDID="${1:-}"
     QUERY="${2:-voice notes}"
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh appstore-smoke <udid> [query]" >&2
+      echo "usage: scripts/rzn_phone.sh appstore-smoke <udid> [query]" >&2
       exit 1
     fi
 
@@ -2145,8 +2145,8 @@ JSON
     TYPEAHEAD_OUT="$OUT_ROOT/typeahead"
     RESULTS_OUT="$OUT_ROOT/results"
 
-    "$ROOT/scripts/ios_tools.sh" appstore-typeahead "$UDID" "$QUERY" --out "$TYPEAHEAD_OUT" >/dev/null
-    "$ROOT/scripts/ios_tools.sh" appstore-search-results "$UDID" "$QUERY" --out "$RESULTS_OUT" >/dev/null
+    "$ROOT/scripts/rzn_phone.sh" appstore-typeahead "$UDID" "$QUERY" --out "$TYPEAHEAD_OUT" >/dev/null
+    "$ROOT/scripts/rzn_phone.sh" appstore-search-results "$UDID" "$QUERY" --out "$RESULTS_OUT" >/dev/null
 
     TYPEAHEAD_COUNT="$(jq '.suggestions | length' "$TYPEAHEAD_OUT/result.json")"
     RESULTS_COUNT="$(jq '.results | length' "$RESULTS_OUT/result.json")"
@@ -2185,7 +2185,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh linkedin-read-feed <udid> [--out <dir>] [--limit <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh linkedin-read-feed <udid> [--out <dir>] [--limit <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2232,7 +2232,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$QUERY" ]]; then
-      echo "usage: scripts/ios_tools.sh google-maps-place <udid> <query> [--out <dir>]" >&2
+      echo "usage: scripts/rzn_phone.sh google-maps-place <udid> <query> [--out <dir>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2279,7 +2279,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$QUERY" ]]; then
-      echo "usage: scripts/ios_tools.sh google-maps-directions <udid> <query> [--out <dir>]" >&2
+      echo "usage: scripts/rzn_phone.sh google-maps-directions <udid> <query> [--out <dir>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2336,7 +2336,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$QUERY" ]]; then
-      echo "usage: scripts/ios_tools.sh google-maps-start <udid> <query> [--out <dir>] [--execute 0|1] [--commit 0|1]" >&2
+      echo "usage: scripts/rzn_phone.sh google-maps-start <udid> <query> [--out <dir>] [--execute 0|1] [--commit 0|1]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2394,7 +2394,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh linkedin-open-post <udid> [--out <dir>] [--post-index <n>] [--max-feed-scrolls <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh linkedin-open-post <udid> [--out <dir>] [--post-index <n>] [--max-feed-scrolls <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2467,7 +2467,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh linkedin-like-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-feed-scrolls <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh linkedin-like-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-feed-scrolls <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2546,7 +2546,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$COMMENT_TEXT" ]]; then
-      echo "usage: scripts/ios_tools.sh linkedin-comment-post <udid> <comment> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-feed-scrolls <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh linkedin-comment-post <udid> <comment> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-feed-scrolls <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2645,7 +2645,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$REPLY_TEXT" ]]; then
-      echo "usage: scripts/ios_tools.sh linkedin-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-feed-scrolls <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]" >&2
+      echo "usage: scripts/rzn_phone.sh linkedin-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-feed-scrolls <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2725,7 +2725,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$POST_TEXT" ]]; then
-      echo "usage: scripts/ios_tools.sh linkedin-create-post <udid> <text> [--out <dir>] [--submit 0|1] [--commit 0|1]" >&2
+      echo "usage: scripts/rzn_phone.sh linkedin-create-post <udid> <text> [--out <dir>] [--submit 0|1] [--commit 0|1]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2797,7 +2797,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" || -z "$UPDATED_TEXT" ]]; then
-      echo "usage: scripts/ios_tools.sh linkedin-update-post <udid> <text> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh linkedin-update-post <udid> <text> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2882,7 +2882,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh linkedin-delete-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh linkedin-delete-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -2961,7 +2961,7 @@ JSON
       esac
     done
     if [[ -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh linkedin-daily-scroll <udid> [--out <dir>] [--max-posts <n>] [--max-scrolls <n>] [--min-engagement-score <n>]" >&2
+      echo "usage: scripts/rzn_phone.sh linkedin-daily-scroll <udid> [--out <dir>] [--max-posts <n>] [--max-scrolls <n>] [--min-engagement-score <n>]" >&2
       exit 1
     fi
     if [[ -z "$OUT_DIR" ]]; then
@@ -3036,7 +3036,7 @@ JSON
       shift "$#"
     fi
     if [[ -z "$CARD_ID" || -z "$UDID" ]]; then
-      echo "usage: scripts/ios_tools.sh social-card-run <card-id> <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--text <value>] [--set key=value ...]" >&2
+      echo "usage: scripts/rzn_phone.sh social-card-run <card-id> <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--text <value>] [--set key=value ...]" >&2
       exit 1
     fi
 

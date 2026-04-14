@@ -58,7 +58,7 @@ if [[ -z "$DEVKIT" ]]; then
   exit 1
 fi
 
-if [[ ! -x "dist/bin/macos/universal/rzn-ios-tools-worker" ]]; then
+if [[ ! -x "dist/bin/macos/universal/rzn-phone-worker" ]]; then
   echo "[info] universal binary missing, building it first"
   "$ROOT/scripts/build_universal.sh"
 fi

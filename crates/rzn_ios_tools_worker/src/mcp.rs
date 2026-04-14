@@ -110,7 +110,7 @@ pub async fn handle_request(
 
 fn initialize_result() -> Value {
     json!({
-        "name": "rzn-ios-tools-worker",
+        "name": "rzn-phone-worker",
         "version": "0.1.0",
         "protocolVersion": "2025-06-18",
         "capabilities": {
@@ -120,7 +120,7 @@ fn initialize_result() -> Value {
             "experimental": {}
         },
         "serverInfo": {
-            "name": "rzn-ios-tools-worker",
+            "name": "rzn-phone-worker",
             "version": "0.1.0"
         }
     })
@@ -141,7 +141,7 @@ mod tests {
 
         assert_eq!(
             result.get("name").and_then(|value| value.as_str()),
-            Some("rzn-ios-tools-worker")
+            Some("rzn-phone-worker")
         );
         assert!(result.get("serverInfo").is_some());
         assert_eq!(

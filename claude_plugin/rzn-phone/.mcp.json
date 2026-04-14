@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "rzn-phone": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/../../dist/bin/macos/universal/rzn-ios-tools-worker",
+      "command": "${CLAUDE_PLUGIN_ROOT}/../../dist/bin/macos/universal/rzn-phone-worker",
       "args": [],
       "cwd": "${CLAUDE_PLUGIN_ROOT}/../..",
       "env": {
