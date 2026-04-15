@@ -1,148 +1,51 @@
 # rzn-phone
 
-`rzn-phone` is the public RZN capability/package for iOS real-device automation via Appium/XCUITest.
-The shipped implementation is still backed by the repo worker runtime and repo-local `rzn_phone` helper scripts.
+`rzn-phone` installs a local CLI and MCP worker for driving a real iPhone from macOS. It gives you named workflows for browsing, reading, extracting, and carefully gated actions across iOS apps without making you build your own Appium stack from scratch.
 
-For the next-phase design (compact snapshots, encoded ids, deterministic runner, and workflow packs), see `docs/DEEP_DIVE.md`.
-Workflow format standardization is described in `docs/specs/rzn_mobile_workflow_v1.md`.
-Social card standardization is described in `docs/specs/rzn_social_card_v1.md`.
-App Store locator/output notes are documented in `docs/appstore_workflows.md`.
-LinkedIn workflow notes are documented in `docs/linkedin_workflows.md`.
-Reddit workflow notes are documented in `docs/reddit_workflows.md`.
-Release automation, asset matrix, and public-install flow are documented in `docs/releasing.md`.
+Public name is `rzn-phone`. Some RZN hosts expose the same capability as `rzn phone`.
 
-## What this repo contains
+## What you get
 
-- Rust MCP stdio worker (`crates/rzn_phone_worker`)
-- Dev-mountable Claude-compatible plugin config (`claude_plugin/rzn-phone`)
-- Signed bundle config for `rzn-plugin-devkit` (`plugin_bundle/rzn-phone.bundle.json`)
-- System metadata for phone-facing surfaces (`crates/rzn_phone_worker/resources/systems/*`)
-- Starter phone-system examples (`examples/phone_messages`, `examples/phone_calls`, `examples/phone_notifications`)
-- Build/package/smoke scripts (`scripts/*`)
+- A local `rzn-phone` CLI for `doctor`, `devices`, `workflow list`, `workflow run`, and `workflows update`
+- An MCP server entrypoint via `rzn-phone worker`
+- 51 shipped workflows covering Safari, App Store, Google Maps, Reddit, LinkedIn, Instagram, X, and Messages OTP lookup
+- Read-oriented phone system tools for Messages, Calls, and Notifications
+- Structured JSON outputs, plus screenshot/UI-source artifacts where the workflow returns them
+- Updateable workflow packs so the runtime and workflows do not have to ship on the same cadence
 
-## Capability contract
+## Why try it
 
-Public docs and operator examples should lead with the capability name, not the worker implementation:
+Raw Appium is too low-level for repeatable product work. `rzn-phone` packages the annoying parts: device checks, session bootstrap, named workflows, artifacts, and safety gates. Try it if you want phone tasks that are installable, inspectable, and reusable instead of another private script graveyard.
 
-| Surface | Canonical form | Notes |
-| --- | --- | --- |
-| Standalone command | `rzn-phone ...` | public standalone capability grammar |
-| Umbrella command | `rzn phone ...` | same capability under the `rzn` umbrella |
-| Repo-local helper today | `./scripts/rzn_phone.sh ...` | repo-local CLI for build/test/package/device workflows |
+## How it works
 
-Examples:
+1. `rzn-phone doctor` checks the machine and iOS toolchain.
+2. `rzn-phone devices` finds a trusted physical iPhone.
+3. `rzn-phone workflow run <name> --udid <udid>` starts a session, runs a named workflow, and returns structured output.
+4. Mutating steps stay behind two gates: a workflow-specific execute flag and runner-level `commit=true`.
 
-```bash
-rzn-phone doctor
-rzn-phone workflow run safari.google_search --udid <udid>
-rzn phone doctor
-rzn phone workflow run safari.google_search --udid <udid>
+```mermaid
+flowchart LR
+  A["CLI or MCP client"] --> B["rzn-phone runtime"]
+  B --> C["Workflow pack + system metadata"]
+  B --> D["Appium + XCUITest"]
+  D --> E["Trusted physical iPhone"]
+  E --> F["App screens"]
+  B --> G["Structured JSON + screenshots + UI source"]
 ```
 
-Current repo-local equivalents:
+## What you need
 
-```bash
-./scripts/rzn_phone.sh doctor
-./scripts/rzn_phone.sh workflow-smoke <udid> "best headphones 2026" 5
-```
+- macOS with Xcode and command line tools
+- A trusted, unlocked physical iPhone
+- Node.js plus Appium with the `xcuitest` driver
+- App Store signed in on the device if you want stable App Store flows
 
-Installed runtime shape:
-
-```text
-make install
-   |
-   +--> ~/.local/share/rzn-phone/releases/<version>/
-   |      |- bin/rzn-phone
-   |      |- libexec/rzn-phone-worker
-   |      |- resources/workflows/*.json
-   |      `- examples/*
-   |
-   `--> <writable-bin-dir>/rzn-phone   # global shim
-```
-
-## Naming boundary
-
-`rzn-phone` is the public repo/package/CLI name.
-
-Internal Rust crate/package naming is aligned on `rzn_phone_worker`.
-
-## Phone system surface
-
-The signed bundle now carries three system metadata slices so the host can treat phone automation as
-coherent systems instead of one opaque device worker:
-
-| System | Read path | Actuation status |
-| --- | --- | --- |
-| `phone_messages` | list threads, read latest messages, find recent OTPs | not promoted yet |
-| `phone_calls` | inspect recents / call history | not promoted yet |
-| `phone_notifications` | list/filter notifications | not promoted yet |
-
-Current implementation status:
-
-- Metadata lives under `resources/systems/<system_id>/system.metadata.yaml`.
-- Starter examples live under `examples/<system_id>/`.
-- The worker now exposes first-class read-oriented `phone_*` tools that wrap the lower-level
-  `ios.*` primitives, including OTP lookup in recent Messages threads.
-- Side-effectful phone actions are intentionally not promoted in this release; the metadata only
-  advertises the real read surface.
-
-## MVP tool surface
-
-- Worker lifecycle: `rzn.worker.health`, `rzn.worker.shutdown`
-- Environment/device: `ios.env.doctor`, `ios.device.list`, `ios.appium.ensure`
-- Session: `ios.session.create`, `ios.session.delete`, `ios.session.info`
-- UI primitives: `ios.ui.source`, `ios.ui.screenshot`, `ios.ui.observe_compact`
-- Targeting/actions: `ios.target.resolve`, `ios.action.tap`, `ios.action.type`, `ios.action.wait`, `ios.action.scroll`, `ios.action.scroll_until`
-- Element getters (read-only): `ios.element.text`, `ios.element.attribute`, `ios.element.rect`
-- Alerts: `ios.alert.text`, `ios.alert.wait`, `ios.alert.accept`, `ios.alert.dismiss`
-- Deterministic runner: `ios.script.run`
-- Utilities: `util.list.length`, `util.list.first`, `util.list.nth`, `util.rank_by_name`, `util.date.bucket_counts`, `util.sleep`
-- Safari primitives: `ios.web.goto`, `ios.web.wait_css`, `ios.web.click_css`, `ios.web.type_css`, `ios.web.press_key`, `ios.web.page_source`, `ios.web.screenshot`, `ios.web.eval_js`
-- Workflows: `ios.workflow.list`, `ios.workflow.run` (`safari.google_search`, `phone_messages.find_recent_otp`, `reddit.read_first_post`, `reddit.comment_first_post`, `reddit.open_post`, `reddit.daily_scroll_digest`, `reddit.like_post`, `reddit.comment_post`, `reddit.reply_to_comment`, `reddit.open_inbox`, `reddit.open_dm_thread`, `reddit.send_dm`, `reddit.send_dm_by_username`, `reddit.reply_dm_thread`, `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.version_history`, `appstore.screenshots`, `appstore.post_review`, `linkedin.read_feed`, `linkedin.open_post`, `linkedin.daily_scroll_digest`, `linkedin.like_post`, `linkedin.comment_post`, `linkedin.reply_to_comment`, `linkedin.create_post`, `linkedin.update_latest_post`, `linkedin.delete_latest_post`)
-
-## Safety notes
-
-- `ios.web.eval_js` is intentionally exposed and high-risk. It can mutate page state.
-- Use host approval controls for `mcp:plugin.rzn-phone.ios:*` when running in autonomous flows.
-- `ios.workflow.run` supports `commit`; mutating workflows enforce `requiresCommit` at step level.
-- `ios.workflow.run` supports post-run controls: `disconnectOnFinish`, `stopAppiumOnFinish`, `backgroundAppOnFinish`, and `lockDeviceOnFinish`.
-- Reddit and LinkedIn engagement workflows use a dual gate: action arg (`execute_*`/`submit`) plus `commit=true`.
-- `appstore.post_review` is commit-gated and also requires `execute_submit=true`; the browse-oriented App Store workflows remain read-only.
-- LinkedIn write/delete/interaction workflows use `requiresCommit` on mutating taps; run dry with `--commit 0` first.
-- Reddit write/interaction/DM workflows use `requiresCommit` on mutating taps; run dry with `--commit 0` first.
-
-## Prerequisites
-
-- macOS with Xcode installed and a trusted/unlocked iPhone connected
-- App Store signed in on device (for stable search/result rendering)
-- Xcode command line tools (`xcodebuild`, `xcrun`, `xctrace`)
-- Node.js available to the runtime environment
-- Rust toolchain (`cargo`, `rustup`)
-- Rust targets for universal build:
-
-```bash
-rustup target add aarch64-apple-darwin x86_64-apple-darwin
-```
-
-- Python 3 (for plugin ZIP packaging script)
-- `rzn-plugin-devkit` binary (for signing/verifying plugin manifest)
-- Appium + XCUITest driver installed:
-
-```bash
-npm i -g appium
-appium driver install xcuitest
-```
-
-## Appium resolution order
-
-1. `RZN_IOS_APPIUM_URL` (recommended)
-2. Spawn Appium from: `RZN_IOS_APPIUM_BIN`, `appium`, `/opt/homebrew/bin/appium`, `/usr/local/bin/appium`
-
-If you launch RZN from Finder and PATH is minimal, `RZN_IOS_APPIUM_URL` is the most reliable setup.
+If you are building from this repo instead of installing a shipped runtime, you also need Rust and Python 3.
 
 ## Install
 
-Install a self-contained runtime locally and expose `rzn-phone` from a writable bin dir:
+Build and install from this repo:
 
 ```bash
 make install
@@ -150,397 +53,150 @@ rzn-phone version
 rzn-phone workflow list
 ```
 
-What `make install` actually does:
-
-- builds the universal release worker
-- stages a versioned runtime under `~/.local/share/rzn-phone/releases/<version>`
-- installs a global `rzn-phone` shim into the first writable bin dir it finds (`~/.local/bin`, `~/bin`, `/opt/homebrew/bin`, `/usr/local/bin`)
-- seeds examples + workflows into the installed runtime
-- records a local workflow-pack source so `rzn-phone workflows update` can pull fresh packaged workflows later
-
-Useful overrides:
+Install from a staged release directory:
 
 ```bash
-RZN_PHONE_INSTALL_ROOT=/custom/runtime/root RZN_PHONE_BIN_DIR=/custom/bin make install
+sh install.sh --source /absolute/path/to/release-dir
+rzn-phone info
 ```
 
-Installed runtime commands:
+Useful runtime commands:
 
 ```bash
 rzn-phone doctor
 rzn-phone devices
 rzn-phone workflow list
-rzn-phone workflows update
 rzn-phone examples path
-```
-
-## Repo Dev Build
-
-Build release worker:
-
-```bash
-cargo build -p rzn_phone_worker --release
-```
-
-Build universal macOS binary:
-
-```bash
-./scripts/build_universal.sh
-```
-
-Unified local CLI:
-
-```bash
-./scripts/rzn_phone.sh build
-./scripts/rzn_phone.sh test
-./scripts/rzn_phone.sh smoke
-./scripts/rzn_phone.sh doctor
-./scripts/rzn_phone.sh devices
-```
-
-Binary build behavior:
-
-- Default: reuse existing `target/release/rzn-phone-worker`; build only if missing.
-- `RZN_PHONE_FORCE_BUILD=1`: force rebuild before command.
-- `RZN_PHONE_SKIP_BUILD=1`: never build (fails if binary is missing).
-
-## Smoke test (stdin/stdout MCP)
-
-```bash
-./scripts/run_smoke.sh
-```
-
-The script sends `initialize` and `tools/list` JSON-RPC calls and prints responses.
-
-## Dev mount in host
-
-Start host (example):
-
-```bash
-rzn-host --port 18789
-```
-
-Mount this plugin directory:
-
-```bash
-rznctl claude plugins dev-mount /Users/sarav/Downloads/side/rzn/rzn-phone/claude_plugin/rzn-phone
-```
-
-List tools:
-
-```bash
-rznctl tools list
-```
-
-## Package signed plugin bundle
-
-```bash
-./scripts/package_plugin.sh
-```
-
-Optional key overrides:
-
-```bash
-./scripts/package_plugin.sh /path/to/ed25519.private /path/to/ed25519.public
-```
-
-Or via unified CLI:
-
-```bash
-./scripts/rzn_phone.sh package
-```
-
-## Installable Release Artifacts
-
-Build the release assets meant for machine-wide install and workflow/example refresh:
-
-```bash
-make install-artifacts
-```
-
-That writes:
-
-| Artifact | Path | Purpose |
-| --- | --- | --- |
-| Runtime archive | `dist/releases/rzn-phone/<version>/macos_universal/rzn-phone-<version>-macos_universal.tar.gz` | self-contained installable runtime |
-| Workflow pack | `dist/releases/rzn-phone/<version>/macos_universal/rzn-phone-workflows-<version>.tar.gz` | examples + workflows refresh payload |
-| Shell installer | `dist/releases/rzn-phone/<version>/macos_universal/install.sh` | `sh` entrypoint for end-user installs |
-| Checksums | `dist/releases/rzn-phone/<version>/macos_universal/SHA256SUMS` | artifact verification |
-
-Release/install flow:
-
-```bash
-TAG="v<version>"
-VERSION="${TAG#v}"
-BASE="https://github.com/srv1n/rzn-phone/releases/download/${TAG}"
-
-curl -fsSL "$BASE/rzn-phone-install.sh" | sh -s -- \
-  --version "$VERSION" \
-  --archive "$BASE/rzn-phone-${VERSION}-macos_universal.tar.gz"
-```
-
-Why the direct `--archive` URL? GitHub release assets are flat files, not a browsable directory tree. Shell is many things; clairvoyant is not one of them.
-
-Workflow/example refresh from an installed runtime:
-
-```bash
 rzn-phone workflows update
 ```
 
-For a local `make install`, that command defaults to the repo-built release directory under `dist/releases/...`.
+## MCP setup
 
-## Package Signed Plugin Bundle
-
-This writes and verifies:
-
-- `dist/plugins/rzn-phone/<version>/macos_universal/rzn-phone-<version>-macos_universal.zip`
-- `dist/plugins/rzn-phone/<version>/macos_universal/plugin.json`
-- `dist/plugins/rzn-phone/<version>/macos_universal/plugin.sig`
-
-The resulting ZIP now also includes:
-
-- `resources/systems/phone_messages/system.metadata.yaml`
-- `resources/systems/phone_calls/system.metadata.yaml`
-- `resources/systems/phone_notifications/system.metadata.yaml`
-- `examples/phone_messages/...`
-- `examples/phone_calls/...`
-- `examples/phone_notifications/...`
-
-To build both the installable runtime artifacts and the signed plugin ZIP in one shot:
-
-```bash
-make release-artifacts
-```
-
-## GitHub Release Flow
-
-Cut a real GitHub release from `main`:
-
-```bash
-make release NEXT_VERSION=0.2.0
-```
-
-That command bumps the versioned manifests, runs `cargo test -p rzn_phone_worker`, creates tag
-`v0.2.0`, pushes it, and lets GitHub Actions build the public release assets.
-
-Public release assets include:
-
-- macOS universal runtime: `rzn-phone-<version>-macos_universal.tar.gz`
-- macOS Intel worker bundle: `rzn-phone-worker-<version>-macos_x86_64.tar.gz`
-- macOS Apple Silicon worker bundle: `rzn-phone-worker-<version>-macos_arm64.tar.gz`
-- Linux worker bundle: `rzn-phone-worker-<version>-linux_x86_64.tar.gz`
-- Windows worker bundle: `rzn-phone-worker-<version>-windows_x86_64.zip`
-- Shared workflow pack: `rzn-phone-workflows-<version>.tar.gz`
-
-The support boundary is deliberate:
-
-- Full local iOS automation is a macOS story because Xcode/XCUITest are a macOS story.
-- Linux and Windows releases are standalone worker bundles for controller, integration, and remote-host use. They do not turn Windows into a secret Mac.
-
-## Backend Publish Contract
-
-Building the ZIP is only the packaging half of the release.
-
-If the bundle should become visible through the backend-served plugin catalog, complete the
-backend publish contract from:
-
-- `/Users/sarav/Downloads/side/rzn/backend/docs/runbook/plugin_team_release_guide.md`
-
-Recommended release pass:
-
-```bash
-python3 scripts/publish_rzn_phone_release.py --channel stable --targets all
-```
-
-That command:
-
-- publishes to local `http://localhost:8082` first,
-- then publishes to cloud `https://cloud.rzn.ai`,
-- verifies `/plugins/index.json`, `/plugins/index.sig`, and the served artifact path after publish.
-
-Legacy `prod` target naming is still accepted as an alias for the cloud target when older shells or
-CI jobs are still using `_PROD` environment variables.
-
-## Example `tools/call`
-
-Create session:
+Use the installed wrapper as the server command:
 
 ```json
 {
-  "name": "ios.session.create",
-  "arguments": {
-    "udid": "00008110-001C12340E87801E",
-    "kind": "safari_web",
-    "sessionCreateTimeoutMs": 600000,
-    "wdaLaunchTimeoutMs": 240000,
-    "wdaConnectionTimeoutMs": 120000
+  "mcpServers": {
+    "rzn-phone": {
+      "command": "/absolute/path/to/rzn-phone",
+      "args": ["worker"],
+      "env": {
+        "RZN_IOS_APPIUM_URL": "http://127.0.0.1:4723"
+      }
+    }
   }
 }
 ```
 
-Run workflow:
+## First run
 
-```json
-{
-  "name": "ios.workflow.run",
-  "arguments": {
-    "name": "safari.google_search",
-    "session": { "udid": "00008110-001C12340E87801E" },
-    "args": { "query": "best wireless headphones", "limit": 5 },
-    "disconnectOnFinish": true,
-    "backgroundAppOnFinish": true,
-    "lockDeviceOnFinish": false
-  }
-}
-```
-
-## Notification behavior
-
-- JSON-RPC `id` is treated as opaque JSON.
-- Notifications (including `initialized` and `shutdown`) are accepted and never receive responses.
-
-## Known limitations (MVP)
-
-- Single active session
-- Native automation is best-effort (depends heavily on accessibility ids)
-- No resource store for large artifacts (screenshots are returned inline)
-- If iOS shows **"Automation Running (hold volume buttons to stop)"**, the worker will attempt `GET /wda/shutdown` on cleanup. If it persists, run `./scripts/rzn_phone.sh wda-shutdown` (or `./scripts/rzn_phone.sh shutdown`) and ensure the device stays unlocked.
-
-## Real-device workflow smoke
+Start with one read-only workflow:
 
 ```bash
-./scripts/rzn_phone.sh workflow-smoke <udid> "best headphones 2026" 5
+rzn-phone doctor
+rzn-phone devices
+rzn-phone workflow run safari.google_search \
+  --udid <udid> \
+  --args-json '{"query":"best headphones 2026","limit":5}'
 ```
 
-App Store typeahead + artifact export:
+Then move to a domain workflow:
 
 ```bash
-./scripts/rzn_phone.sh appstore-typeahead <udid> "voice notes" --out /tmp/appstore-typeahead
+rzn-phone workflow run appstore.search_results \
+  --udid <udid> \
+  --args-json '{"query":"voice notes","limit":5,"target_app_name":"Voicenotes AI Notes & Meetings"}'
 ```
 
-App Store search results + rank spot-check:
+## Example flows
+
+| Use case | Workflow | What you get |
+| --- | --- | --- |
+| Search the web in mobile Safari | `safari.google_search` | top results and on-device proof |
+| Audit App Store search and listing quality | `appstore.typeahead`, `appstore.search_results`, `appstore.app_details`, `appstore.reviews`, `appstore.screenshots`, `appstore.version_history` | ranking, metadata, reviews, screenshots, version history |
+| Pull a recent OTP from Messages | `phone_messages.find_recent_otp` | recent matching code without hand-driving the Messages UI |
+| Inspect calls or notifications | `phone_calls.list_recent_calls`, `phone_notifications.list_recent_notifications`, `phone_notifications.filter_notifications_by_app` | read-only device state from core phone surfaces |
+| Open a place or directions in Maps | `google_maps.open_place`, `google_maps.open_directions` | captured on-device state for place and route lookup |
+| Build a social browsing digest | `reddit.daily_scroll_digest`, `linkedin.daily_scroll_digest`, `instagram.daily_scroll_digest`, `x.daily_scroll_digest` | structured feed rows for review or downstream ranking |
+| Open a post or DM thread before acting | `*.open_post`, `*.open_inbox`, `*.open_dm_thread` | deterministic targeting without side effects |
+| Draft or perform a gated social action | `reddit.comment_post`, `linkedin.create_post`, `instagram.send_dm`, `x.create_post` | dry-run first, then rerun with approval |
+
+## System integrations
+
+| Surface | What it exposes | Why it matters |
+| --- | --- | --- |
+| `rzn-phone` CLI | install, doctor, device listing, workflow execution, workflow refresh | terminal-first use without wiring raw JSON-RPC by hand |
+| `rzn-phone worker` | stdio MCP server | plug into Codex, Claude-compatible clients, or any MCP-capable host |
+| Workflow pack | versioned JSON workflows under `resources/workflows/` | named flows you can ship, inspect, and update |
+| Phone systems | `phone_messages.*`, `phone_calls.*`, `phone_notifications.*` | read-oriented access to core phone surfaces |
+| Social card catalogs | catalog-backed Reddit/LinkedIn/Instagram/X actions in `cards/social/` | one pattern for browse/read/engage flows across apps |
+| Examples | starter payloads under `examples/` | copy, tweak, run |
+
+## Safety model
+
+Read-only flows are the default path. Mutating flows require both of these:
+
+1. A workflow-specific execute flag such as `execute_comment`, `execute_like`, `execute_send`, or `submit`
+2. `--commit 1` at runtime
+
+That gives you a dry-run path by default:
 
 ```bash
-./scripts/rzn_phone.sh appstore-search-results <udid> "voice notes" --target-app-name "Voicenotes AI Notes & Meetings" --out /tmp/appstore-results
+rzn-phone workflow run linkedin.create_post \
+  --udid <udid> \
+  --args-json '{"text":"Draft only","submit":false}' \
+  --commit 0
 ```
 
-App Store smoke (asserts at least 1 suggestion + 1 result row):
+Cleanup controls are available on every workflow run:
 
-```bash
-./scripts/rzn_phone.sh appstore-smoke <udid> "voice notes"
-```
+- `--disconnect-on-finish 0|1`
+- `--stop-appium-on-finish 0|1`
+- `--background-on-exit 0|1`
+- `--lock-device-on-exit 0|1`
 
-App Store review job wrapper:
+## Current limits
 
-```bash
-python3 scripts/appstore_review_job.py <udid> /path/to/job.json
-python3 scripts/appstore_review_job.py <udid> /path/to/job.json --dry-run --skip-upload
-```
+- Local iOS automation is a macOS story because Xcode/XCUITest are a macOS story
+- One active session at a time
+- Native selectors are best-effort and may need tuning across app builds, locales, and device states
+- Keep the phone unlocked during bootstrap and execution
 
-Messages OTP lookup:
+## Architecture brief
 
-```bash
-./scripts/rzn_phone.sh messages-find-otp <udid> --thread-contains "OpenAI"
-```
+Use this as diagram copy if you are rendering product graphics later.
 
-Reddit (read-only):
+**Runtime path**
 
-```bash
-./scripts/rzn_phone.sh reddit-read-smoke <udid>
-```
+- An operator or agent calls the installed `rzn-phone` CLI or mounts `rzn-phone worker` over MCP
+- The runtime loads named workflows and system metadata from the installed package
+- The worker talks to Appium/XCUITest on macOS
+- Appium drives a trusted physical iPhone
+- The run returns structured JSON and may include screenshots or full UI source
 
-Reddit (comment submit requires commit=1):
+**Safety path**
 
-```bash
-./scripts/rzn_phone.sh reddit-comment-smoke <udid> "Nice post — thanks for sharing." 0  # dry run
-./scripts/rzn_phone.sh reddit-comment-smoke <udid> "Nice post — thanks for sharing." 1  # commit
-```
+- Read workflows can run directly
+- Write workflows still load normally, but side-effectful steps are marked in the workflow
+- The runtime only executes those steps when the workflow execute flag is true and the run also uses `commit=true`
+- This creates a built-in dry-run -> inspect -> approve -> execute loop
 
-Reddit interaction flows (LM-safe dry-run first):
+**Update path**
 
-```bash
-./scripts/rzn_phone.sh reddit-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/reddit-daily
-./scripts/rzn_phone.sh reddit-open-post <udid> --post-index 0 --out /tmp/reddit-open
-./scripts/rzn_phone.sh reddit-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-like-dry
-./scripts/rzn_phone.sh reddit-comment-post <udid> "Thanks for sharing this." --execute 0 --commit 0 --post-index 0 --out /tmp/reddit-comment-dry
-./scripts/rzn_phone.sh reddit-reply-comment <udid> "Great callout." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/reddit-reply-dry
-```
+- The runtime and the workflow pack are versioned separately
+- `rzn-phone workflows update` refreshes workflows/examples without reinstalling the whole runtime
+- This lets selector fixes and workflow additions ship faster than binary changes
 
-Reddit DM flows (LM-safe dry-run first):
+## Repo notes
 
-```bash
-./scripts/rzn_phone.sh reddit-open-inbox <udid> --out /tmp/reddit-open-inbox
-./scripts/rzn_phone.sh reddit-open-dm-thread <udid> --thread-index 0 --out /tmp/reddit-open-dm-thread
-./scripts/rzn_phone.sh reddit-send-dm <udid> "Hey there" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-send-dm-dry
-./scripts/rzn_phone.sh reddit-send-dm-user <udid> "chorefit" "Hey there" --execute 0 --commit 0 --out /tmp/reddit-send-dm-user-dry
-./scripts/rzn_phone.sh reddit-reply-dm <udid> "Following up here" --execute 0 --commit 0 --thread-index 0 --out /tmp/reddit-reply-dm-dry
-```
+This README is the product surface. If you are working inside the repo, start here:
 
-Single-session Reddit operation (open + like + comment + optional reply in one worker run):
-
-```bash
-RZN_PHONE_SKIP_BUILD=1 \
-./scripts/rzn_phone.sh reddit-engage-seq <udid> "Draft comment text" \
-  --execute-like 0 --execute-comment 0 --commit 0 --out /tmp/reddit-engage-seq
-```
-
-LinkedIn read/create/update/delete:
-
-```bash
-./scripts/rzn_phone.sh linkedin-read-feed <udid> --limit 5 --out /tmp/linkedin-read
-./scripts/rzn_phone.sh linkedin-create-post <udid> "Testing workflow draft" --submit 0 --commit 0 --out /tmp/linkedin-create-dry
-./scripts/rzn_phone.sh linkedin-update-post <udid> "Updated text from workflow" --execute 0 --commit 0 --out /tmp/linkedin-update-dry
-./scripts/rzn_phone.sh linkedin-delete-post <udid> --execute 0 --commit 0 --out /tmp/linkedin-delete-dry
-```
-
-LinkedIn interaction flows (LM-safe dry-run first):
-
-```bash
-./scripts/rzn_phone.sh linkedin-open-post <udid> --post-index 0 --max-feed-scrolls 6 --out /tmp/linkedin-open
-./scripts/rzn_phone.sh linkedin-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-like-dry
-./scripts/rzn_phone.sh linkedin-comment-post <udid> "Nice perspective, thanks for sharing." --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-comment-dry
-./scripts/rzn_phone.sh linkedin-reply-comment <udid> "Great point." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/linkedin-reply-dry
-```
-
-LinkedIn daily scroll digest (thread-ready output):
-
-```bash
-./scripts/rzn_phone.sh linkedin-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/linkedin-daily
-```
-
-Card-based social workflows (catalog-backed):
-
-```bash
-./scripts/rzn_phone.sh social-card-list
-./scripts/rzn_phone.sh social-card-list --app linkedin
-./scripts/rzn_phone.sh social-card-run linkedin.daily_scroll <udid> --set max_posts=20
-./scripts/rzn_phone.sh social-card-run reddit.comment_post <udid> --text "Nice breakdown." --execute 0 --commit 0
-```
-
-Optional end-of-run cleanup on any workflow command:
-
-```bash
-./scripts/rzn_phone.sh linkedin-like-post <udid> --execute 1 --commit 1 \
-  --background-on-exit 1 --lock-device-on-exit 1
-```
-
-With explicit WDA signing + xcodebuild logs:
-
-```bash
-security find-identity -v -p codesigning  # find your Team ID, e.g. "(7A99W929U5)"
-
-IOS_XCODE_ORG_ID="<team_id>" \
-IOS_XCODE_SIGNING_ID="Apple Development" \
-IOS_UPDATED_WDA_BUNDLE_ID="com.example.webDriveAgentRunner" \
-IOS_SHOW_XCODE_LOG=1 \
-IOS_ALLOW_PROVISIONING_UPDATES=1 \
-IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION=1 \
-IOS_SESSION_CREATE_TIMEOUT_MS=600000 \
-IOS_WDA_LAUNCH_TIMEOUT_MS=240000 \
-IOS_WDA_CONNECTION_TIMEOUT_MS=120000 \
-IOS_STOP_APPIUM_ON_EXIT=1 \
-./scripts/rzn_phone.sh workflow-smoke <udid> "best headphones 2026" 5
-```
-
-`workflow-smoke` now sends a final `rzn.worker.shutdown` call to ensure any active XCTest/Appium session is terminated after the run.
-Set `IOS_STOP_APPIUM_ON_EXIT=0` if you want to keep a local Appium server running after the smoke.
+- Workflow format spec: [docs/specs/rzn_mobile_workflow_v1.md](docs/specs/rzn_mobile_workflow_v1.md)
+- Social card spec: [docs/specs/rzn_social_card_v1.md](docs/specs/rzn_social_card_v1.md)
+- Agent setup guide: [docs/agent_setup.md](docs/agent_setup.md)
+- App notes: [App Store](docs/appstore_workflows.md), [Reddit](docs/reddit_workflows.md), [LinkedIn](docs/linkedin_workflows.md)
+- Repo-local helper CLI: `./scripts/rzn_phone.sh`
+- Build from source: `cargo build -p rzn_phone_worker --release`
+- Build install artifacts: `make install-artifacts`
+- Build runtime + signed bundle: `make release-artifacts`
+- Public plugin release also requires backend publish registration; use `python3 scripts/publish_rzn_phone_release.py --channel stable --targets all` and the backend runbook at `/Users/sarav/Downloads/side/rzn/backend/docs/runbook/plugin_team_release_guide.md`
