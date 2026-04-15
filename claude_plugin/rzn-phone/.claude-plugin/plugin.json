@@ -1,0 +1,6 @@
+{
+  "name": "rzn-phone",
+  "version": "0.1.0",
+  "description": "Public phone automation capability for RZN, backed by the rzn-phone worker runtime",
+  "author": "RZN"
+}

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "rzn-phone": {
+      "command": "/absolute/path/to/unpacked/bin/macos/universal/rzn-phone-worker",
+      "args": [],
+      "env": {
+        "RZN_PLUGIN_DIR": "/absolute/path/to/unpacked",
+        "RZN_IOS_APPIUM_URL": "http://127.0.0.1:4723"
+      }
+    }
+  }
+}

@@ -18,8 +18,23 @@ bd sync               # Sync with git
   - Completion/cleanup controls: see `### 1.5 Completion and cleanup (runner options)`
 - Social “card” layer (cross-app browse/read/engage): `docs/specs/rzn_social_card_v1.md`
   - Completion controls guidance: see `## 4.1 Completion controls (close out of the app)`
-- Local CLI entrypoint for validating flows end-to-end: `scripts/ios_tools.sh`
+- Local CLI entrypoint for validating flows end-to-end: `scripts/rzn_phone.sh`
   - Global flags for optional close-out behavior: `--disconnect-on-finish`, `--background-on-exit`, `--lock-device-on-exit`
+
+## Plugin Release Requirement
+
+If the task includes building or publishing the public `rzn-phone` capability bundle, release
+completion also requires backend notification using the contract documented at:
+
+- `/Users/sarav/Downloads/side/rzn/backend/docs/runbook/plugin_team_release_guide.md`
+
+For plugin release work:
+
+- Building a ZIP alone is not enough.
+- Notify the backend through the release registration and catalog publish API flow.
+- Publish to local `http://localhost:8082` first, then cloud `https://cloud.rzn.ai`, unless the user explicitly says otherwise.
+- The release script supports `cloud` directly and retains `prod` as a legacy alias.
+- If local or cloud publish fails at any stage, stop and report exactly what failed.
 
 ## Landing the Plane (Session Completion)
 

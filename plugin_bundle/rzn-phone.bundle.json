@@ -1,0 +1,226 @@
+{
+  "id": "rzn-phone",
+  "version": "0.1.1",
+  "name": "RZN Phone",
+  "description": "Public phone automation capability for RZN, implemented by the rzn-phone worker runtime",
+  "min_host_version": "0.1.0",
+  "mcp_protocol_version": "2025-06-18",
+  "requires_entitlement": false,
+  "required_product_ids": [],
+  "platforms": [
+    "macos_universal"
+  ],
+  "workers": [
+    {
+      "id": "ios",
+      "kind": "mcp_stdio",
+      "auto_start": false,
+      "tools_namespace": "plugin:rzn-phone",
+      "entrypoints": {
+        "macos_universal": "bin/macos/universal/rzn-phone-worker"
+      },
+      "args": [],
+      "env": {}
+    }
+  ],
+  "resources": [
+    {
+      "path": "resources/systems/phone_messages/system.metadata.yaml"
+    },
+    {
+      "path": "resources/systems/phone_calls/system.metadata.yaml"
+    },
+    {
+      "path": "resources/systems/phone_notifications/system.metadata.yaml"
+    },
+    {
+      "path": "resources/workflows/appstore_app_details_v1.json"
+    },
+    {
+      "path": "resources/workflows/appstore_reviews_v1.json"
+    },
+    {
+      "path": "resources/workflows/appstore_screenshots_v1.json"
+    },
+    {
+      "path": "resources/workflows/appstore_search_results_v1.json"
+    },
+    {
+      "path": "resources/workflows/appstore_typeahead_v1.json"
+    },
+    {
+      "path": "resources/workflows/appstore_version_history_v1.json"
+    },
+    {
+      "path": "resources/workflows/linkedin_comment_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/linkedin_create_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/linkedin_daily_scroll_digest_v1.json"
+    },
+    {
+      "path": "resources/workflows/linkedin_delete_latest_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/linkedin_like_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/linkedin_open_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/linkedin_read_feed_v1.json"
+    },
+    {
+      "path": "resources/workflows/linkedin_reply_to_comment_v1.json"
+    },
+    {
+      "path": "resources/workflows/linkedin_update_latest_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/instagram_comment_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/instagram_daily_scroll_digest_v1.json"
+    },
+    {
+      "path": "resources/workflows/instagram_like_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/instagram_open_dm_thread_v1.json"
+    },
+    {
+      "path": "resources/workflows/instagram_open_inbox_v1.json"
+    },
+    {
+      "path": "resources/workflows/instagram_open_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/instagram_reply_comment_v1.json"
+    },
+    {
+      "path": "resources/workflows/instagram_reply_dm_thread_v1.json"
+    },
+    {
+      "path": "resources/workflows/instagram_send_dm_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_comment_first_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_comment_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_daily_scroll_digest_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_like_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_open_dm_thread_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_open_inbox_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_open_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_read_first_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_reply_dm_thread_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_reply_to_comment_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_send_dm_by_username_v1.json"
+    },
+    {
+      "path": "resources/workflows/reddit_send_dm_v1.json"
+    },
+    {
+      "path": "resources/workflows/x_create_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/x_daily_scroll_digest_v1.json"
+    },
+    {
+      "path": "resources/workflows/x_like_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/x_open_dm_thread_v1.json"
+    },
+    {
+      "path": "resources/workflows/x_open_inbox_v1.json"
+    },
+    {
+      "path": "resources/workflows/x_open_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/x_reply_dm_thread_v1.json"
+    },
+    {
+      "path": "resources/workflows/x_reply_post_v1.json"
+    },
+    {
+      "path": "resources/workflows/x_send_dm_v1.json"
+    },
+    {
+      "path": "resources/workflows/safari_google_search_v1.json"
+    }
+  ],
+  "payloads": [
+    {
+      "source": "$RZN_PHONE_ROOT/dist/bin/macos/universal/rzn-phone-worker",
+      "dest": "bin/macos/universal/rzn-phone-worker",
+      "platforms": [
+        "macos_universal"
+      ],
+      "mode": "755"
+    },
+    {
+      "source": "$RZN_PHONE_ROOT/crates/rzn_phone_worker/resources/workflows",
+      "dest": "resources/workflows",
+      "platforms": [
+        "macos_universal"
+      ],
+      "mode": "644"
+    },
+    {
+      "source": "$RZN_PHONE_ROOT/crates/rzn_phone_worker/resources/systems",
+      "dest": "resources/systems",
+      "platforms": [
+        "macos_universal"
+      ],
+      "mode": "644"
+    },
+    {
+      "source": "$RZN_PHONE_ROOT/examples/phone_messages",
+      "dest": "examples/phone_messages",
+      "platforms": [
+        "macos_universal"
+      ],
+      "mode": "644"
+    },
+    {
+      "source": "$RZN_PHONE_ROOT/examples/phone_calls",
+      "dest": "examples/phone_calls",
+      "platforms": [
+        "macos_universal"
+      ],
+      "mode": "644"
+    },
+    {
+      "source": "$RZN_PHONE_ROOT/examples/phone_notifications",
+      "dest": "examples/phone_notifications",
+      "platforms": [
+        "macos_universal"
+      ],
+      "mode": "644"
+    }
+  ],
+  "shared_payloads": []
+}

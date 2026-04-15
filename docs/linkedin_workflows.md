@@ -12,7 +12,7 @@ This repo now includes first-pass LinkedIn workflows for iOS real devices:
 - `linkedin.update_latest_post`
 - `linkedin.delete_latest_post`
 
-These are data-only workflows loaded from `crates/rzn_ios_tools_worker/resources/workflows/`.
+These are data-only workflows loaded from `crates/rzn_phone_worker/resources/workflows/`.
 
 ## Selector Baseline (Observed)
 
@@ -36,9 +36,9 @@ LinkedIn IDs vary by account, locale, and app build; update/delete workflows are
 List workflows:
 
 ```bash
-./scripts/ios_tools.sh build >/dev/null
-./target/release/rzn_ios_tools_worker <<'JSON'
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ios-tools-cli","version":"0.1"}}}
+./scripts/rzn_phone.sh build >/dev/null
+./target/release/rzn-phone-worker <<'JSON'
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
 {"jsonrpc":"2.0","id":"wf-list-1","method":"tools/call","params":{"name":"ios.workflow.list","arguments":{}}}
 JSON
@@ -47,13 +47,13 @@ JSON
 Read feed (read-only):
 
 ```bash
-./scripts/ios_tools.sh linkedin-read-feed <udid> --limit 5 --out /tmp/linkedin-read
+./scripts/rzn_phone.sh linkedin-read-feed <udid> --limit 5 --out /tmp/linkedin-read
 ```
 
 Daily scroll digest (read-only + parsed artifacts):
 
 ```bash
-./scripts/ios_tools.sh linkedin-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/linkedin-daily
+./scripts/rzn_phone.sh linkedin-daily-scroll <udid> --max-posts 30 --max-scrolls 8 --min-engagement-score 20 --out /tmp/linkedin-daily
 ```
 
 This command writes:
@@ -65,10 +65,10 @@ This command writes:
 Interaction targeting (read-only open + commit-gated actions):
 
 ```bash
-./scripts/ios_tools.sh linkedin-open-post <udid> --post-index 0 --max-feed-scrolls 6 --out /tmp/linkedin-open
-./scripts/ios_tools.sh linkedin-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-like-dry
-./scripts/ios_tools.sh linkedin-comment-post <udid> "Thanks for sharing this." --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-comment-dry
-./scripts/ios_tools.sh linkedin-reply-comment <udid> "Great callout." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/linkedin-reply-dry
+./scripts/rzn_phone.sh linkedin-open-post <udid> --post-index 0 --max-feed-scrolls 6 --out /tmp/linkedin-open
+./scripts/rzn_phone.sh linkedin-like-post <udid> --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-like-dry
+./scripts/rzn_phone.sh linkedin-comment-post <udid> "Thanks for sharing this." --execute 0 --commit 0 --post-index 0 --out /tmp/linkedin-comment-dry
+./scripts/rzn_phone.sh linkedin-reply-comment <udid> "Great callout." --execute 0 --commit 0 --post-index 0 --reply-index 0 --out /tmp/linkedin-reply-dry
 ```
 
 Each command writes `result.json` and best-effort screenshot/UI-source artifacts; action workflows only mutate when both `--execute 1` and `--commit 1` are set.
@@ -76,25 +76,25 @@ Each command writes `result.json` and best-effort screenshot/UI-source artifacts
 Create post dry-run (prepare draft only, no submit):
 
 ```bash
-./scripts/ios_tools.sh linkedin-create-post <udid> "Testing RZN LinkedIn workflow draft" --submit 0 --commit 0 --out /tmp/linkedin-create-dry
+./scripts/rzn_phone.sh linkedin-create-post <udid> "Testing RZN LinkedIn workflow draft" --submit 0 --commit 0 --out /tmp/linkedin-create-dry
 ```
 
 Create post commit (actual publish):
 
 ```bash
-./scripts/ios_tools.sh linkedin-create-post <udid> "Testing RZN LinkedIn workflow post" --submit 1 --commit 1 --out /tmp/linkedin-create-live
+./scripts/rzn_phone.sh linkedin-create-post <udid> "Testing RZN LinkedIn workflow post" --submit 1 --commit 1 --out /tmp/linkedin-create-live
 ```
 
 Update post dry-run (open edit path and stage updated text):
 
 ```bash
-./scripts/ios_tools.sh linkedin-update-post <udid> "Updated copy from workflow runner" --execute 0 --commit 0 --out /tmp/linkedin-update-dry
+./scripts/rzn_phone.sh linkedin-update-post <udid> "Updated copy from workflow runner" --execute 0 --commit 0 --out /tmp/linkedin-update-dry
 ```
 
 Delete post dry-run (open delete path and stop before delete):
 
 ```bash
-./scripts/ios_tools.sh linkedin-delete-post <udid> --execute 0 --commit 0 --out /tmp/linkedin-delete-dry
+./scripts/rzn_phone.sh linkedin-delete-post <udid> --execute 0 --commit 0 --out /tmp/linkedin-delete-dry
 ```
 
 ## Override Selectors (Update/Delete)
@@ -107,7 +107,7 @@ LINKEDIN_EDIT_ACTION_PREDICATE="label CONTAINS 'Edit'" \
 LINKEDIN_SAVE_ACTION_PREDICATE="label == 'Save'" \
 LINKEDIN_DELETE_ACTION_PREDICATE="label CONTAINS 'Delete post'" \
 LINKEDIN_CONFIRM_DELETE_PREDICATE="label == 'Delete'" \
-./scripts/ios_tools.sh linkedin-update-post <udid> "Updated text" --execute 1 --commit 1
+./scripts/rzn_phone.sh linkedin-update-post <udid> "Updated text" --execute 1 --commit 1
 ```
 
 ## Override Selectors (Interaction Flows)
@@ -124,7 +124,7 @@ LINKEDIN_COMMENT_SUBMIT_PREDICATE="label CONTAINS 'Post comment'" \
 LINKEDIN_REPLY_BUTTON_PREDICATE="label CONTAINS 'Reply'" \
 LINKEDIN_REPLY_FIELD_PREDICATE="label CONTAINS 'Add a reply'" \
 LINKEDIN_REPLY_SUBMIT_PREDICATE="label CONTAINS 'Post reply'" \
-./scripts/ios_tools.sh linkedin-comment-post <udid> "Nice insight." --execute 1 --commit 1
+./scripts/rzn_phone.sh linkedin-comment-post <udid> "Nice insight." --execute 1 --commit 1
 ```
 
 `linkedin-reply-comment` also supports `--target-comment-contains "<text>"` to scroll comments toward a matching thread before tapping a reply button.

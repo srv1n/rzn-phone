@@ -1,0 +1,228 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "instagram.reply_dm_thread",
+  "version": "1.0.0",
+  "description": "Open an Instagram DM thread, draft a reply, and optionally send it with commit gating.",
+  "inputs": {
+    "message_text": { "type": "string", "required": true },
+    "execute_reply": { "type": "boolean", "default": false },
+    "thread_position": { "type": "integer", "default": 1, "min": 1, "max": 30 },
+    "max_visible_threads": { "type": "integer", "default": 20, "min": 1, "max": 60 },
+    "message_field_predicate": { "type": "string", "default": "type == 'XCUIElementTypeTextView' OR type == 'XCUIElementTypeTextField' OR label CONTAINS[c] 'Message' OR name CONTAINS[c] 'Message' OR value CONTAINS[c] 'Message'" },
+    "send_button_predicate": { "type": "string", "default": "type == 'XCUIElementTypeButton' AND (label CONTAINS[c] 'Send' OR name CONTAINS[c] 'Send')" },
+    "maxNodes": { "type": "integer", "default": 260, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Dry-run by default.",
+    "When Instagram DM access is blocked by onboarding or empty-state gating, the workflow returns gate metadata and draft artifacts from that surface instead of pretending reply is available.",
+    "Actual mutation requires both args.execute_reply=true and commit=true."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.burbn.instagram",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.app.activate",
+      "arguments": {
+        "bundleId": "com.burbn.instagram",
+        "terminateFirst": true
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "name == 'mainfeed-tab' OR name == 'direct-inbox-tab' OR name == 'main-feed-screen' OR name == 'main-feed'"
+        },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 2200, "maxMs": 2200 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "direct-inbox-tab" }
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 1800, "maxMs": 1800 } },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "mapGateHeader",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeStaticText",
+          "labelContains": "Instagram map",
+          "max": 1
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "mapGateCount",
+      "arguments": { "list": "{{steps.mapGateHeader.texts}}" }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "emptyState",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeTextView",
+          "labelContains": "Chats will appear here",
+          "max": 1
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "emptyStateCount",
+      "arguments": { "list": "{{steps.emptyState.texts}}" }
+    },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "inboxUiSource" },
+    {
+      "tool": "ios.ui.extract_rows",
+      "saveAs": "threadListRows",
+      "arguments": {
+        "source": "{{steps.inboxUiSource.source}}",
+        "row": {
+          "type": "XCUIElementTypeButton",
+          "ancestorName": "direct-inbox-view",
+          "nameContains": ","
+        },
+        "primary": {
+          "type": "XCUIElementTypeButton",
+          "attr": "name",
+          "pick": "first"
+        },
+        "limit": "{{max_visible_threads}}",
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.nth",
+      "saveAs": "selectedThread",
+      "arguments": { "list": "{{steps.threadListRows.rows}}", "index": "{{thread_position}}" }
+    },
+    {
+      "tool": "util.rank_by_name",
+      "when": { "var": "steps.selectedThread.found", "truthy": true },
+      "saveAs": "selectedThreadRank",
+      "arguments": {
+        "items": "{{steps.threadListRows.rows}}",
+        "field": "rawLabel",
+        "target": "{{steps.selectedThread.value.rawLabel}}"
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.selectedThread.found", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND name CONTAINS ','",
+          "index": "{{steps.selectedThreadRank.index}}"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.selectedThread.found", "truthy": true },
+      "arguments": { "minMs": 2200, "maxMs": 2200 }
+    },
+    {
+      "tool": "ios.action.wait",
+      "when": { "var": "steps.selectedThread.found", "truthy": true },
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{message_field_predicate}}" },
+        "timeoutMs": 12000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.type",
+      "when": { "var": "steps.selectedThread.found", "truthy": true },
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{message_field_predicate}}" },
+        "text": "{{message_text}}",
+        "clearFirst": true
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "draftReplyDmScreenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "draftReplyDmUiSource" },
+    {
+      "tool": "ios.ui.observe_compact",
+      "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+      "saveAs": "draftReplyDmCompactSnapshot"
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "sendButtonVisible",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "labelContains": "Send", "max": 3 },
+        "limit": 3,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "sendButtonVisibleCount",
+      "arguments": { "list": "{{steps.sendButtonVisible.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.sendButtonVisibleCount.count", "truthy": true },
+      "requiresCommit": true,
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{send_button_predicate}}" } }
+    },
+    {
+      "tool": "ios.ui.screenshot",
+      "when": { "var": "steps.sendButtonVisibleCount.count", "truthy": true },
+      "arguments": {},
+      "saveAs": "afterReplyDmScreenshot"
+    }
+  ],
+  "output": {
+    "requestedReply": "{{execute_reply}}",
+    "thread_position": "{{thread_position}}",
+    "mapGateCount": "{{steps.mapGateCount.count}}",
+    "mapGateHeaderTexts": "{{steps.mapGateHeader.texts}}",
+    "emptyStateCount": "{{steps.emptyStateCount.count}}",
+    "emptyStateTexts": "{{steps.emptyState.texts}}",
+    "threadListRows": "{{steps.threadListRows.rows}}",
+    "threadListRowCount": "{{steps.threadListRows.rowCount}}",
+    "selectedThread": "{{steps.selectedThread.value}}",
+    "sendButtonVisibleCount": "{{steps.sendButtonVisibleCount.count}}",
+    "screenshot": "{{steps.draftReplyDmScreenshot}}",
+    "uiSource": "{{steps.draftReplyDmUiSource}}",
+    "compactSnapshot": "{{steps.draftReplyDmCompactSnapshot}}",
+    "afterReplyDmScreenshot": "{{steps.afterReplyDmScreenshot}}"
+  }
+}

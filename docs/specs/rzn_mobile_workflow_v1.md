@@ -6,6 +6,12 @@ This spec defines a **portable workflow format** for mobile automation that:
 - works with **Appium** today (iOS real devices now, Android later)
 - minimizes LLM tokens via **compact observations + encoded ids**
 
+Capability naming contract:
+
+- standalone operator docs should use `rzn-phone ...`
+- umbrella/operator docs should use `rzn phone ...`
+- runner internals may still use older implementation labels while repo internals finish converging on `rzn-phone`
+
 This is a **workflow format**, not a runner. A runner (host-side or worker-side) is expected to:
 
 - validate workflows (JSON Schema)

@@ -1,6 +1,0 @@
-{
-  "name": "ios-tools",
-  "version": "0.1.0",
-  "description": "iOS real-device automation MCP worker (Appium/XCUITest)",
-  "author": "RZN"
-}
