@@ -9,6 +9,7 @@ Social card standardization is described in `docs/specs/rzn_social_card_v1.md`.
 App Store locator/output notes are documented in `docs/appstore_workflows.md`.
 LinkedIn workflow notes are documented in `docs/linkedin_workflows.md`.
 Reddit workflow notes are documented in `docs/reddit_workflows.md`.
+Release automation, asset matrix, and public-install flow are documented in `docs/releasing.md`.
 
 ## What this repo contains
 
@@ -269,11 +270,16 @@ That writes:
 Release/install flow:
 
 ```bash
-BASE_URL="https://downloads.example.com/rzn-phone/0.1.0/macos_universal"
-curl -fsSL "$BASE_URL/install.sh" | sh -s -- --source "$BASE_URL"
+TAG="v<version>"
+VERSION="${TAG#v}"
+BASE="https://github.com/srv1n/rzn-phone/releases/download/${TAG}"
+
+curl -fsSL "$BASE/rzn-phone-install.sh" | sh -s -- \
+  --version "$VERSION" \
+  --archive "$BASE/rzn-phone-${VERSION}-macos_universal.tar.gz"
 ```
 
-Why the extra `--source`? Because once a script is piped into `sh`, it does not know where it came from. Shell is many things; clairvoyant is not one of them.
+Why the direct `--archive` URL? GitHub release assets are flat files, not a browsable directory tree. Shell is many things; clairvoyant is not one of them.
 
 Workflow/example refresh from an installed runtime:
 
@@ -287,9 +293,9 @@ For a local `make install`, that command defaults to the repo-built release dire
 
 This writes and verifies:
 
-- `dist/plugins/rzn-phone/0.1.0/macos_universal/rzn-phone-0.1.0-macos_universal.zip`
-- `dist/plugins/rzn-phone/0.1.0/macos_universal/plugin.json`
-- `dist/plugins/rzn-phone/0.1.0/macos_universal/plugin.sig`
+- `dist/plugins/rzn-phone/<version>/macos_universal/rzn-phone-<version>-macos_universal.zip`
+- `dist/plugins/rzn-phone/<version>/macos_universal/plugin.json`
+- `dist/plugins/rzn-phone/<version>/macos_universal/plugin.sig`
 
 The resulting ZIP now also includes:
 
@@ -305,6 +311,31 @@ To build both the installable runtime artifacts and the signed plugin ZIP in one
 ```bash
 make release-artifacts
 ```
+
+## GitHub Release Flow
+
+Cut a real GitHub release from `main`:
+
+```bash
+make release NEXT_VERSION=0.2.0
+```
+
+That command bumps the versioned manifests, runs `cargo test -p rzn_phone_worker`, creates tag
+`v0.2.0`, pushes it, and lets GitHub Actions build the public release assets.
+
+Public release assets include:
+
+- macOS universal runtime: `rzn-phone-<version>-macos_universal.tar.gz`
+- macOS Intel worker bundle: `rzn-phone-worker-<version>-macos_x86_64.tar.gz`
+- macOS Apple Silicon worker bundle: `rzn-phone-worker-<version>-macos_arm64.tar.gz`
+- Linux worker bundle: `rzn-phone-worker-<version>-linux_x86_64.tar.gz`
+- Windows worker bundle: `rzn-phone-worker-<version>-windows_x86_64.zip`
+- Shared workflow pack: `rzn-phone-workflows-<version>.tar.gz`
+
+The support boundary is deliberate:
+
+- Full local iOS automation is a macOS story because Xcode/XCUITest are a macOS story.
+- Linux and Windows releases are standalone worker bundles for controller, integration, and remote-host use. They do not turn Windows into a secret Mac.
 
 ## Backend Publish Contract
 

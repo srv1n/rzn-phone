@@ -111,7 +111,7 @@ pub async fn handle_request(
 fn initialize_result() -> Value {
     json!({
         "name": "rzn-phone-worker",
-        "version": "0.1.0",
+        "version": env!("CARGO_PKG_VERSION"),
         "protocolVersion": "2025-06-18",
         "capabilities": {
             "tools": { "listChanged": false },
@@ -121,7 +121,7 @@ fn initialize_result() -> Value {
         },
         "serverInfo": {
             "name": "rzn-phone-worker",
-            "version": "0.1.0"
+            "version": env!("CARGO_PKG_VERSION")
         }
     })
 }

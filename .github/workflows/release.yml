@@ -1,0 +1,234 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      version: ${{ steps.vars.outputs.version }}
+      repo: ${{ steps.vars.outputs.repo }}
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate tag/version sync
+        id: vars
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          TAG="${TAG#refs/tags/}"
+          VERSION="${TAG#v}"
+          BUNDLE_VERSION="$(python scripts/release_common.py current-version)"
+
+          if [[ "$VERSION" != "$BUNDLE_VERSION" ]]; then
+            echo "tag $TAG does not match bundle version $BUNDLE_VERSION" >&2
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "repo=${GITHUB_REPOSITORY}" >> "$GITHUB_OUTPUT"
+
+  build-worker:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux_x86_64
+            binary: target/release/rzn-phone-worker
+          - runner: windows-latest
+            platform: windows_x86_64
+            binary: target/release/rzn-phone-worker.exe
+          - runner: macos-13
+            platform: macos_x86_64
+            binary: target/release/rzn-phone-worker
+          - runner: macos-15
+            platform: macos_arm64
+            binary: target/release/rzn-phone-worker
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build worker
+        shell: bash
+        run: cargo build -p rzn_phone_worker --release
+
+      - name: Package standalone worker bundle
+        shell: bash
+        run: |
+          python scripts/build_worker_release_assets.py \
+            --platform "${{ matrix.platform }}" \
+            --binary "${{ matrix.binary }}"
+
+      - name: Upload raw macOS binary
+        if: startsWith(matrix.platform, 'macos_')
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-binary-${{ matrix.platform }}
+          path: ${{ matrix.binary }}
+          if-no-files-found: error
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ matrix.platform }}
+          path: dist/worker-releases/rzn-phone/${{ needs.validate.outputs.version }}/${{ matrix.platform }}
+          if-no-files-found: error
+
+  build-macos-universal:
+    needs: [validate, build-worker]
+    runs-on: macos-15
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download Intel macOS binary
+        uses: actions/download-artifact@v4
+        with:
+          name: raw-binary-macos_x86_64
+          path: dist/raw/macos_x86_64
+
+      - name: Download Apple Silicon macOS binary
+        uses: actions/download-artifact@v4
+        with:
+          name: raw-binary-macos_arm64
+          path: dist/raw/macos_arm64
+
+      - name: Build universal runtime archive
+        shell: bash
+        run: |
+          mkdir -p dist/bin/macos/universal
+          X86_BIN="$(find dist/raw/macos_x86_64 -type f -name 'rzn-phone-worker' | head -n1)"
+          ARM_BIN="$(find dist/raw/macos_arm64 -type f -name 'rzn-phone-worker' | head -n1)"
+          [[ -n "$X86_BIN" ]] || { echo "missing Intel binary" >&2; exit 1; }
+          [[ -n "$ARM_BIN" ]] || { echo "missing arm64 binary" >&2; exit 1; }
+          lipo -create "$X86_BIN" "$ARM_BIN" -output dist/bin/macos/universal/rzn-phone-worker
+          chmod +x dist/bin/macos/universal/rzn-phone-worker
+          python scripts/build_release_artifacts.py --platform macos_universal
+
+      - name: Upload universal runtime assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-macos_universal
+          path: dist/releases/rzn-phone/${{ needs.validate.outputs.version }}/macos_universal
+          if-no-files-found: error
+
+  publish:
+    needs: [validate, build-worker, build-macos-universal]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_RELEASE_NOTES_MODEL: ${{ vars.OPENAI_RELEASE_NOTES_MODEL }}
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download packaged assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-assets-*
+          path: dist/publish
+
+      - name: Rename flat installer asset
+        shell: bash
+        run: |
+          INSTALLER="$(find dist/publish -type f -name 'install.sh' | head -n1 || true)"
+          if [[ -n "$INSTALLER" ]]; then
+            cp "$INSTALLER" dist/publish/rzn-phone-install.sh
+          fi
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          python scripts/generate_release_notes.py \
+            --current-tag "${{ needs.validate.outputs.tag }}" \
+            --repo "${{ needs.validate.outputs.repo }}" \
+            --output dist/release-notes.md
+
+      - name: Publish GitHub release
+        shell: bash
+        run: |
+          TAG="${{ needs.validate.outputs.tag }}"
+          VERSION="${{ needs.validate.outputs.version }}"
+          TITLE="rzn-phone ${VERSION}"
+          mapfile -d '' ASSETS < <(
+            find dist/publish -type f \
+              \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sha256' -o -name 'rzn-phone-install.sh' \) \
+              -print0 | sort -z
+          )
+          [[ "${#ASSETS[@]}" -gt 0 ]] || { echo "no release assets found" >&2; exit 1; }
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+            gh release edit "$TAG" --title "$TITLE" --notes-file dist/release-notes.md --latest
+          else
+            gh release create "$TAG" "${ASSETS[@]}" \
+              --title "$TITLE" \
+              --notes-file dist/release-notes.md \
+              --verify-tag \
+              --latest
+          fi

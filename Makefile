@@ -1,6 +1,6 @@
-.PHONY: build build-universal test smoke install-artifacts workflows-pack plugin-bundle release-artifacts artifacts install
+.PHONY: build build-universal test smoke install-artifacts workflows-pack plugin-bundle release-artifacts artifacts install release release-dry-run
 
-VERSION := $(shell python3 -c 'import json, pathlib; print(json.loads(pathlib.Path("plugin_bundle/rzn-phone.bundle.json").read_text(encoding="utf-8"))["version"])')
+VERSION := $(shell python3 ./scripts/release_common.py current-version)
 PLATFORM := macos_universal
 RELEASE_DIR := dist/releases/rzn-phone/$(VERSION)/$(PLATFORM)
 
@@ -30,3 +30,11 @@ artifacts: release-artifacts
 
 install: install-artifacts
 	./scripts/install_rzn_phone.sh --stage "$(RELEASE_DIR)/package" --update-source "$(abspath $(RELEASE_DIR))"
+
+release:
+	@test -n "$(NEXT_VERSION)" || (echo "usage: make release NEXT_VERSION=0.1.1" >&2; exit 1)
+	python3 ./scripts/release.py --version "$(NEXT_VERSION)"
+
+release-dry-run:
+	@test -n "$(NEXT_VERSION)" || (echo "usage: make release-dry-run NEXT_VERSION=0.1.1" >&2; exit 1)
+	python3 ./scripts/release.py --version "$(NEXT_VERSION)" --dry-run

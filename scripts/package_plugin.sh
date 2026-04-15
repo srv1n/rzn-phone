@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 export RZN_PHONE_ROOT="$ROOT"
+VERSION="$(python3 "$ROOT/scripts/release_common.py" current-version)"
 DEFAULT_PRIV_KEY="/Users/sarav/Downloads/side/rzn/rznapp/.secrets/plugin-signing/ed25519.private"
 DEFAULT_PUB_KEY="/Users/sarav/Downloads/side/rzn/rznapp/.secrets/plugin-signing/ed25519.public"
 
@@ -106,9 +107,9 @@ python3 "$ROOT/scripts/build_bundle.py" \
   --out "$OUT_DIR" \
   --devkit "$DEVKIT" >/dev/null
 
-ZIP_PATH="$(ls -1 "$OUT_DIR"/rzn-phone/0.1.0/"$PLATFORM"/rzn-phone-0.1.0-"$PLATFORM".zip | head -n1)"
-PLUGIN_JSON="$(ls -1 "$OUT_DIR"/rzn-phone/0.1.0/"$PLATFORM"/plugin.json | head -n1)"
-PLUGIN_SIG="$(ls -1 "$OUT_DIR"/rzn-phone/0.1.0/"$PLATFORM"/plugin.sig | head -n1)"
+ZIP_PATH="$(ls -1 "$OUT_DIR"/rzn-phone/"$VERSION"/"$PLATFORM"/rzn-phone-"$VERSION"-"$PLATFORM".zip | head -n1)"
+PLUGIN_JSON="$(ls -1 "$OUT_DIR"/rzn-phone/"$VERSION"/"$PLATFORM"/plugin.json | head -n1)"
+PLUGIN_SIG="$(ls -1 "$OUT_DIR"/rzn-phone/"$VERSION"/"$PLATFORM"/plugin.sig | head -n1)"
 
 echo "[verify] verifying plugin bundle"
 "$DEVKIT" verify --public "$PUB_KEY" --input "$PLUGIN_JSON" --sig "$PLUGIN_SIG"
