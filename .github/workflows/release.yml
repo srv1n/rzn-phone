@@ -71,7 +71,7 @@ jobs:
           - runner: windows-latest
             platform: windows_x86_64
             binary: target/release/rzn-phone-worker.exe
-          - runner: macos-13
+          - runner: macos-15-intel
             platform: macos_x86_64
             binary: target/release/rzn-phone-worker
           - runner: macos-15
