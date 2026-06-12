@@ -117,19 +117,13 @@ If you are installing the shipped runtime, you do not need Python for `rzn-phone
 
 ## Install
 
-Install the latest public macOS runtime from GitHub Releases:
+Install the latest public macOS runtime:
 
 ```bash
-TAG="$(curl -fsSL https://api.github.com/repos/srv1n/rzn-phone/releases/latest | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
-VERSION="${TAG#v}"
-BASE="https://github.com/srv1n/rzn-phone/releases/download/${TAG}"
-
-curl -fsSL "$BASE/rzn-phone-install.sh" | bash -s -- \
-  --version "$VERSION" \
-  --archive "$BASE/rzn-phone-${VERSION}-macos_universal.tar.gz"
+curl -fsSL https://raw.githubusercontent.com/srv1n/rzn-phone/main/scripts/install_rzn_phone.sh | bash
 ```
 
-That installs the latest `rzn-phone-<version>-macos_universal.tar.gz`, verifies the adjacent checksum before extraction, and writes a `rzn-phone` shim. The First Run Setup below is the same checklist the updated installer prints after install: Appium, XCUITest, device trust, smoke tests, and MCP setup. Release assets built from this revision also verify the adjacent Ed25519 signature.
+That one line finds the latest GitHub release, installs `rzn-phone-<version>-macos_universal.tar.gz`, verifies the adjacent checksum before extraction, and writes a `rzn-phone` shim. When a release publishes an Ed25519 `.sig` sidecar, the installer verifies that too. The First Run Setup below is the same checklist the installer prints after install: Appium, XCUITest, device trust, smoke tests, and MCP setup.
 
 Pin a specific release when you need repeatability:
 
@@ -192,13 +186,13 @@ If WebDriverAgent provisioning fails, set the Apple signing environment Appium e
 Remove the installed runtime and the installer-managed shim:
 
 ```bash
-curl -fsSL https://github.com/srv1n/rzn-phone/releases/latest/download/rzn-phone-install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/srv1n/rzn-phone/main/scripts/install_rzn_phone.sh | bash -s -- --uninstall
 ```
 
 Local history and favorites live under `~/.rzn-phone`. Remove them too when you want a full local cleanup:
 
 ```bash
-curl -fsSL https://github.com/srv1n/rzn-phone/releases/latest/download/rzn-phone-install.sh | bash -s -- --uninstall --purge-state
+curl -fsSL https://raw.githubusercontent.com/srv1n/rzn-phone/main/scripts/install_rzn_phone.sh | bash -s -- --uninstall --purge-state
 ```
 
 If you installed with `--bin-dir` or `--install-root`, pass the same values to uninstall.

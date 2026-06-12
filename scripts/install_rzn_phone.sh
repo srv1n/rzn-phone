@@ -39,8 +39,8 @@ Options:
   -h, --help               Show this help.
 
 Examples:
-  curl -fsSL https://github.com/srv1n/rzn-phone/releases/latest/download/rzn-phone-install.sh | bash
-  curl -fsSL https://github.com/srv1n/rzn-phone/releases/latest/download/rzn-phone-install.sh | bash -s -- --uninstall
+  curl -fsSL https://raw.githubusercontent.com/srv1n/rzn-phone/main/scripts/install_rzn_phone.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/srv1n/rzn-phone/main/scripts/install_rzn_phone.sh | bash -s -- --uninstall
 EOF
 }
 
@@ -472,11 +472,14 @@ stage_from_archive() {
   read_source_to_file "$sha_ref" "$sha_path"
 
   if is_remote_ref "$archive_ref"; then
-    read_source_to_file "$(resolve_sig_ref "$archive_ref")" "$sig_path"
-    if [[ -f "$RELEASE_PUBLIC_KEY" ]]; then
-      release_archive_tool verify-signature --archive "$archive_path" --signature "$sig_path" --public-key "$RELEASE_PUBLIC_KEY"
+    if read_source_to_file "$(resolve_sig_ref "$archive_ref")" "$sig_path"; then
+      if [[ -f "$RELEASE_PUBLIC_KEY" ]]; then
+        release_archive_tool verify-signature --archive "$archive_path" --signature "$sig_path" --public-key "$RELEASE_PUBLIC_KEY"
+      else
+        release_archive_tool verify-signature --archive "$archive_path" --signature "$sig_path"
+      fi
     else
-      release_archive_tool verify-signature --archive "$archive_path" --signature "$sig_path"
+      printf 'rzn-phone install: release signature sidecar not found; falling back to sha256 verification only\n' >&2
     fi
   fi
   release_archive_tool verify-sha256 --archive "$archive_path" --sha256 "$sha_path"
@@ -602,7 +605,7 @@ print_post_install() {
   local version="$1"
   local bin_dir="$2"
   local shim_path="$bin_dir/rzn-phone"
-  local install_url="https://github.com/${RELEASE_REPO}/releases/latest/download/rzn-phone-install.sh"
+  local install_url="https://raw.githubusercontent.com/${RELEASE_REPO}/main/scripts/install_rzn_phone.sh"
 
   cat <<EOF
 Installed rzn-phone ${version}

@@ -69,7 +69,7 @@ GitHub release assets are flat files, so the default public install can use the 
 asset directly:
 
 ```bash
-curl -fsSL https://github.com/srv1n/rzn-phone/releases/latest/download/rzn-phone-install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/srv1n/rzn-phone/main/scripts/install_rzn_phone.sh | bash
 ```
 
 Pin a version with a direct archive URL when validating an exact release:
@@ -84,14 +84,15 @@ curl -fsSL "$BASE/rzn-phone-install.sh" | bash -s -- \
   --archive "$BASE/rzn-phone-${VERSION}-macos_universal.tar.gz"
 ```
 
-The installer requires adjacent `.sha256` and `.sig` files for remote runtime archives, verifies
-them before extraction, and rejects archives with absolute paths, traversal, links, special files,
-or world-writable/special modes. `rzn-phone workflows update` also verifies workflow-pack sidecars.
+The installer requires adjacent `.sha256` files for remote runtime archives. When an adjacent
+`.sig` exists, it verifies the Ed25519 release signature too. It rejects archives with absolute
+paths, traversal, links, special files, or world-writable/special modes. `rzn-phone workflows
+update` also verifies workflow-pack sidecars.
 
 Uninstall uses the same flat installer asset:
 
 ```bash
-curl -fsSL https://github.com/srv1n/rzn-phone/releases/latest/download/rzn-phone-install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/srv1n/rzn-phone/main/scripts/install_rzn_phone.sh | bash -s -- --uninstall
 ```
 
 ## Public Repo Reality
