@@ -22,6 +22,7 @@ The tester kit contains:
 
 - `artifacts/rzn-phone-<version>-macos_universal.zip`: signed plugin bundle with the worker binary and workflow JSON files
 - `scripts/tester_doctor.sh`: local environment/device preflight
+- `scripts/prepare_mcp_plugin.sh`: preflight plus local MCP unpack/config helper
 - `examples/rzn-phone.mcp.json`: sample MCP server config for Codex/Claude-style local clients
 - `examples/agent-handoff.md`: compact agent-facing setup and diagnosis instructions
 - `AGENT_SETUP.md`: full agent playbook for setup, safe execution, and troubleshooting
@@ -62,8 +63,10 @@ appium driver install xcuitest
 Then run:
 
 ```bash
-./scripts/tester_doctor.sh
+./scripts/prepare_mcp_plugin.sh
 ```
+
+That command runs `./scripts/tester_doctor.sh`, unpacks the bundled plugin artifact, validates the worker/workflow files, writes an MCP config with absolute local paths, and prints the exact next action.
 
 ## Device and Apple-side requirements
 
@@ -108,10 +111,9 @@ This is the cleanest non-dev distribution because the workflows are already bund
 
 Use this if they want an agent to orchestrate the shipped flows on their own machine.
 
-1. Unzip the plugin artifact itself to a local folder.
-2. Point their MCP client at the unpacked worker binary.
-3. Set `RZN_PLUGIN_DIR` to the unpacked plugin root so the worker can find `resources/workflows`.
-4. Set `RZN_IOS_APPIUM_URL=http://127.0.0.1:4723` unless they use a different Appium endpoint.
+1. Run `./scripts/prepare_mcp_plugin.sh` from the unzipped tester kit root.
+2. Point their MCP client at the generated config path or use the printed worker/env values.
+3. Set `RZN_IOS_APPIUM_URL=http://127.0.0.1:4723` unless they use a different Appium endpoint.
 
 The sample config in `examples/rzn-phone.mcp.json` shows the shape:
 
@@ -174,12 +176,12 @@ Suggested starter workflows:
 - `linkedin/read_feed`
 - `linkedin/daily_scroll_digest`
 
-## Prompt to hand to Codex, Cloud Code, or Claude
+## Prompt to hand to Codex, Claude Code, or Claude Desktop
 
 If the tester is using a local coding/agent client, give them a prompt like:
 
 ```text
-Use RZN Phone Automation on this machine. The repo slug and CLI command are `rzn-phone`, but this packaged build still runs through the shipped MCP worker. Start with `ios.env.doctor` and `ios.device.list`. If the device is healthy, run a read-only workflow such as `safari/google_search` or `appstore/search_results`. Do not use mutating Reddit or LinkedIn workflows unless I explicitly ask.
+Use RZN Phone Automation on this machine. The repo slug and CLI command are `rzn-phone`, but this packaged build still runs through the shipped MCP worker. Start with `ios.env.doctor` and `ios.device.list`. If the device is healthy, run a read-only workflow such as `safari/google_search` or `appstore/search_results`. Do not use mutating Reddit, LinkedIn, Instagram, X, or App Store post-review workflows unless I explicitly ask.
 ```
 
 That is enough to get safe exploration started without teaching them the full tool surface up front.

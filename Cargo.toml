@@ -1,3 +1,14 @@
 [workspace]
 members = ["crates/rzn_phone_worker"]
 resolver = "2"
+
+[workspace.package]
+description = "Local CLI and MCP runtime for driving real iPhone workflows through Appium/XCUITest."
+repository = "https://github.com/srv1n/rzn-phone"
+readme = "README.md"
+license = "AGPL-3.0-only"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

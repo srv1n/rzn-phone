@@ -2,9 +2,12 @@
 set -euo pipefail
 
 INSTALL_ROOT="${RZN_PHONE_INSTALL_ROOT:-$HOME/.local/share/rzn-phone}"
+STATE_DIR="${RZN_PHONE_STATE_DIR:-$HOME/.rzn-phone}"
 SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd || pwd)"
 RELEASE_ARCHIVE_HELPER="$SCRIPT_DIR/release_archive.py"
+RELEASE_PUBLIC_KEY="$SCRIPT_DIR/rzn_phone_release_ed25519.pub"
+RELEASE_REPO="${RZN_PHONE_RELEASE_REPO:-srv1n/rzn-phone}"
 BIN_DIR="${RZN_PHONE_BIN_DIR:-}"
 PLATFORM="macos_universal"
 VERSION=""
@@ -12,12 +15,15 @@ SOURCE=""
 ARCHIVE=""
 STAGE=""
 UPDATE_SOURCE=""
+UNINSTALL="0"
+PURGE_STATE="0"
 
 usage() {
   cat <<'EOF'
 Usage: scripts/install_rzn_phone.sh [options]
 
 Install rzn-phone into a versioned local runtime and expose a global `rzn-phone` shim.
+With no source options, installs the latest GitHub release from srv1n/rzn-phone.
 
 Options:
   --stage <dir>            Install from an unpacked release directory.
@@ -27,7 +33,14 @@ Options:
   --update-source <value>  Persist workflow update source for `rzn-phone workflows update`.
   --install-root <dir>     Override install root (default: ~/.local/share/rzn-phone).
   --bin-dir <dir>          Override shim directory.
+  --uninstall              Remove the installed runtime and installer-managed shim.
+  --purge-state            With --uninstall, also remove local history/favorites (~/.rzn-phone).
+  --state-dir <dir>        Override state dir used by --purge-state.
   -h, --help               Show this help.
+
+Examples:
+  curl -fsSL https://github.com/srv1n/rzn-phone/releases/latest/download/rzn-phone-install.sh | bash
+  curl -fsSL https://github.com/srv1n/rzn-phone/releases/latest/download/rzn-phone-install.sh | bash -s -- --uninstall
 EOF
 }
 
@@ -83,11 +96,49 @@ read_source_to_file() {
   esac
 }
 
+github_latest_tag() {
+  local api payload tag
+  api="${RZN_PHONE_RELEASE_API:-https://api.github.com/repos/${RELEASE_REPO}/releases/latest}"
+  payload="$(curl -fsSL "$api")" || fail "unable to read latest release from $api"
+  tag="$(
+    printf '%s\n' "$payload" \
+      | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+      | head -n 1
+  )"
+  [[ -n "$tag" ]] || fail "unable to determine latest release tag from $api"
+  printf '%s\n' "$tag"
+}
+
+configure_latest_release_source() {
+  local tag
+  tag="$(github_latest_tag)"
+  VERSION="${tag#v}"
+  SOURCE="${RZN_PHONE_RELEASE_BASE:-https://github.com/${RELEASE_REPO}/releases/download/${tag}}"
+  UPDATE_SOURCE="${UPDATE_SOURCE:-$SOURCE}"
+}
+
 validate_release_version() {
   local version="$1"
   if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
     fail "invalid release version: $version"
   fi
+}
+
+assert_supported_platform() {
+  local os arch
+  os="$(uname -s 2>/dev/null || true)"
+  arch="$(uname -m 2>/dev/null || true)"
+
+  if [[ "$os" != "Darwin" ]]; then
+    fail "unsupported platform: rzn-phone ${PLATFORM} install requires macOS, got ${os:-unknown}"
+  fi
+  case "$arch" in
+    arm64|x86_64)
+      ;;
+    *)
+      fail "unsupported macOS architecture for ${PLATFORM}: ${arch:-unknown}"
+      ;;
+  esac
 }
 
 release_archive_tool() {
@@ -98,15 +149,36 @@ release_archive_tool() {
 
   python3 - "$@" <<'PY'
 import argparse
+import base64
 import hashlib
 import posixpath
 import re
 import sys
 import tarfile
 import warnings
+from hashlib import sha512
 from pathlib import Path
 
 SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+DEFAULT_PUBLIC_KEY_B64 = "1p/wWuPPELkYlRb6lojwXDCmFp3ziDxq1haj4RiV3FY="
+ED25519_P = 2**255 - 19
+ED25519_Q = 2**252 + 27742317777372353535851937790883648493
+ED25519_D = -121665 * pow(121666, ED25519_P - 2, ED25519_P) % ED25519_P
+ED25519_I = pow(2, (ED25519_P - 1) // 4, ED25519_P)
+ED25519_BY = 4 * pow(5, ED25519_P - 2, ED25519_P) % ED25519_P
+
+def ed25519_xrecover(y):
+    xx = (y * y - 1) * pow(ED25519_D * y * y + 1, ED25519_P - 2, ED25519_P)
+    xx %= ED25519_P
+    x = pow(xx, (ED25519_P + 3) // 8, ED25519_P)
+    if (x * x - xx) % ED25519_P != 0:
+        x = (x * ED25519_I) % ED25519_P
+    if x & 1:
+        x = ED25519_P - x
+    return x
+
+ED25519_B = (ed25519_xrecover(ED25519_BY), ED25519_BY)
+ED25519_IDENTITY = (0, 1)
 
 def sha256_file(path):
     digest = hashlib.sha256()
@@ -135,6 +207,88 @@ def verify_sha256(archive_path, sum_path):
     actual = sha256_file(archive_path)
     if actual.lower() != expected:
         raise SystemExit(f"sha256 mismatch for {archive_path.name}: expected {expected}, got {actual}")
+
+def read_base64_bytes(path, expected_len, label):
+    try:
+        encoded = "".join(Path(path).read_text(encoding="utf-8").split())
+        raw = base64.b64decode(encoded, validate=True)
+    except Exception as exc:
+        raise SystemExit(f"invalid {label} at {path}: {exc}") from None
+    if len(raw) != expected_len:
+        raise SystemExit(f"invalid {label} at {path}: expected {expected_len} bytes, got {len(raw)}")
+    return raw
+
+def default_public_key():
+    return base64.b64decode(DEFAULT_PUBLIC_KEY_B64, validate=True)
+
+def ed25519_point_add(p, q):
+    x1, y1 = p
+    x2, y2 = q
+    xyxy = ED25519_D * x1 * x2 * y1 * y2
+    x3 = (x1 * y2 + x2 * y1) * pow(1 + xyxy, ED25519_P - 2, ED25519_P)
+    y3 = (y1 * y2 + x1 * x2) * pow(1 - xyxy, ED25519_P - 2, ED25519_P)
+    return (x3 % ED25519_P, y3 % ED25519_P)
+
+def ed25519_scalar_mult(point, scalar):
+    result = ED25519_IDENTITY
+    addend = point
+    while scalar:
+        if scalar & 1:
+            result = ed25519_point_add(result, addend)
+        addend = ed25519_point_add(addend, addend)
+        scalar >>= 1
+    return result
+
+def ed25519_is_on_curve(point):
+    x, y = point
+    return (-x * x + y * y - 1 - ED25519_D * x * x * y * y) % ED25519_P == 0
+
+def ed25519_encode_point(point):
+    x, y = point
+    encoded = bytearray(y.to_bytes(32, "little"))
+    encoded[31] |= (x & 1) << 7
+    return bytes(encoded)
+
+def ed25519_decode_point(encoded):
+    if len(encoded) != 32:
+        raise ValueError("encoded point must be 32 bytes")
+    y = int.from_bytes(encoded, "little") & ((1 << 255) - 1)
+    sign = encoded[31] >> 7
+    if y >= ED25519_P:
+        raise ValueError("point encoding is non-canonical")
+    x = ed25519_xrecover(y)
+    if (x & 1) != sign:
+        x = ED25519_P - x
+    point = (x, y)
+    if not ed25519_is_on_curve(point):
+        raise ValueError("point is not on Ed25519 curve")
+    return point
+
+def ed25519_verify(message, signature, public_key):
+    if len(signature) != 64 or len(public_key) != 32:
+        return False
+    encoded_r = signature[:32]
+    s = int.from_bytes(signature[32:], "little")
+    if s >= ED25519_Q:
+        return False
+    try:
+        public_point = ed25519_decode_point(public_key)
+        r_point = ed25519_decode_point(encoded_r)
+    except ValueError:
+        return False
+    k = int.from_bytes(sha512(encoded_r + public_key + message).digest(), "little") % ED25519_Q
+    left = ed25519_scalar_mult(ED25519_B, s)
+    right = ed25519_point_add(r_point, ed25519_scalar_mult(public_point, k))
+    return ed25519_encode_point(left) == ed25519_encode_point(right)
+
+def verify_signature(archive_path, signature_path, public_key_path=None):
+    if public_key_path and Path(public_key_path).is_file():
+        public_key = read_base64_bytes(public_key_path, 32, "Ed25519 public key")
+    else:
+        public_key = default_public_key()
+    signature = read_base64_bytes(signature_path, 64, "Ed25519 signature")
+    if not ed25519_verify(archive_path.read_bytes(), signature, public_key):
+        raise SystemExit(f"signature verification failed for {archive_path.name}")
 
 def validate_member(info, root_name):
     name = info.name
@@ -176,6 +330,10 @@ subparsers = parser.add_subparsers(dest="command", required=True)
 verify = subparsers.add_parser("verify-sha256")
 verify.add_argument("--archive", required=True, type=Path)
 verify.add_argument("--sha256", required=True, type=Path)
+signature = subparsers.add_parser("verify-signature")
+signature.add_argument("--archive", required=True, type=Path)
+signature.add_argument("--signature", required=True, type=Path)
+signature.add_argument("--public-key", type=Path)
 extract = subparsers.add_parser("safe-extract")
 extract.add_argument("--archive", required=True, type=Path)
 extract.add_argument("--dest", required=True, type=Path)
@@ -184,6 +342,8 @@ args = parser.parse_args()
 try:
     if args.command == "verify-sha256":
         verify_sha256(args.archive, args.sha256)
+    elif args.command == "verify-signature":
+        verify_signature(args.archive, args.signature, args.public_key)
     else:
         safe_extract(args.archive, args.dest, args.root_name)
 except tarfile.TarError as exc:
@@ -280,6 +440,22 @@ resolve_sha_ref() {
   printf '%s.sha256\n' "$archive_ref"
 }
 
+resolve_sig_ref() {
+  local archive_ref="$1"
+  printf '%s.sig\n' "$archive_ref"
+}
+
+is_remote_ref() {
+  case "$1" in
+    http://*|https://*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 stage_from_archive() {
   local archive_ref="$1"
   local tmpdir="$2"
@@ -288,12 +464,21 @@ stage_from_archive() {
   [[ -n "$archive_name" && "$archive_name" == *.tar.gz ]] || fail "release archive must be a .tar.gz file: $archive_ref"
   local archive_path="$tmpdir/$archive_name"
   local sha_path="$tmpdir/$archive_name.sha256"
+  local sig_path="$tmpdir/$archive_name.sig"
   local sha_ref
   sha_ref="$(resolve_sha_ref "$archive_ref")"
 
   read_source_to_file "$archive_ref" "$archive_path"
   read_source_to_file "$sha_ref" "$sha_path"
 
+  if is_remote_ref "$archive_ref"; then
+    read_source_to_file "$(resolve_sig_ref "$archive_ref")" "$sig_path"
+    if [[ -f "$RELEASE_PUBLIC_KEY" ]]; then
+      release_archive_tool verify-signature --archive "$archive_path" --signature "$sig_path" --public-key "$RELEASE_PUBLIC_KEY"
+    else
+      release_archive_tool verify-signature --archive "$archive_path" --signature "$sig_path"
+    fi
+  fi
   release_archive_tool verify-sha256 --archive "$archive_path" --sha256 "$sha_path"
   release_archive_tool safe-extract --archive "$archive_path" --dest "$tmpdir" --root-name rzn-phone
   if [[ -d "$tmpdir/rzn-phone" ]]; then
@@ -357,6 +542,125 @@ install_stage() {
   write_shim "$bin_dir/rzn-phone" "$INSTALL_ROOT/current"
 }
 
+shim_points_to_install_root() {
+  local shim_path="$1"
+  [[ -f "$shim_path" ]] || return 1
+  grep -F "exec \"$INSTALL_ROOT/current/bin/rzn-phone\"" "$shim_path" >/dev/null 2>&1
+}
+
+uninstall_runtime() {
+  local candidates=()
+  local command_path bin_dir shim_path removed_shims skipped_shims
+  removed_shims=""
+  skipped_shims=""
+
+  if [[ -n "$BIN_DIR" ]]; then
+    candidates+=("$BIN_DIR")
+  else
+    candidates+=("$HOME/.local/bin" "$HOME/bin" "/opt/homebrew/bin" "/usr/local/bin")
+    command_path="$(command -v rzn-phone 2>/dev/null || true)"
+    if [[ -n "$command_path" ]]; then
+      candidates+=("$(dirname "$command_path")")
+    fi
+  fi
+
+  for bin_dir in "${candidates[@]}"; do
+    [[ -n "$bin_dir" && -d "$bin_dir" ]] || continue
+    shim_path="$bin_dir/rzn-phone"
+    [[ -e "$shim_path" ]] || continue
+    if shim_points_to_install_root "$shim_path"; then
+      rm -f "$shim_path"
+      removed_shims="${removed_shims}${removed_shims:+, }$shim_path"
+    else
+      skipped_shims="${skipped_shims}${skipped_shims:+, }$shim_path"
+    fi
+  done
+
+  if [[ -d "$INSTALL_ROOT" ]]; then
+    rm -rf "$INSTALL_ROOT"
+  fi
+
+  if [[ "$PURGE_STATE" == "1" && -d "$STATE_DIR" ]]; then
+    rm -rf "$STATE_DIR"
+  fi
+
+  cat <<EOF
+Uninstalled rzn-phone runtime from $INSTALL_ROOT
+Removed shim(s): ${removed_shims:-none found}
+EOF
+  if [[ -n "$skipped_shims" ]]; then
+    printf 'Skipped non-installer-managed rzn-phone shim(s): %s\n' "$skipped_shims"
+  fi
+  if [[ "$PURGE_STATE" == "1" ]]; then
+    printf 'Removed local state: %s\n' "$STATE_DIR"
+  else
+    printf 'Kept local state: %s\n' "$STATE_DIR"
+  fi
+}
+
+print_post_install() {
+  local version="$1"
+  local bin_dir="$2"
+  local shim_path="$bin_dir/rzn-phone"
+  local install_url="https://github.com/${RELEASE_REPO}/releases/latest/download/rzn-phone-install.sh"
+
+  cat <<EOF
+Installed rzn-phone ${version}
+Runtime: $INSTALL_ROOT/current
+Shim: $shim_path
+
+Next steps:
+1. Make sure the shim is on PATH.
+EOF
+
+  if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+    cat <<EOF
+   export PATH="$bin_dir:\$PATH"
+   Then restart your shell or add that line to your shell profile.
+EOF
+  else
+    cat <<'EOF'
+   Already on PATH for this shell.
+EOF
+  fi
+
+  cat <<EOF
+
+2. Install the phone automation prerequisites.
+   xcode-select --install
+   node --version || brew install node
+   npm i -g appium
+   appium driver install xcuitest
+
+3. Connect a physical iPhone.
+   Unlock it, tap Trust on the device, keep it awake, and sign into the apps you plan to automate.
+
+4. Verify the machine and device.
+   rzn-phone doctor
+   rzn-phone devices
+
+5. Run a read-only smoke test.
+   rzn-phone list --compact
+   rzn-phone run safari/google_search --args-json '{"query":"rzn-phone","limit":3}'
+
+Optional Appium setup:
+   rzn-phone can start Appium when it is on PATH. For desktop/agent hosts, an explicit Appium
+   endpoint is usually more predictable:
+
+   appium
+   export RZN_IOS_APPIUM_URL="http://127.0.0.1:4723"
+
+MCP setup:
+   Use this command in your MCP client config:
+   command: "$shim_path"
+   args: ["worker"]
+
+Uninstall:
+   curl -fsSL $install_url | bash -s -- --uninstall
+   curl -fsSL $install_url | bash -s -- --uninstall --purge-state
+EOF
+}
+
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --stage)
@@ -387,6 +691,18 @@ while [[ "$#" -gt 0 ]]; do
       BIN_DIR="$(expand_path "${2:-}")"
       shift 2
       ;;
+    --state-dir)
+      STATE_DIR="$(expand_path "${2:-}")"
+      shift 2
+      ;;
+    --uninstall)
+      UNINSTALL="1"
+      shift
+      ;;
+    --purge-state)
+      PURGE_STATE="1"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -397,11 +713,26 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$STAGE" && -z "$ARCHIVE" && -z "$SOURCE" ]]; then
-  usage >&2
-  exit 1
+INSTALL_ROOT="$(expand_path "$INSTALL_ROOT")"
+STATE_DIR="$(expand_path "$STATE_DIR")"
+if [[ -n "$BIN_DIR" ]]; then
+  BIN_DIR="$(expand_path "$BIN_DIR")"
 fi
 
+if [[ "$PURGE_STATE" == "1" && "$UNINSTALL" != "1" ]]; then
+  fail "--purge-state requires --uninstall"
+fi
+
+if [[ "$UNINSTALL" == "1" ]]; then
+  uninstall_runtime
+  exit 0
+fi
+
+if [[ -z "$STAGE" && -z "$ARCHIVE" && -z "$SOURCE" ]]; then
+  configure_latest_release_source
+fi
+
+assert_supported_platform
 VERSION="$(discover_version)"
 validate_release_version "$VERSION"
 BIN_DIR="$(select_bin_dir)"
@@ -428,16 +759,4 @@ else
   install_stage "$STAGE_DIR" "$VERSION" "$BIN_DIR" "$UPDATE_SOURCE"
 fi
 
-if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-  cat <<EOF
-Installed rzn-phone ${VERSION} to $INSTALL_ROOT/current
-Shim: $BIN_DIR/rzn-phone
-Note: $BIN_DIR is not on PATH in this shell. Add it, then restart your shell.
-EOF
-else
-  cat <<EOF
-Installed rzn-phone ${VERSION} to $INSTALL_ROOT/current
-Shim: $BIN_DIR/rzn-phone
-Run: rzn-phone version
-EOF
-fi
+print_post_install "$VERSION" "$BIN_DIR"

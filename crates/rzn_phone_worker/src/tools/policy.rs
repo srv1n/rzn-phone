@@ -112,7 +112,7 @@ pub enum ToolCallContext {
 pub fn policy_for_tool(name: &str) -> ToolPolicy {
     let mut policy = if is_direct_mutation_tool(name) {
         ToolPolicy::mutating(ToolRisk::Medium)
-    } else if name == "ios.web.eval_js" {
+    } else if is_raw_javascript_tool(name) {
         ToolPolicy::read_only(ToolRisk::High)
     } else if name == "phone_messages.find_recent_otp" {
         ToolPolicy::private(PrivacyClass::Otp)
@@ -133,7 +133,7 @@ pub fn policy_for_tool(name: &str) -> ToolPolicy {
         ToolPolicy::read_only(ToolRisk::Low)
     };
 
-    if name == "ios.web.eval_js" {
+    if is_raw_javascript_tool(name) {
         policy.allowed_direct = false;
         policy.allowed_in_workflow = true;
     }
@@ -278,6 +278,10 @@ fn is_direct_mutation_tool(name: &str) -> bool {
         || name == "ios.web.press_key"
         || name == "ios.alert.accept"
         || name == "ios.alert.dismiss"
+}
+
+fn is_raw_javascript_tool(name: &str) -> bool {
+    name == "ios.web.eval_js" || name == "ios.web.wait_js"
 }
 
 fn direct_commit_requested(arguments: &Value) -> bool {
@@ -490,6 +494,32 @@ mod tests {
         let err = enforce_direct_tool_policy("ios.web.eval_js", &json!({"script": "1"}))
             .expect_err("eval_js should be gated");
         assert_eq!(err.code, ToolErrorCode::PolicyDenied);
+    }
+
+    #[test]
+    fn wait_js_uses_raw_javascript_policy() {
+        let policy = policy_for_tool("ios.web.wait_js");
+        assert_eq!(policy.risk, ToolRisk::High);
+        assert!(!policy.allowed_direct);
+        assert!(policy.allowed_in_workflow);
+
+        let metadata = policy.metadata();
+        assert_eq!(metadata.get("risk").and_then(Value::as_str), Some("high"));
+        assert_eq!(
+            metadata.get("allowedDirect").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            metadata.get("allowedInWorkflow").and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let err = enforce_direct_tool_policy("ios.web.wait_js", &json!({"script": "true"}))
+            .expect_err("wait_js should be gated for direct calls");
+        assert_eq!(err.code, ToolErrorCode::PolicyDenied);
+
+        enforce_workflow_tool_policy("ios.web.wait_js", &json!({}))
+            .expect("trusted workflow wait_js use should remain allowed");
     }
 
     #[test]

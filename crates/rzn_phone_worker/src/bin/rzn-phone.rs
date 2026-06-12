@@ -330,34 +330,7 @@ async fn main() -> Result<()> {
         },
         CommandKind::Rerun { index } => {
             let entry = rerun_entry(index)?;
-            let mut command = vec![
-                "run".to_string(),
-                entry.workflow_ref.clone(),
-                "--udid".to_string(),
-                entry.udid.clone(),
-                "--args-json".to_string(),
-                serde_json::to_string(&entry.args_json)?,
-            ];
-            if entry.commit {
-                command.push("--commit".to_string());
-            } else {
-                command.push("--dry-run".to_string());
-            }
-            if entry.disconnect_on_finish {
-                command.extend(["--disconnect-on-finish".to_string(), "true".to_string()]);
-            }
-            if entry.stop_appium_on_finish {
-                command.extend(["--stop-appium-on-finish".to_string(), "true".to_string()]);
-            }
-            if entry.background_on_exit {
-                command.extend(["--background-on-exit".to_string(), "true".to_string()]);
-            }
-            if entry.lock_device_on_exit {
-                command.extend(["--lock-device-on-exit".to_string(), "true".to_string()]);
-            }
-            if entry.smart_cache {
-                command.extend(["--fast".to_string(), "true".to_string()]);
-            }
+            let command = rerun_command(&entry)?;
             exec_self(&command)?;
         }
         CommandKind::Favorite { command } => match command {
@@ -503,4 +476,77 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn rerun_command(entry: &HistoryEntry) -> Result<Vec<String>> {
+    Ok(vec![
+        "run".to_string(),
+        entry.workflow_ref.clone(),
+        "--udid".to_string(),
+        entry.udid.clone(),
+        "--args-json".to_string(),
+        serde_json::to_string(&entry.args_json)?,
+        format!("--commit={}", entry.commit),
+        format!("--disconnect-on-finish={}", entry.disconnect_on_finish),
+        format!("--stop-appium-on-finish={}", entry.stop_appium_on_finish),
+        format!("--background-on-exit={}", entry.background_on_exit),
+        format!("--lock-device-on-exit={}", entry.lock_device_on_exit),
+        format!("--fast={}", entry.smart_cache),
+    ])
+}
+
+#[cfg(test)]
+mod cli_rerun_tests {
+    use super::*;
+
+    #[test]
+    fn rerun_command_uses_inline_boolean_values_that_round_trip() {
+        let entry = HistoryEntry {
+            ts: "2026-06-12T00:00:00Z".to_string(),
+            workflow_ref: "safari/google_search".to_string(),
+            udid: "TEST-UDID-RERUN-001".to_string(),
+            args_json: json!({"query": "headphones", "limit": 5}),
+            commit: false,
+            disconnect_on_finish: false,
+            stop_appium_on_finish: false,
+            background_on_exit: false,
+            lock_device_on_exit: false,
+            smart_cache: true,
+        };
+
+        let command = rerun_command(&entry).expect("rerun command");
+        assert_eq!(
+            command,
+            vec![
+                "run",
+                "safari/google_search",
+                "--udid",
+                "TEST-UDID-RERUN-001",
+                "--args-json",
+                "{\"limit\":5,\"query\":\"headphones\"}",
+                "--commit=false",
+                "--disconnect-on-finish=false",
+                "--stop-appium-on-finish=false",
+                "--background-on-exit=false",
+                "--lock-device-on-exit=false",
+                "--fast=true",
+            ]
+        );
+        assert!(!command.iter().any(|arg| arg == "true" || arg == "false"));
+
+        let mut argv = vec!["rzn-phone".to_string()];
+        argv.extend(command);
+        match Cli::try_parse_from(argv).expect("round-trip parse").command {
+            CommandKind::Run(args) => {
+                assert_eq!(args.first, "safari/google_search");
+                assert!(!args.commit);
+                assert!(!args.disconnect_on_finish);
+                assert!(!args.stop_appium_on_finish);
+                assert!(!args.background_on_exit);
+                assert!(!args.lock_device_on_exit);
+                assert_eq!(args.fast, Some(true));
+            }
+            _ => panic!("expected run command"),
+        }
+    }
 }

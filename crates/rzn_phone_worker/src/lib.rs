@@ -66,8 +66,99 @@ pub async fn run_worker_stdio() -> anyhow::Result<()> {
         }
     }
 
-    if !state.persistence_enabled().await {
-        state.shutdown_spawned_appium().await;
-    }
+    cleanup_worker_on_stdin_close(&state).await;
     Ok(())
+}
+
+async fn cleanup_worker_on_stdin_close(state: &AppState) {
+    if state.persistence_enabled().await {
+        return;
+    }
+
+    let _ = crate::tools::handle_tool_call(
+        state,
+        "rzn.worker.shutdown",
+        json!({
+            "commit": true,
+            "stopAppium": true,
+            "shutdownWDA": true,
+            "backgroundApp": false,
+            "lockDevice": false
+        }),
+    )
+    .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{AppiumSource, TEST_ENV_LOCK};
+    use httpmock::{
+        Method::{DELETE, GET},
+        MockServer,
+    };
+    use std::ffi::OsString;
+
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn remove(key: &'static str) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::remove_var(key);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(previous) = &self.previous {
+                std::env::set_var(self.key, previous);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn stdin_close_cleanup_deletes_active_webdriver_session() {
+        let _guard = TEST_ENV_LOCK.lock().await;
+        let _persist_guard = EnvVarGuard::remove("RZN_IOS_PERSIST_RUNTIME");
+        let _state_file_guard = EnvVarGuard::remove("RZN_IOS_RUNTIME_STATE_FILE");
+        let server = MockServer::start_async().await;
+        let delete_mock = server
+            .mock_async(|when, then| {
+                when.method(DELETE).path("/session/sess-1");
+                then.status(200).json_body(json!({"value": null}));
+            })
+            .await;
+        let wda_mock = server
+            .mock_async(|when, then| {
+                when.method(GET).path("/wda/shutdown");
+                then.status(200).body("ok");
+            })
+            .await;
+        let state = AppState::new();
+        state
+            .set_appium(server.url(""), AppiumSource::Env, None, None)
+            .await;
+        state
+            .set_session(
+                "sess-1".to_string(),
+                "native_app".to_string(),
+                "TEST-UDID".to_string(),
+                Some("com.example.app".to_string()),
+                Some(server.port()),
+            )
+            .await;
+
+        cleanup_worker_on_stdin_close(&state).await;
+
+        delete_mock.assert_async().await;
+        wda_mock.assert_async().await;
+        assert!(state.active_session().await.is_none());
+        assert!(state.appium_base_url().await.is_none());
+    }
 }

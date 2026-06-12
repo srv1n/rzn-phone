@@ -3,6 +3,8 @@ use serde_json::{json, Value};
 use crate::state::AppState;
 use crate::tools;
 
+const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
+
 #[derive(Debug, Clone)]
 pub struct McpMethodError {
     pub code: i64,
@@ -34,7 +36,7 @@ pub async fn handle_request(
     params: Value,
 ) -> Result<Value, McpMethodError> {
     match method {
-        "initialize" => Ok(initialize_result()),
+        "initialize" => Ok(initialize_result(&params)),
         "tools/list" => Ok(json!({ "tools": tools::list_tool_definitions() })),
         "tools/call" => {
             let name = params
@@ -108,14 +110,15 @@ pub async fn handle_request(
     }
 }
 
-fn initialize_result() -> Value {
+fn initialize_result(params: &Value) -> Value {
+    let protocol_version = negotiated_protocol_version(params);
+
     json!({
         "name": "rzn-phone-worker",
         "version": env!("CARGO_PKG_VERSION"),
-        "protocolVersion": "2025-06-18",
+        "protocolVersion": protocol_version,
         "capabilities": {
             "tools": { "listChanged": false },
-            "resources": { "listChanged": false },
             "prompts": { "listChanged": false },
             "experimental": {}
         },
@@ -124,6 +127,15 @@ fn initialize_result() -> Value {
             "version": env!("CARGO_PKG_VERSION")
         }
     })
+}
+
+fn negotiated_protocol_version(params: &Value) -> &str {
+    params
+        .get("protocolVersion")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(MCP_PROTOCOL_VERSION)
 }
 
 #[cfg(test)]
@@ -149,6 +161,33 @@ mod tests {
                 .get("protocolVersion")
                 .and_then(|value| value.as_str()),
             Some("2025-06-18")
+        );
+        assert!(result
+            .get("capabilities")
+            .and_then(|value| value.get("resources"))
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn initialize_reflects_client_protocol_version_when_provided() {
+        let state = AppState::new();
+        let result = handle_request(
+            &state,
+            "initialize",
+            json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": { "name": "contract-test", "version": "0" }
+            }),
+        )
+        .await
+        .expect("initialize");
+
+        assert_eq!(
+            result
+                .get("protocolVersion")
+                .and_then(|value| value.as_str()),
+            Some("2024-11-05")
         );
     }
 }

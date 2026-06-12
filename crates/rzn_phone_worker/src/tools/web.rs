@@ -18,129 +18,168 @@ pub(crate) const TOOL_NAMES: &[&str] = &[
 pub(crate) fn definitions() -> Vec<Value> {
     vec![
         tool(
-        	            "ios.web.goto",
-        	            "Navigate Safari session to a URL.",
-        	            json!({
-        	                "type": "object",
-                        "properties": {
-                            "sessionId": { "type": "string" },
-                            "url": { "type": "string" }
-                        },
-                        "required": ["url"],
-                        "additionalProperties": false
-                    }),
-                ),
+            "ios.web.goto",
+            "Navigate Safari session to a URL.",
+            json!({
+                    "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string" },
+                    "url": { "type": "string" }
+                },
+                "required": ["url"],
+                "additionalProperties": false
+            }),
+        ),
         tool(
-                    "ios.web.wait_css",
-                    "Wait for a CSS selector and return a matching element id.",
-                    json!({
-                        "type": "object",
-        	                "properties": {
-        	                    "sessionId": { "type": "string" },
-        	                    "selector": { "type": "string" },
-        	                    "index": { "type": "integer", "minimum": 0, "default": 0 },
-        	                    "requireUnique": { "type": "boolean", "default": false },
-        	                    "timeoutMs": { "type": "integer", "default": 10000 }
-        	                },
-        	                "required": ["selector"],
-                        "additionalProperties": false
-                    }),
-                ),
+            "ios.web.wait_css",
+            "Wait for a CSS selector and return a matching element id.",
+            json!({
+                "type": "object",
+                    "properties": {
+                        "sessionId": { "type": "string" },
+                        "selector": { "type": "string" },
+                        "index": { "type": "integer", "minimum": 0, "default": 0 },
+                        "requireUnique": { "type": "boolean", "default": false },
+                        "timeoutMs": { "type": "integer", "default": 10000 }
+                    },
+                    "required": ["selector"],
+                "additionalProperties": false
+            }),
+        ),
         tool(
-                    "ios.web.wait_js",
-                    "Wait until a JavaScript expression returns a truthy result in the current page context.",
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "sessionId": { "type": "string" },
-                            "script": { "type": "string" },
-                            "args": { "type": "array", "items": {} },
-                            "timeoutMs": { "type": "integer", "default": 10000 },
-                            "intervalMs": { "type": "integer", "default": 250 }
-                        },
-                        "required": ["script"],
-                        "additionalProperties": false
-                    }),
-                ),
+            "ios.web.wait_js",
+            "UNSAFE (high-risk): poll caller-provided JavaScript in the current page context until it returns truthy; the script is executed repeatedly and can have side effects.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string" },
+                    "script": { "type": "string", "description": "Caller-provided JavaScript executed repeatedly while waiting; it can have side effects." },
+                    "args": { "type": "array", "items": {} },
+                    "timeoutMs": { "type": "integer", "default": 10000 },
+                    "intervalMs": { "type": "integer", "default": 250 }
+                },
+                "required": ["script"],
+                "additionalProperties": false
+            }),
+        ),
         tool(
-        	            "ios.web.click_css",
-        	            "Click an element matching a CSS selector.",
-        	            json!({
-        	                "type": "object",
-        	                "properties": {
-        	                    "sessionId": { "type": "string" },
-        	                    "selector": { "type": "string" },
-        	                    "index": { "type": "integer", "minimum": 0, "default": 0 },
-        	                    "requireUnique": { "type": "boolean", "default": false }
-        	                },
-        	                "required": ["selector"],
-        	                "additionalProperties": false
-                    }),
-                ),
+            "ios.web.click_css",
+            "Click an element matching a CSS selector.",
+            json!({
+                    "type": "object",
+                    "properties": {
+                        "sessionId": { "type": "string" },
+                        "selector": { "type": "string" },
+                        "index": { "type": "integer", "minimum": 0, "default": 0 },
+                        "requireUnique": { "type": "boolean", "default": false }
+                    },
+                    "required": ["selector"],
+                    "additionalProperties": false
+            }),
+        ),
         tool(
-        	            "ios.web.type_css",
-        	            "Type text into an element matching a CSS selector.",
-        	            json!({
-        	                "type": "object",
-        	                "properties": {
-        	                    "sessionId": { "type": "string" },
-        	                    "selector": { "type": "string" },
-        	                    "index": { "type": "integer", "minimum": 0, "default": 0 },
-        	                    "requireUnique": { "type": "boolean", "default": false },
-        	                    "text": { "type": "string" },
-        	                    "clearFirst": { "type": "boolean", "default": true }
-        	                },
-                        "required": ["selector", "text"],
-                        "additionalProperties": false
-                    }),
-                ),
+            "ios.web.type_css",
+            "Type text into an element matching a CSS selector.",
+            json!({
+                    "type": "object",
+                    "properties": {
+                        "sessionId": { "type": "string" },
+                        "selector": { "type": "string" },
+                        "index": { "type": "integer", "minimum": 0, "default": 0 },
+                        "requireUnique": { "type": "boolean", "default": false },
+                        "text": { "type": "string" },
+                        "clearFirst": { "type": "boolean", "default": true }
+                    },
+                "required": ["selector", "text"],
+                "additionalProperties": false
+            }),
+        ),
         tool(
-                    "ios.web.press_key",
-                    "Send a keyboard key to the active element (supports Enter for MVP).",
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "sessionId": { "type": "string" },
-                            "key": { "type": "string", "default": "Enter" }
-                        },
-                        "additionalProperties": false
-                    }),
-                ),
+            "ios.web.press_key",
+            "Send a keyboard key to the active element (supports Enter for MVP).",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string" },
+                    "key": { "type": "string", "default": "Enter" }
+                },
+                "additionalProperties": false
+            }),
+        ),
         tool(
-                    "ios.web.page_source",
-                    "Get current page source.",
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "sessionId": { "type": "string" }
-                        },
-                        "additionalProperties": false
-                    }),
-                ),
+            "ios.web.page_source",
+            "Get current page source.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string" }
+                },
+                "additionalProperties": false
+            }),
+        ),
         tool(
-                    "ios.web.screenshot",
-                    "Capture a screenshot from the active session.",
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "sessionId": { "type": "string" }
-                        },
-                        "additionalProperties": false
-                    }),
-                ),
+            "ios.web.screenshot",
+            "Capture a screenshot from the active session.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string" }
+                },
+                "additionalProperties": false
+            }),
+        ),
         tool(
-                    "ios.web.eval_js",
-                    "UNSAFE (high-risk): execute raw JavaScript in the current page context.",
-                    json!({
-                        "type": "object",
-                        "properties": {
-                            "sessionId": { "type": "string" },
-                            "script": { "type": "string" },
-                            "args": { "type": "array", "items": {} }
-                        },
-                        "required": ["script"],
-                        "additionalProperties": false
-                    }),
-                ),
+            "ios.web.eval_js",
+            "UNSAFE (high-risk): execute raw JavaScript in the current page context.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string" },
+                    "script": { "type": "string" },
+                    "args": { "type": "array", "items": {} }
+                },
+                "required": ["script"],
+                "additionalProperties": false
+            }),
+        ),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn wait_js_definition_warns_about_side_effecting_caller_javascript() {
+        let definitions = definitions();
+        let definition = definitions
+            .iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("ios.web.wait_js"))
+            .expect("ios.web.wait_js definition");
+
+        let description = definition
+            .get("description")
+            .and_then(Value::as_str)
+            .expect("description")
+            .to_ascii_lowercase();
+        assert!(description.contains("high-risk"));
+        assert!(description.contains("caller-provided javascript"));
+        assert!(description.contains("side effects"));
+
+        assert_eq!(definition.get("risk"), Some(&json!("high")));
+        assert_eq!(definition.get("allowedDirect"), Some(&json!(false)));
+        assert_eq!(definition.get("allowedInWorkflow"), Some(&json!(true)));
+
+        let script_description = definition
+            .get("inputSchema")
+            .and_then(|schema| schema.get("properties"))
+            .and_then(|properties| properties.get("script"))
+            .and_then(|script| script.get("description"))
+            .and_then(Value::as_str)
+            .expect("script description")
+            .to_ascii_lowercase();
+        assert!(script_description.contains("side effects"));
+        assert!(script_description.contains("repeatedly"));
+    }
 }

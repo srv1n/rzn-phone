@@ -4,7 +4,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use regex::Regex;
 use reqwest::Client;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, HashSet};
 use std::str;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -35,6 +35,12 @@ pub mod web;
 pub mod workflow;
 
 const DEFAULT_WDA_LOCAL_PORT: u16 = 8100;
+const DEFAULT_SESSION_CREATE_TIMEOUT_MS: u64 = 600_000;
+const SESSION_CREATE_CLEANUP_BUFFER_MS: u64 = 15_000;
+const DEFAULT_WORKFLOW_STEP_TIMEOUT_MS: u64 = 120_000;
+const MIN_WORKFLOW_STEP_TIMEOUT_MS: u64 = 250;
+const MAX_EXPLICIT_WORKFLOW_STEP_TIMEOUT_MS: u64 = 600_000;
+const FAILURE_ARTIFACT_SOURCE_MAX_BYTES: usize = 50_000;
 
 pub use spec::list_tool_definitions;
 
@@ -148,6 +154,36 @@ fn tool_success_with_content(structured: Value, mut content: Vec<Value>) -> Valu
     })
 }
 
+fn screenshot_tool_result(session_id: &str, data: String) -> Value {
+    let mime_type = "image/png";
+    let bytes_base64 = data.len();
+    tool_success_with_content(
+        json!({
+            "ok": true,
+            "sessionId": session_id,
+            "mimeType": mime_type,
+            "bytesBase64": bytes_base64,
+            "data": data
+        }),
+        screenshot_content("screenshot captured", mime_type, bytes_base64),
+    )
+}
+
+fn screenshot_content(message: &str, mime_type: &str, bytes_base64: usize) -> Vec<Value> {
+    vec![screenshot_metadata_text_block(
+        message,
+        mime_type,
+        bytes_base64,
+    )]
+}
+
+fn screenshot_metadata_text_block(message: &str, mime_type: &str, bytes_base64: usize) -> Value {
+    json!({
+        "type": "text",
+        "text": format!("{message} ({mime_type}, {bytes_base64} base64 chars)")
+    })
+}
+
 pub fn tool_error_result(message: &str, details: Value) -> Value {
     tool_error_result_with_code(message, None, details)
 }
@@ -185,7 +221,7 @@ pub fn tool_error_from_anyhow(err: &anyhow::Error, tool: &str) -> Value {
 
     let message = format!("{err:#}");
     let lowered = message.to_lowercase();
-    let code = if lowered.contains("timeout") {
+    let code = if error_chain_indicates_timeout(err) {
         ToolErrorCode::Timeout
     } else if lowered.contains("device was not, or could not be, unlocked")
         || lowered.contains("could not be unlocked")
@@ -216,6 +252,97 @@ pub fn tool_error_from_anyhow(err: &anyhow::Error, tool: &str) -> Value {
     };
 
     tool_error_result_with_code(&message, Some(code.as_str()), json!({ "tool": tool }))
+}
+
+fn error_chain_indicates_timeout(err: &anyhow::Error) -> bool {
+    if err.chain().any(|cause| {
+        cause
+            .downcast_ref::<reqwest::Error>()
+            .map(reqwest::Error::is_timeout)
+            .unwrap_or(false)
+    }) {
+        return true;
+    }
+
+    let lowered = format!("{err:#}").to_lowercase();
+    lowered.contains("timeout")
+        || lowered.contains("timed out")
+        || lowered.contains("deadline has elapsed")
+}
+
+fn is_retryable_webdriver_error(err: &anyhow::Error) -> bool {
+    if error_chain_indicates_timeout(err) {
+        return true;
+    }
+
+    let lowered = format!("{err:#}").to_lowercase();
+    lowered.contains("socket hang up")
+        || lowered.contains("connection reset by peer")
+        || lowered.contains("connection refused")
+        || lowered.contains("connection aborted")
+        || lowered.contains("temporarily unavailable")
+        || lowered.contains("could not proxy command to the remote server")
+        || lowered.contains("remote server")
+        || lowered.contains("with status 500")
+        || lowered.contains("with status 502")
+        || lowered.contains("with status 503")
+        || lowered.contains("with status 504")
+}
+
+fn session_create_timeout_ms_arg(arguments: &Value) -> u64 {
+    arguments
+        .get("sessionCreateTimeoutMs")
+        .and_then(Value::as_u64)
+        .unwrap_or(DEFAULT_SESSION_CREATE_TIMEOUT_MS)
+}
+
+fn session_create_deadline_ms(arguments: &Value) -> u64 {
+    session_create_timeout_ms_arg(arguments).saturating_add(SESSION_CREATE_CLEANUP_BUFFER_MS)
+}
+
+fn session_create_timeout_error(
+    udid: &str,
+    kind: &str,
+    bundle_id: Option<&str>,
+    session_create_timeout_ms: u64,
+) -> ToolCallError {
+    ToolCallError::new(
+        ToolErrorCode::Timeout,
+        format!("timed out creating {kind} session after {session_create_timeout_ms}ms"),
+        json!({
+            "udid": udid,
+            "kind": kind,
+            "bundleId": bundle_id,
+            "sessionCreateTimeoutMs": session_create_timeout_ms,
+            "cleanupBufferMs": SESSION_CREATE_CLEANUP_BUFFER_MS,
+            "failedSessionCleanupAttempted": true
+        }),
+    )
+}
+
+fn explicit_workflow_step_timeout_ms(step: &Map<String, Value>) -> Option<u64> {
+    step.get("timeoutMs")
+        .and_then(Value::as_u64)
+        .or_else(|| step.get("timeout_ms").and_then(Value::as_u64))
+        .map(|timeout_ms| {
+            timeout_ms.clamp(
+                MIN_WORKFLOW_STEP_TIMEOUT_MS,
+                MAX_EXPLICIT_WORKFLOW_STEP_TIMEOUT_MS,
+            )
+        })
+}
+
+fn default_workflow_step_timeout_ms(tool: &str, arguments: &Value) -> u64 {
+    if tool == "ios.session.create" {
+        return DEFAULT_WORKFLOW_STEP_TIMEOUT_MS.max(session_create_deadline_ms(arguments));
+    }
+
+    DEFAULT_WORKFLOW_STEP_TIMEOUT_MS
+}
+
+fn workflow_step_timeout_ms(tool: &str, step: &Map<String, Value>, arguments: &Value) -> u64 {
+    explicit_workflow_step_timeout_ms(step)
+        .unwrap_or_else(|| default_workflow_step_timeout_ms(tool, arguments))
 }
 
 fn merge_error_details(tool: &str, details: &Value) -> Value {
@@ -728,10 +855,7 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
 
     let wda_local_port = parse_port_value(arguments.get("wdaLocalPort"), "wdaLocalPort")?;
 
-    let session_create_timeout_ms = arguments
-        .get("sessionCreateTimeoutMs")
-        .and_then(Value::as_u64)
-        .unwrap_or(600_000);
+    let session_create_timeout_ms = session_create_timeout_ms_arg(arguments);
 
     let request = SessionCreateRequest {
         udid: udid.clone(),
@@ -792,7 +916,7 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
             .map(ToString::to_string),
     };
 
-    let create_deadline = Duration::from_millis(session_create_timeout_ms.saturating_add(15_000));
+    let create_deadline = Duration::from_millis(session_create_deadline_ms(arguments));
     let created = match tokio::time::timeout(create_deadline, async {
         match kind {
             "safari_web" => driver.create_session_safari(request).await,
@@ -813,6 +937,7 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
     {
         Ok(Ok(created)) => created,
         Ok(Err(err)) => {
+            let is_timeout = error_chain_indicates_timeout(&err);
             cleanup_failed_session_create(
                 state,
                 if ensure_result.source == "spawned" {
@@ -825,6 +950,15 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
                 &udid,
             )
             .await;
+            if is_timeout {
+                return Err(session_create_timeout_error(
+                    &udid,
+                    kind,
+                    requested_bundle_id.as_deref(),
+                    session_create_timeout_ms,
+                )
+                .into());
+            }
             return Err(err.context(format!("failed to create {} session", kind)));
         }
         Err(_) => {
@@ -840,15 +974,11 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
                 &udid,
             )
             .await;
-            return Err(ToolCallError::new(
-                ToolErrorCode::Timeout,
-                format!("timed out creating {kind} session"),
-                json!({
-                    "udid": udid,
-                    "kind": kind,
-                    "bundleId": requested_bundle_id,
-                    "sessionCreateTimeoutMs": session_create_timeout_ms
-                }),
+            return Err(session_create_timeout_error(
+                &udid,
+                kind,
+                requested_bundle_id.as_deref(),
+                session_create_timeout_ms,
             )
             .into());
         }
@@ -898,30 +1028,11 @@ async fn ui_screenshot(state: &AppState, arguments: &Value) -> Result<Value> {
     let driver = driver_from_state(state).await?;
     let data = driver.screenshot(&session_id).await?;
 
-    Ok(tool_success_with_content(
-        json!({
-            "ok": true,
-            "sessionId": session_id,
-            "mimeType": "image/png",
-            "bytesBase64": data.len(),
-            "data": data
-        }),
-        vec![
-            json!({"type": "text", "text": "screenshot captured"}),
-            json!({"type": "image", "mimeType": "image/png", "data": data}),
-        ],
-    ))
+    Ok(screenshot_tool_result(&session_id, data))
 }
 
 fn is_retryable_native_source_error(err: &anyhow::Error) -> bool {
-    let message = format!("{err:#}").to_lowercase();
-    message.contains("socket hang up")
-        || message.contains("operation timed out")
-        || message.contains("timed out")
-        || message.contains("could not proxy command to the remote server")
-        || message.contains("connection refused")
-        || message.contains("connection reset by peer")
-        || message.contains("remote server")
+    is_retryable_webdriver_error(err)
 }
 
 async fn fetch_native_ui_source(driver: &WebDriverClient, session_id: &str) -> Result<String> {
@@ -1202,7 +1313,7 @@ fn find_matching_row_in_rows(
     seen_matches: &mut HashSet<String>,
     matched_count: &mut usize,
     match_index: usize,
-) -> Option<(usize, String, RowMatch)> {
+) -> Option<(usize, String, RowMatch, usize)> {
     for (row_idx, row) in rows.iter().enumerate() {
         let Some(candidate) = row_field_value(row, Some(match_field)) else {
             continue;
@@ -1216,11 +1327,12 @@ fn find_matching_row_in_rows(
                 continue;
             }
         }
-        if *matched_count < match_index {
-            *matched_count += 1;
+        let current_match_index = *matched_count;
+        *matched_count += 1;
+        if current_match_index < match_index {
             continue;
         }
-        return Some((row_idx, candidate, row.clone()));
+        return Some((row_idx, candidate, row.clone(), current_match_index));
     }
     None
 }
@@ -1283,8 +1395,7 @@ async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
         sort_rows(&mut rows, &order);
 
         for row in rows {
-            let key = normalize_match_key(&row.raw_label);
-            if key.is_empty() || !seen.insert(key) {
+            if !insert_normalized_match_key(&mut seen, &row.raw_label) {
                 continue;
             }
             rows_out.push(row);
@@ -1411,7 +1522,7 @@ async fn ui_find_row(state: &AppState, arguments: &Value) -> Result<Value> {
         sort_rows(&mut rows, &order);
         visible_row_count = rows.len();
 
-        if let Some((row_idx, candidate, row)) = find_matching_row_in_rows(
+        if let Some((row_idx, candidate, row, selected_match_index)) = find_matching_row_in_rows(
             &rows,
             &match_field,
             &match_query,
@@ -1424,8 +1535,8 @@ async fn ui_find_row(state: &AppState, arguments: &Value) -> Result<Value> {
                 "ok": true,
                 "sessionId": session_id,
                 "found": true,
-                "index": matched_count + 1,
-                "zeroBasedIndex": matched_count,
+                "index": selected_match_index + 1,
+                "zeroBasedIndex": selected_match_index,
                 "matchedText": candidate,
                 "value": row_match_to_value(&row, row_idx + 1),
                 "matchField": match_field,
@@ -1527,11 +1638,8 @@ async fn ui_extract_text(state: &AppState, arguments: &Value) -> Result<Value> {
     let mut out = Vec::new();
     let mut seen = HashSet::<String>::new();
     for node in nodes {
-        if unique {
-            let key = normalize_match_key(&node.text);
-            if key.is_empty() || !seen.insert(key) {
-                continue;
-            }
+        if unique && !insert_normalized_match_key(&mut seen, &node.text) {
+            continue;
         }
         out.push(json!({
             "position": out.len() + 1,
@@ -1931,11 +2039,20 @@ async fn action_wait(state: &AppState, arguments: &Value) -> Result<Value> {
     })?;
     let driver = driver_from_state(state).await?;
     let deadline = tokio::time::Instant::now() + Duration::from_millis(timeout_ms);
+    let mut last_retryable_error: Option<String> = None;
 
     loop {
-        let ids = driver
+        let ids = match driver
             .find_elements(&session_id, &resolved.using, &resolved.value)
-            .await?;
+            .await
+        {
+            Ok(ids) => ids,
+            Err(err) if is_retryable_webdriver_error(&err) => {
+                last_retryable_error = Some(format!("{err:#}"));
+                Vec::new()
+            }
+            Err(err) => return Err(err),
+        };
         if ids.is_empty() {
             // keep waiting
         } else if resolved.require_unique && ids.len() != 1 {
@@ -1969,7 +2086,12 @@ async fn action_wait(state: &AppState, arguments: &Value) -> Result<Value> {
                     "timeout waiting for locator using='{}' value='{}'",
                     &resolved.using, &resolved.value
                 ),
-                json!({"using": &resolved.using, "value": &resolved.value, "timeoutMs": timeout_ms}),
+                json!({
+                    "using": &resolved.using,
+                    "value": &resolved.value,
+                    "timeoutMs": timeout_ms,
+                    "lastRetryableError": last_retryable_error
+                }),
             )
             .into());
         }
@@ -2400,11 +2522,20 @@ fn normalize_text(value: String) -> Option<String> {
 }
 
 fn normalize_match_key(value: &str) -> String {
-    value
+    let ascii_key: String = value
         .to_lowercase()
         .chars()
         .filter(|ch| ch.is_ascii_alphanumeric())
-        .collect()
+        .collect();
+    if !ascii_key.is_empty() {
+        return ascii_key;
+    }
+    normalize_string_dedupe_key(value)
+}
+
+fn insert_normalized_match_key(seen: &mut HashSet<String>, value: &str) -> bool {
+    let key = normalize_match_key(value);
+    !key.is_empty() && seen.insert(key)
 }
 
 #[derive(Debug, Clone)]
@@ -2863,8 +2994,7 @@ fn extract_suggestion_texts(source: &str, query: &NodeQuery, limit: usize) -> Ve
     let mut seen = HashSet::<String>::new();
     let mut out = Vec::new();
     for node in nodes {
-        let key = normalize_match_key(&node.text);
-        if key.is_empty() || !seen.insert(key) {
+        if !insert_normalized_match_key(&mut seen, &node.text) {
             continue;
         }
         out.push(json!({"text": node.text, "position": out.len() + 1}));
@@ -3665,27 +3795,42 @@ async fn web_wait_js(state: &AppState, arguments: &Value) -> Result<Value> {
 
     let driver = driver_from_state(state).await?;
     let deadline = std::time::Instant::now() + Duration::from_millis(timeout_ms);
+    let mut last_retryable_error: Option<String> = None;
     loop {
-        let response = driver
+        let response = match driver
             .execute_script(&session_id, script, args.clone())
-            .await?;
-        let result = response.get("value").cloned().unwrap_or(Value::Null);
-        if js_value_is_truthy(&result) {
-            return Ok(tool_success(
-                json!({
-                    "ok": true,
-                    "sessionId": session_id,
-                    "result": result
-                }),
-                "script condition satisfied",
-            ));
+            .await
+        {
+            Ok(response) => Some(response),
+            Err(err) if is_retryable_webdriver_error(&err) => {
+                last_retryable_error = Some(format!("{err:#}"));
+                None
+            }
+            Err(err) => return Err(err),
+        };
+        if let Some(response) = response {
+            let result = response.get("value").cloned().unwrap_or(Value::Null);
+            if js_value_is_truthy(&result) {
+                return Ok(tool_success(
+                    json!({
+                        "ok": true,
+                        "sessionId": session_id,
+                        "result": result
+                    }),
+                    "script condition satisfied",
+                ));
+            }
         }
 
         if std::time::Instant::now() >= deadline {
             return Err(ToolCallError::new(
                 ToolErrorCode::Timeout,
                 "timeout waiting for JavaScript condition",
-                json!({"tool": "ios.web.wait_js"}),
+                json!({
+                    "tool": "ios.web.wait_js",
+                    "timeoutMs": timeout_ms,
+                    "lastRetryableError": last_retryable_error
+                }),
             )
             .into());
         }
@@ -3861,19 +4006,7 @@ async fn web_screenshot(state: &AppState, arguments: &Value) -> Result<Value> {
     let driver = driver_from_state(state).await?;
     let data = driver.screenshot(&session_id).await?;
 
-    Ok(tool_success_with_content(
-        json!({
-            "ok": true,
-            "sessionId": session_id,
-            "mimeType": "image/png",
-            "bytesBase64": data.len(),
-            "data": data
-        }),
-        vec![
-            json!({"type": "text", "text": "screenshot captured"}),
-            json!({"type": "image", "mimeType": "image/png", "data": data}),
-        ],
-    ))
+    Ok(screenshot_tool_result(&session_id, data))
 }
 
 async fn web_eval_js(state: &AppState, arguments: &Value) -> Result<Value> {
@@ -4259,39 +4392,7 @@ async fn workflow_run(state: &AppState, arguments: &Value) -> Result<Value> {
         .into());
     }
 
-    let screenshot_block = output
-        .get("screenshot")
-        .and_then(|value| value.get("data").and_then(Value::as_str))
-        .filter(|data| !data.trim().is_empty())
-        .map(|data| {
-            json!({
-                "type": "image",
-                "mimeType": output.get("screenshot").and_then(|v| v.get("mimeType")).and_then(Value::as_str).unwrap_or("image/png"),
-                "data": data
-            })
-        })
-        .or_else(|| {
-            output
-                .get("trace")
-                .and_then(Value::as_array)
-                .and_then(|trace| {
-                    trace.iter().rev().find_map(|entry| {
-                        let result = entry.get("result")?;
-                        let content = result.get("content")?.as_array()?;
-                        content.iter().find_map(|block| {
-                            let typ = block.get("type")?.as_str()?;
-                            if typ != "image" {
-                                return None;
-                            }
-                            let data = block.get("data")?.as_str()?;
-                            if data.trim().is_empty() {
-                                return None;
-                            }
-                            Some(block.clone())
-                        })
-                    })
-                })
-        })
+    let screenshot_block = workflow_screenshot_content_block(&output)
         .unwrap_or_else(|| json!({"type": "text", "text": "no screenshot"}));
 
     let content = vec![
@@ -4519,19 +4620,12 @@ async fn phone_messages_list_recent_threads(state: &AppState, arguments: &Value)
     let max_threads = bounded_usize_arg(arguments, "maxThreads", 25, 1, 50);
     let background_app_on_finish = bool_arg(arguments, "backgroundAppOnFinish", true);
     let lock_device_on_finish = bool_arg(arguments, "lockDeviceOnFinish", false);
+    let keep_session_on_finish = bool_arg(arguments, "__keepSessionOnFinish", false);
+    let reuse_active_session = bool_arg(arguments, "__reuseActiveSession", false);
 
     let steps = vec![
         json!({ "tool": "ios.appium.ensure", "arguments": {} }),
-        json!({
-            "tool": "ios.session.create",
-            "arguments": {
-                "udid": "{{udid}}",
-                "kind": "native_app",
-                "bundleId": "com.apple.MobileSMS",
-                "replaceExisting": true,
-                "noReset": true
-            }
-        }),
+        phone_messages_session_create_step(reuse_active_session),
         json!({
             "tool": "ios.action.wait",
             "arguments": {
@@ -4594,8 +4688,11 @@ async fn phone_messages_list_recent_threads(state: &AppState, arguments: &Value)
             "threads": "{{steps.threads.rows}}",
             "screenshot": "{{steps.messagesScreenshot}}"
         }),
-        background_app_on_finish,
-        lock_device_on_finish,
+        PhoneRunFinish {
+            background_app_on_finish,
+            lock_device_on_finish,
+            keep_session_on_finish,
+        },
     )
     .await?;
 
@@ -4622,25 +4719,32 @@ async fn phone_messages_list_recent_threads(state: &AppState, arguments: &Value)
     Ok(tool_success_with_content(output, content))
 }
 
+fn phone_messages_session_create_step(reuse_active_session: bool) -> Value {
+    json!({
+        "tool": "ios.session.create",
+        "arguments": {
+            "udid": "{{udid}}",
+            "kind": "native_app",
+            "bundleId": "com.apple.MobileSMS",
+            "replaceExisting": !reuse_active_session,
+            "reuseActiveSession": reuse_active_session,
+            "noReset": true
+        }
+    })
+}
+
 async fn phone_messages_read_latest_messages(state: &AppState, arguments: &Value) -> Result<Value> {
     let device_id = required_device_id(arguments)?;
     let thread_index = resolve_thread_index(arguments)?;
     let max_messages = bounded_usize_arg(arguments, "maxMessages", 20, 1, 50);
     let background_app_on_finish = bool_arg(arguments, "backgroundAppOnFinish", true);
     let lock_device_on_finish = bool_arg(arguments, "lockDeviceOnFinish", false);
+    let keep_session_on_finish = bool_arg(arguments, "__keepSessionOnFinish", false);
+    let reuse_active_session = bool_arg(arguments, "__reuseActiveSession", false);
 
     let steps = vec![
         json!({ "tool": "ios.appium.ensure", "arguments": {} }),
-        json!({
-            "tool": "ios.session.create",
-            "arguments": {
-                "udid": "{{udid}}",
-                "kind": "native_app",
-                "bundleId": "com.apple.MobileSMS",
-                "replaceExisting": true,
-                "noReset": true
-            }
-        }),
+        phone_messages_session_create_step(reuse_active_session),
         json!({
             "tool": "ios.action.wait",
             "arguments": {
@@ -4717,8 +4821,11 @@ async fn phone_messages_read_latest_messages(state: &AppState, arguments: &Value
             "messages": "{{steps.messages.rows}}",
             "screenshot": "{{steps.threadScreenshot}}"
         }),
-        background_app_on_finish,
-        lock_device_on_finish,
+        PhoneRunFinish {
+            background_app_on_finish,
+            lock_device_on_finish,
+            keep_session_on_finish,
+        },
     )
     .await?;
 
@@ -4806,7 +4913,9 @@ async fn phone_messages_find_recent_otp(state: &AppState, arguments: &Value) -> 
             "deviceId": device_id.clone(),
             "maxThreads": max_threads,
             "backgroundAppOnFinish": background_app_on_finish,
-            "lockDeviceOnFinish": lock_device_on_finish
+            "lockDeviceOnFinish": lock_device_on_finish,
+            "__keepSessionOnFinish": true,
+            "__reuseActiveSession": true
         }),
     )
     .await?;
@@ -4855,7 +4964,9 @@ async fn phone_messages_find_recent_otp(state: &AppState, arguments: &Value) -> 
                 "threadIndex": thread_index,
                 "maxMessages": max_messages,
                 "backgroundAppOnFinish": background_app_on_finish,
-                "lockDeviceOnFinish": lock_device_on_finish
+                "lockDeviceOnFinish": lock_device_on_finish,
+                "__keepSessionOnFinish": true,
+                "__reuseActiveSession": true
             }),
         )
         .await;
@@ -4930,6 +5041,7 @@ async fn phone_messages_find_recent_otp(state: &AppState, arguments: &Value) -> 
 
     if successful_thread_reads == 0 && !filtered_threads.is_empty() {
         if let Some(err) = last_thread_error {
+            cleanup_after_phone_steps(state, background_app_on_finish, lock_device_on_finish).await;
             return Err(err);
         }
     }
@@ -5004,6 +5116,8 @@ async fn phone_messages_find_recent_otp(state: &AppState, arguments: &Value) -> 
     if let Some(block) = screenshot_to_content_block(output.get("screenshot")) {
         content.push(block);
     }
+
+    cleanup_after_phone_steps(state, background_app_on_finish, lock_device_on_finish).await;
 
     Ok(tool_success_with_content(output, content))
 }
@@ -5097,8 +5211,11 @@ async fn phone_calls_list_recent_calls(state: &AppState, arguments: &Value) -> R
             "calls": "{{steps.calls.rows}}",
             "screenshot": "{{steps.callsScreenshot}}"
         }),
-        background_app_on_finish,
-        lock_device_on_finish,
+        PhoneRunFinish {
+            background_app_on_finish,
+            lock_device_on_finish,
+            keep_session_on_finish: false,
+        },
     )
     .await?;
 
@@ -5261,8 +5378,11 @@ async fn collect_recent_notifications(state: &AppState, arguments: &Value) -> Re
             "notifications": "{{steps.notifications.rows}}",
             "screenshot": "{{steps.notificationsScreenshot}}"
         }),
-        background_app_on_finish,
-        lock_device_on_finish,
+        PhoneRunFinish {
+            background_app_on_finish,
+            lock_device_on_finish,
+            keep_session_on_finish: false,
+        },
     )
     .await?;
 
@@ -5291,55 +5411,47 @@ async fn run_phone_steps(
     steps: Vec<Value>,
     vars: Value,
     output_template: Value,
-    background_app_on_finish: bool,
-    lock_device_on_finish: bool,
+    finish: PhoneRunFinish,
 ) -> Result<Value> {
     let output_result = run_steps(state, &steps, false, &vars, Some(&output_template), None).await;
 
-    if let Err(err) = &output_result {
-        let artifacts = capture_failure_artifacts(state)
-            .await
-            .unwrap_or_else(|_| json!({}));
-        let _ = worker_shutdown(
-            state,
-            &json!({
-                "stopAppium": false,
-                "shutdownWDA": true,
-                "backgroundApp": background_app_on_finish,
-                "lockDevice": lock_device_on_finish
-            }),
-        )
-        .await;
-        let message = format!("{tool_name} failed: {err:#}");
-        return Err(ToolCallError::new(
-            classify_tool_error_code(&message),
-            message,
-            json!({
-                "tool": tool_name,
-                "artifacts": artifacts
-            }),
-        )
-        .into());
-    }
+    let output = match output_result {
+        Ok(output) => output,
+        Err(err) => {
+            let artifacts = capture_failure_artifacts(state)
+                .await
+                .unwrap_or_else(|_| json!({}));
+            cleanup_after_phone_steps(
+                state,
+                finish.background_app_on_finish,
+                finish.lock_device_on_finish,
+            )
+            .await;
+            let message = format!("{tool_name} failed: {err:#}");
+            return Err(ToolCallError::new(
+                classify_tool_error_code(&message),
+                message,
+                json!({
+                    "tool": tool_name,
+                    "artifacts": artifacts
+                }),
+            )
+            .into());
+        }
+    };
 
-    let _ = worker_shutdown(
-        state,
-        &json!({
-            "stopAppium": false,
-            "shutdownWDA": true,
-            "backgroundApp": background_app_on_finish,
-            "lockDevice": lock_device_on_finish
-        }),
-    )
-    .await;
-
-    let output = output_result.expect("output_result already checked");
     if output.get("ok").and_then(Value::as_bool) == Some(false) {
         let message = output
             .get("error")
             .and_then(Value::as_str)
             .map(ToString::to_string)
             .unwrap_or_else(|| format!("{tool_name} failed"));
+        cleanup_after_phone_steps(
+            state,
+            finish.background_app_on_finish,
+            finish.lock_device_on_finish,
+        )
+        .await;
         return Err(ToolCallError::new(
             tool_error_code_from_value(output.get("errorCode")),
             message,
@@ -5351,7 +5463,40 @@ async fn run_phone_steps(
         .into());
     }
 
+    if !finish.keep_session_on_finish {
+        cleanup_after_phone_steps(
+            state,
+            finish.background_app_on_finish,
+            finish.lock_device_on_finish,
+        )
+        .await;
+    }
+
     Ok(output)
+}
+
+#[derive(Clone, Copy)]
+struct PhoneRunFinish {
+    background_app_on_finish: bool,
+    lock_device_on_finish: bool,
+    keep_session_on_finish: bool,
+}
+
+async fn cleanup_after_phone_steps(
+    state: &AppState,
+    background_app_on_finish: bool,
+    lock_device_on_finish: bool,
+) {
+    let _ = worker_shutdown(
+        state,
+        &json!({
+            "stopAppium": false,
+            "shutdownWDA": true,
+            "backgroundApp": background_app_on_finish,
+            "lockDevice": lock_device_on_finish
+        }),
+    )
+    .await;
 }
 
 fn phone_tool_content(
@@ -5370,17 +5515,80 @@ fn phone_tool_content(
     content
 }
 
+fn workflow_screenshot_content_block(output: &Value) -> Option<Value> {
+    screenshot_to_content_block(output.get("screenshot")).or_else(|| {
+        output
+            .get("trace")
+            .and_then(Value::as_array)
+            .and_then(|trace| {
+                trace.iter().rev().find_map(|entry| {
+                    let content = entry
+                        .get("result")
+                        .and_then(|result| result.get("content"))
+                        .and_then(Value::as_array)?;
+                    content
+                        .iter()
+                        .find_map(image_content_block_to_screenshot_metadata)
+                })
+            })
+    })
+}
+
 fn screenshot_to_content_block(screenshot: Option<&Value>) -> Option<Value> {
     let shot = screenshot?;
-    let data = shot.get("data")?.as_str()?;
-    if data.trim().is_empty() {
+    let mime_type = screenshot_mime_type(shot);
+    let bytes_base64 = screenshot_base64_len(shot)?;
+    Some(screenshot_metadata_text_block(
+        "screenshot available",
+        mime_type,
+        bytes_base64,
+    ))
+}
+
+fn image_content_block_to_screenshot_metadata(block: &Value) -> Option<Value> {
+    if block.get("type").and_then(Value::as_str) != Some("image") {
         return None;
     }
-    Some(json!({
-        "type": "image",
-        "mimeType": shot.get("mimeType").and_then(Value::as_str).unwrap_or("image/png"),
-        "data": data
-    }))
+    let mime_type = screenshot_mime_type(block);
+    let bytes_base64 = screenshot_base64_len(block)?;
+    Some(screenshot_metadata_text_block(
+        "screenshot available",
+        mime_type,
+        bytes_base64,
+    ))
+}
+
+fn screenshot_mime_type(value: &Value) -> &str {
+    value
+        .get("mimeType")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            value
+                .get("dataSummary")
+                .and_then(|summary| summary.get("mimeType"))
+                .and_then(Value::as_str)
+        })
+        .unwrap_or("image/png")
+}
+
+fn screenshot_base64_len(value: &Value) -> Option<usize> {
+    if let Some(data) = value.get("data").and_then(Value::as_str) {
+        if data.trim().is_empty() {
+            return None;
+        }
+        return Some(data.len());
+    }
+
+    value
+        .get("bytesBase64")
+        .and_then(Value::as_u64)
+        .or_else(|| {
+            value
+                .get("dataSummary")
+                .and_then(|summary| summary.get("length"))
+                .and_then(Value::as_u64)
+        })
+        .and_then(|length| usize::try_from(length).ok())
 }
 
 fn normalize_message_threads(rows: &[Value]) -> Vec<Value> {
@@ -5878,7 +6086,10 @@ fn classify_tool_error_code(message: &str) -> ToolErrorCode {
         || lowered.contains(" for reason: locked")
     {
         ToolErrorCode::DeviceLocked
-    } else if lowered.contains("timeout") {
+    } else if lowered.contains("timeout")
+        || lowered.contains("timed out")
+        || lowered.contains("deadline has elapsed")
+    {
         ToolErrorCode::Timeout
     } else if lowered.contains("no active session")
         || lowered.contains("sessionid is required")
@@ -5966,6 +6177,132 @@ fn workflow_error_parts(
     }
 
     (error_message, error_code, error_details)
+}
+
+fn sanitize_trace_result(result: &Value) -> Value {
+    sanitize_trace_value(result)
+}
+
+fn sanitize_trace_value(value: &Value) -> Value {
+    match value {
+        Value::Array(items) => Value::Array(items.iter().map(sanitize_trace_value).collect()),
+        Value::Object(map) => sanitize_trace_object(map),
+        _ => value.clone(),
+    }
+}
+
+fn sanitize_trace_object(map: &Map<String, Value>) -> Value {
+    let mut sanitized = Map::new();
+
+    for (key, value) in map {
+        if let Some((summary_key, summary)) = trace_artifact_summary_for_field(key, value, map) {
+            sanitized.insert(summary_key, summary);
+        } else {
+            sanitized.insert(key.clone(), sanitize_trace_value(value));
+        }
+    }
+
+    Value::Object(sanitized)
+}
+
+fn trace_artifact_summary_for_field(
+    key: &str,
+    value: &Value,
+    siblings: &Map<String, Value>,
+) -> Option<(String, Value)> {
+    let raw = value.as_str()?;
+    let key_lower = key.to_ascii_lowercase();
+
+    if key_lower == "data" {
+        let mime_type = siblings.get("mimeType").and_then(Value::as_str);
+        let kind = if mime_type
+            .map(|mime| mime.to_ascii_lowercase().starts_with("image/"))
+            .unwrap_or(false)
+        {
+            "screenshot"
+        } else {
+            "data"
+        };
+        return Some((
+            "dataSummary".to_string(),
+            trace_string_artifact_summary(kind, raw, mime_type, Some("base64")),
+        ));
+    }
+
+    if key_lower.contains("screenshot") {
+        let mime_type = siblings.get("mimeType").and_then(Value::as_str);
+        return Some((
+            trace_summary_key(key),
+            trace_string_artifact_summary("screenshot", raw, mime_type, Some("base64")),
+        ));
+    }
+
+    if is_trace_source_artifact_key(&key_lower, raw) {
+        return Some((
+            trace_summary_key(key),
+            trace_string_artifact_summary("source", raw, Some(trace_source_mime_type(raw)), None),
+        ));
+    }
+
+    None
+}
+
+fn trace_summary_key(key: &str) -> String {
+    format!("{key}Summary")
+}
+
+fn trace_string_artifact_summary(
+    kind: &str,
+    raw: &str,
+    mime_type: Option<&str>,
+    encoding: Option<&str>,
+) -> Value {
+    let mut summary = Map::new();
+    summary.insert("omitted".to_string(), json!(true));
+    summary.insert("kind".to_string(), json!(kind));
+    summary.insert("length".to_string(), json!(raw.len()));
+    summary.insert("digest".to_string(), json!(trace_digest(raw)));
+    if let Some(mime_type) = mime_type.filter(|value| !value.trim().is_empty()) {
+        summary.insert("mimeType".to_string(), json!(mime_type));
+    }
+    if let Some(encoding) = encoding {
+        summary.insert("encoding".to_string(), json!(encoding));
+    }
+    Value::Object(summary)
+}
+
+fn trace_digest(raw: &str) -> String {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in raw.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("fnv1a64:{hash:016x}")
+}
+
+fn is_trace_source_artifact_key(key_lower: &str, raw: &str) -> bool {
+    match key_lower {
+        "pagesource" | "uisource" | "pagexml" | "xml" => true,
+        "source" => looks_like_markup_source(raw) || raw.len() > 512,
+        _ if key_lower.ends_with("source") => looks_like_markup_source(raw) || raw.len() > 512,
+        _ => false,
+    }
+}
+
+fn looks_like_markup_source(raw: &str) -> bool {
+    raw.trim_start().starts_with('<')
+}
+
+fn trace_source_mime_type(raw: &str) -> &'static str {
+    let trimmed = raw.trim_start();
+    let prefix = trimmed.chars().take(32).collect::<String>().to_lowercase();
+    if prefix.starts_with("<!doctype html") || prefix.starts_with("<html") {
+        "text/html"
+    } else if prefix.starts_with("<?xml") || prefix.starts_with('<') {
+        "application/xml"
+    } else {
+        "text/plain"
+    }
 }
 
 async fn run_steps(
@@ -6078,12 +6415,6 @@ async fn run_steps(
             .and_then(Value::as_i64)
             .unwrap_or(0)
             .clamp(0, 10) as u32;
-        let timeout_ms = obj
-            .get("timeoutMs")
-            .and_then(Value::as_u64)
-            .or_else(|| obj.get("timeout_ms").and_then(Value::as_u64))
-            .unwrap_or(120_000)
-            .clamp(250, 600_000);
 
         let raw_args = obj
             .get("arguments")
@@ -6091,6 +6422,7 @@ async fn run_steps(
             .or_else(|| obj.get("args").cloned())
             .unwrap_or_else(|| json!({}));
         let args = substitute_vars(raw_args, &vars);
+        let timeout_ms = workflow_step_timeout_ms(tool, obj, &args);
 
         let max_attempts = retries.saturating_add(1);
         let possibly_applied_on_timeout = requires_commit || workflow_tool_may_mutate(tool);
@@ -6119,7 +6451,7 @@ async fn run_steps(
                         "attempt": attempt,
                         "ok": true,
                         "durationMs": attempt_started.elapsed().as_millis(),
-                        "result": result
+                        "result": sanitize_trace_result(&result)
                     }));
                     break;
                 }
@@ -6154,7 +6486,14 @@ async fn run_steps(
                     }
                 }
                 Err(_) => {
-                    let err = anyhow!("timeout after {timeout_ms}ms");
+                    let err = anyhow::Error::new(ToolCallError::new(
+                        ToolErrorCode::Timeout,
+                        format!("timeout after {timeout_ms}ms"),
+                        json!({
+                            "step": idx + 1,
+                            "timeoutMs": timeout_ms
+                        }),
+                    ));
                     let (error_message, error_code, error_details) =
                         workflow_error_parts(&err, tool, possibly_applied_on_timeout);
                     trace.push(json!({
@@ -6224,6 +6563,18 @@ async fn run_steps(
     Ok(output)
 }
 
+fn truncate_str_at_char_boundary(value: &str, max_bytes: usize) -> (&str, bool) {
+    if value.len() <= max_bytes {
+        return (value, false);
+    }
+
+    let mut end = max_bytes;
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    (&value[..end], true)
+}
+
 async fn capture_failure_artifacts(state: &AppState) -> Result<Value> {
     let policy = FailureArtifactPolicy::from_env();
     if policy == FailureArtifactPolicy::Off {
@@ -6265,15 +6616,12 @@ async fn capture_failure_artifacts(state: &AppState) -> Result<Value> {
         driver.page_source(&session.session_id).await
     };
     if let Ok(source) = source_result {
-        let truncated = source.len() > 50_000;
-        let slice = if truncated {
-            source.chars().take(50_000).collect::<String>()
-        } else {
-            source
-        };
+        let source_length = source.len();
+        let (slice, truncated) =
+            truncate_str_at_char_boundary(&source, FAILURE_ARTIFACT_SOURCE_MAX_BYTES);
         out.insert(
             "uiSource".to_string(),
-            json!({"length": slice.len(), "truncated": truncated, "source": slice}),
+            json!({"length": source_length, "truncated": truncated, "source": slice}),
         );
     }
 
@@ -7124,9 +7472,17 @@ async fn wait_for_selector(
     timeout: Duration,
 ) -> Result<String> {
     let deadline = tokio::time::Instant::now() + timeout;
+    let mut last_retryable_error: Option<String> = None;
 
     loop {
-        let ids = driver.find_elements_css(session_id, selector).await?;
+        let ids = match driver.find_elements_css(session_id, selector).await {
+            Ok(ids) => ids,
+            Err(err) if is_retryable_webdriver_error(&err) => {
+                last_retryable_error = Some(format!("{err:#}"));
+                Vec::new()
+            }
+            Err(err) => return Err(err),
+        };
         if ids.is_empty() {
             // keep waiting
         } else if require_unique && ids.len() != 1 {
@@ -7147,7 +7503,11 @@ async fn wait_for_selector(
             return Err(ToolCallError::new(
                 ToolErrorCode::Timeout,
                 format!("timeout waiting for selector '{selector}'"),
-                json!({"selector": selector, "index": index}),
+                json!({
+                    "selector": selector,
+                    "index": index,
+                    "lastRetryableError": last_retryable_error
+                }),
             )
             .into());
         }
@@ -7159,14 +7519,248 @@ async fn wait_for_selector(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::AppState;
+    use crate::state::{AppState, AppiumSource};
     use crate::ui_compact::TargetLocator;
+    use httpmock::prelude::*;
     use once_cell::sync::Lazy;
     use serde_json::json;
     use std::collections::HashMap;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
     use tokio::sync::Mutex as TokioMutex;
 
     static ENV_LOCK: Lazy<TokioMutex<()>> = Lazy::new(|| TokioMutex::new(()));
+
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: impl AsRef<std::ffi::OsStr>) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, previous }
+        }
+
+        fn remove(key: &'static str) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::remove_var(key);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(previous) = &self.previous {
+                std::env::set_var(self.key, previous);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn write_executable(path: &std::path::Path, contents: &str) {
+        std::fs::write(path, contents).expect("write executable");
+        let mut permissions = std::fs::metadata(path)
+            .expect("executable metadata")
+            .permissions();
+        use std::os::unix::fs::PermissionsExt;
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(path, permissions).expect("chmod executable");
+    }
+
+    fn value_contains_string(value: &Value, needle: &str) -> bool {
+        match value {
+            Value::String(text) => text.contains(needle),
+            Value::Array(items) => items.iter().any(|item| value_contains_string(item, needle)),
+            Value::Object(map) => map.values().any(|item| value_contains_string(item, needle)),
+            _ => false,
+        }
+    }
+
+    fn value_contains_key(value: &Value, needle: &str) -> bool {
+        match value {
+            Value::Array(items) => items.iter().any(|item| value_contains_key(item, needle)),
+            Value::Object(map) => {
+                map.contains_key(needle)
+                    || map.values().any(|item| value_contains_key(item, needle))
+            }
+            _ => false,
+        }
+    }
+
+    fn assert_no_raw_artifact_fields(value: &Value) {
+        for key in ["data", "source", "pageSource", "uiSource"] {
+            assert!(
+                !value_contains_key(value, key),
+                "trace should not contain raw artifact field {key}: {value}"
+            );
+        }
+    }
+
+    fn http_json_response(status: u16, body: &str) -> String {
+        let reason = match status {
+            200 => "OK",
+            500 => "Internal Server Error",
+            _ => "OK",
+        };
+        format!(
+            "HTTP/1.1 {status} {reason}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+            body.len()
+        )
+    }
+
+    async fn spawn_sequence_http_server(responses: Vec<String>) -> (String, Arc<AtomicUsize>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test http server");
+        let addr = listener.local_addr().expect("test http server address");
+        let responses = Arc::new(responses);
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let task_responses = Arc::clone(&responses);
+        let task_request_count = Arc::clone(&request_count);
+
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let idx = task_request_count.fetch_add(1, Ordering::SeqCst);
+                let response = task_responses
+                    .get(idx)
+                    .or_else(|| task_responses.last())
+                    .expect("at least one response")
+                    .clone();
+                tokio::spawn(async move {
+                    let mut buf = [0_u8; 4096];
+                    let _ = stream.read(&mut buf).await;
+                    let _ = stream.write_all(response.as_bytes()).await;
+                });
+            }
+        });
+
+        (format!("http://{addr}"), request_count)
+    }
+
+    #[test]
+    fn screenshot_tool_payload_keeps_raw_data_only_in_structured_content() {
+        let screenshot = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABpayloadshape";
+        let result = screenshot_tool_result("session-1", screenshot.to_string());
+
+        let structured = result.get("structuredContent").expect("structured content");
+        assert_eq!(
+            structured.get("data").and_then(Value::as_str),
+            Some(screenshot)
+        );
+        assert_eq!(
+            structured.get("bytesBase64").and_then(Value::as_u64),
+            Some(screenshot.len() as u64)
+        );
+
+        let content = result.get("content").expect("top-level content");
+        assert!(!value_contains_string(content, screenshot));
+        let blocks = content.as_array().expect("content blocks");
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].get("type").and_then(Value::as_str), Some("text"));
+        assert!(value_contains_string(&blocks[0], "image/png"));
+        assert!(value_contains_string(
+            &blocks[0],
+            &screenshot.len().to_string()
+        ));
+    }
+
+    #[test]
+    fn screenshot_content_helpers_emit_metadata_without_base64() {
+        let screenshot = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABcontentmeta";
+        let screenshot_value = json!({
+            "mimeType": "image/png",
+            "data": screenshot
+        });
+        let content = phone_tool_content(
+            "listed recent messages".to_string(),
+            3,
+            "threads",
+            Some(&screenshot_value),
+        );
+
+        assert!(!value_contains_string(
+            &Value::Array(content.clone()),
+            screenshot
+        ));
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[1].get("type").and_then(Value::as_str), Some("text"));
+        assert!(value_contains_string(&content[1], "image/png"));
+        assert!(value_contains_string(
+            &content[1],
+            &screenshot.len().to_string()
+        ));
+
+        let workflow_output = json!({
+            "trace": [{
+                "result": {
+                    "content": [{
+                        "type": "image",
+                        "mimeType": "image/png",
+                        "dataSummary": {
+                            "omitted": true,
+                            "kind": "screenshot",
+                            "length": screenshot.len(),
+                            "mimeType": "image/png",
+                            "encoding": "base64"
+                        }
+                    }]
+                }
+            }]
+        });
+        let block = workflow_screenshot_content_block(&workflow_output)
+            .expect("workflow screenshot metadata");
+        assert_eq!(block.get("type").and_then(Value::as_str), Some("text"));
+        assert!(!value_contains_string(&block, screenshot));
+        assert!(value_contains_string(&block, "image/png"));
+        assert!(value_contains_string(&block, &screenshot.len().to_string()));
+    }
+
+    #[test]
+    fn phone_messages_session_step_replaces_by_default_and_reuses_when_requested() {
+        let default_step = phone_messages_session_create_step(false);
+        let default_args = default_step
+            .get("arguments")
+            .and_then(Value::as_object)
+            .expect("session arguments");
+        assert_eq!(
+            default_args.get("replaceExisting").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            default_args
+                .get("reuseActiveSession")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+
+        let reuse_step = phone_messages_session_create_step(true);
+        let reuse_args = reuse_step
+            .get("arguments")
+            .and_then(Value::as_object)
+            .expect("session arguments");
+        assert_eq!(
+            reuse_args.get("replaceExisting").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            reuse_args
+                .get("reuseActiveSession")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            reuse_args.get("bundleId").and_then(Value::as_str),
+            Some("com.apple.MobileSMS")
+        );
+    }
 
     #[test]
     fn tool_error_from_anyhow_downcasts_tool_call_error() {
@@ -7322,6 +7916,19 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tool_policy_direct_wait_js_is_gated_before_execution() {
+        let state = AppState::new();
+        let err = handle_tool_call(&state, "ios.web.wait_js", json!({"script": "true"}))
+            .await
+            .expect_err("wait_js should be gated");
+        let typed = err
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<ToolCallError>())
+            .expect("typed policy error");
+        assert_eq!(typed.code, ToolErrorCode::PolicyDenied);
+    }
+
+    #[tokio::test]
     async fn runtime_guardrails_encoded_compact_targets_default_to_unique_resolution() {
         let state = AppState::new();
         let mut targets = HashMap::new();
@@ -7345,6 +7952,72 @@ mod tests {
         .expect("target");
 
         assert!(resolved.require_unique);
+    }
+
+    #[tokio::test]
+    async fn wait_for_selector_retries_transient_driver_errors() {
+        let (base_url, request_count) = spawn_sequence_http_server(vec![
+            http_json_response(500, r#"{"value":{"error":"unknown error"}}"#),
+            http_json_response(
+                200,
+                r#"{"value":[{"element-6066-11e4-a52e-4f735466cecf":"el-1"}]}"#,
+            ),
+        ])
+        .await;
+        let driver = WebDriverClient::new(&base_url).expect("driver");
+
+        let element_id = wait_for_selector(
+            &driver,
+            "sess-1",
+            ".ready",
+            0,
+            false,
+            Duration::from_secs(2),
+        )
+        .await
+        .expect("selector should be found after retry");
+
+        assert_eq!(element_id, "el-1");
+        assert_eq!(request_count.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn web_wait_js_retries_transient_driver_errors() {
+        let _state_guard = crate::state::TEST_ENV_LOCK.lock().await;
+        let (base_url, request_count) = spawn_sequence_http_server(vec![
+            http_json_response(500, r#"{"value":{"error":"unknown error"}}"#),
+            http_json_response(200, r#"{"value":true}"#),
+        ])
+        .await;
+        let state = AppState::new();
+        state
+            .set_appium(base_url, AppiumSource::Env, None, None)
+            .await;
+        state
+            .set_session(
+                "sess-1".to_string(),
+                "safari_web".to_string(),
+                "TEST-UDID".to_string(),
+                None,
+                None,
+            )
+            .await;
+
+        let output = web_wait_js(
+            &state,
+            &json!({"sessionId": "sess-1", "script": "return true", "timeoutMs": 2000}),
+        )
+        .await
+        .expect("wait_js should succeed after retry");
+
+        assert_eq!(request_count.load(Ordering::SeqCst), 2);
+        assert_eq!(
+            output
+                .get("structuredContent")
+                .and_then(|content| content.get("result"))
+                .and_then(Value::as_bool),
+            Some(true)
+        );
     }
 
     #[tokio::test]
@@ -7375,6 +8048,53 @@ mod tests {
         if let Some(value) = old_policy {
             std::env::set_var("RZN_IOS_FAILURE_ARTIFACTS", value);
         }
+    }
+
+    #[tokio::test]
+    async fn full_failure_artifacts_truncate_ui_source_by_utf8_bytes() {
+        let _guard = ENV_LOCK.lock().await;
+        let _state_guard = crate::state::TEST_ENV_LOCK.lock().await;
+        let _policy_guard = EnvVarGuard::set("RZN_IOS_FAILURE_ARTIFACTS", "full");
+        let source = format!("<xml>{}</xml>", "é".repeat(30_000));
+        let server = MockServer::start_async().await;
+        let source_mock = server
+            .mock_async(|when, then| {
+                when.method(GET).path("/session/sess-1/source");
+                then.status(200).json_body(json!({"value": source.clone()}));
+            })
+            .await;
+        let state = AppState::new();
+        state
+            .set_appium(server.url(""), AppiumSource::Env, None, None)
+            .await;
+        state
+            .set_session(
+                "sess-1".to_string(),
+                "safari_web".to_string(),
+                "udid-1".to_string(),
+                None,
+                Some(8100),
+            )
+            .await;
+
+        let artifacts = capture_failure_artifacts(&state).await.expect("artifacts");
+        let ui_source = artifacts.get("uiSource").expect("uiSource");
+        let captured = ui_source
+            .get("source")
+            .and_then(Value::as_str)
+            .expect("truncated source");
+
+        source_mock.assert_async().await;
+        assert_eq!(
+            ui_source.get("length").and_then(Value::as_u64),
+            Some(source.len() as u64)
+        );
+        assert_eq!(
+            ui_source.get("truncated").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(captured.len() <= FAILURE_ARTIFACT_SOURCE_MAX_BYTES);
+        assert!(source.starts_with(captured));
     }
 
     #[tokio::test]
@@ -7576,6 +8296,97 @@ mod tests {
     }
 
     #[test]
+    fn normalize_match_key_preserves_nonempty_ascii_keys() {
+        assert_eq!(normalize_match_key("  Hello, World 123! "), "helloworld123");
+        assert_eq!(normalize_match_key("Cafe 東京 42"), "cafe42");
+        assert_eq!(normalize_match_key("Café"), "caf");
+    }
+
+    #[test]
+    fn normalize_match_key_falls_back_to_whitespace_normalized_unicode() {
+        assert_eq!(normalize_match_key("  你好   世界  "), "你好 世界");
+        assert_eq!(normalize_match_key("  مرحبا   بالعالم  "), "مرحبا بالعالم");
+        assert_eq!(normalize_match_key("  🔍   ✨  "), "🔍 ✨");
+        assert_eq!(
+            normalize_match_key("  你好   مرحبا   🔍  "),
+            "你好 مرحبا 🔍"
+        );
+    }
+
+    #[test]
+    fn extract_rows_dedupe_keeps_non_ascii_labels() {
+        let source = r#"<?xml version="1.0" encoding="UTF-8"?>
+<AppiumAUT>
+  <XCUIElementTypeCell type="XCUIElementTypeCell" label="你好 世界" x="0" y="10" width="100" height="40"/>
+  <XCUIElementTypeCell type="XCUIElementTypeCell" label="مرحبا بالعالم" x="0" y="60" width="100" height="40"/>
+  <XCUIElementTypeCell type="XCUIElementTypeCell" label="🔍 ✨" x="0" y="110" width="100" height="40"/>
+  <XCUIElementTypeCell type="XCUIElementTypeCell" label="你好   世界" x="0" y="160" width="100" height="40"/>
+</AppiumAUT>"#;
+        let row_query =
+            parse_row_query(Some(&json!({"type": "XCUIElementTypeCell"}))).expect("row query");
+        let primary_query = parse_primary_query(Some(
+            &json!({"type": "XCUIElementTypeCell", "attr": "label", "pick": "first"}),
+        ))
+        .expect("primary query");
+        let rows = extract_rows_from_source(
+            source,
+            &row_query,
+            &primary_query,
+            None,
+            &[],
+            &parse_split_config(None),
+        );
+
+        let mut seen = HashSet::new();
+        let labels = rows
+            .into_iter()
+            .filter(|row| insert_normalized_match_key(&mut seen, &row.raw_label))
+            .map(|row| row.raw_label)
+            .collect::<Vec<_>>();
+
+        assert_eq!(labels, vec!["你好 世界", "مرحبا بالعالم", "🔍 ✨"]);
+    }
+
+    #[test]
+    fn extract_text_dedupe_keeps_non_ascii_labels() {
+        let source = r#"<?xml version="1.0" encoding="UTF-8"?>
+<AppiumAUT>
+  <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" label="你好 世界" x="0" y="10"/>
+  <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" label="مرحبا بالعالم" x="0" y="60"/>
+  <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" label="🔍 ✨" x="0" y="110"/>
+  <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" label="你好   世界" x="0" y="160"/>
+</AppiumAUT>"#;
+        let query = parse_node_query(Some(&json!({"type": "XCUIElementTypeStaticText"})));
+        let mut seen = HashSet::new();
+        let texts = extract_nodes_from_source(source, &query)
+            .into_iter()
+            .filter(|node| insert_normalized_match_key(&mut seen, &node.text))
+            .map(|node| node.text)
+            .collect::<Vec<_>>();
+
+        assert_eq!(texts, vec!["你好 世界", "مرحبا بالعالم", "🔍 ✨"]);
+    }
+
+    #[test]
+    fn typeahead_dedupe_keeps_non_ascii_suggestions() {
+        let source = r#"<?xml version="1.0" encoding="UTF-8"?>
+<AppiumAUT>
+  <XCUIElementTypeCell type="XCUIElementTypeCell" label="你好 世界" x="0" y="10"/>
+  <XCUIElementTypeCell type="XCUIElementTypeCell" label="مرحبا بالعالم" x="0" y="60"/>
+  <XCUIElementTypeCell type="XCUIElementTypeCell" label="🔍 ✨" x="0" y="110"/>
+  <XCUIElementTypeCell type="XCUIElementTypeCell" label="مرحبا   بالعالم" x="0" y="160"/>
+</AppiumAUT>"#;
+        let query = parse_node_query(Some(&json!({"type": "XCUIElementTypeCell"})));
+        let suggestions = extract_suggestion_texts(source, &query, 10);
+        let texts = suggestions
+            .iter()
+            .map(|suggestion| suggestion.get("text").and_then(Value::as_str).unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(texts, vec!["你好 世界", "مرحبا بالعالم", "🔍 ✨"]);
+    }
+
+    #[test]
     fn extract_rows_captures_geometry_and_safe_tap_point() {
         let source = r#"<?xml version="1.0" encoding="UTF-8"?>
 <AppiumAUT>
@@ -7726,7 +8537,8 @@ mod tests {
         assert_eq!(found.0, 2);
         assert_eq!(found.1, "Beta+");
         assert_eq!(found.2.raw_label, "r/baz, Beta+, 5 comments");
-        assert_eq!(matched_count, 1);
+        assert_eq!(found.3, 1);
+        assert_eq!(matched_count, 2);
     }
 
     #[test]
@@ -7770,6 +8582,51 @@ mod tests {
             0,
         );
         assert!(second.is_none());
+    }
+
+    #[test]
+    fn find_matching_row_in_rows_counts_duplicates_when_dedupe_disabled() {
+        let rows = vec![
+            RowMatch {
+                x: 0.0,
+                y: 50.0,
+                width: 375.0,
+                height: 100.0,
+                raw_label: "Alpha".to_string(),
+                fields: vec![("subtitle".to_string(), "Alpha".to_string())],
+                extra_fields: vec![],
+                tag_field: None,
+                tag_value: None,
+            },
+            RowMatch {
+                x: 0.0,
+                y: 160.0,
+                width: 375.0,
+                height: 100.0,
+                raw_label: "Alpha duplicate".to_string(),
+                fields: vec![("subtitle".to_string(), "Alpha".to_string())],
+                extra_fields: vec![],
+                tag_field: None,
+                tag_value: None,
+            },
+        ];
+        let match_query =
+            parse_string_match_query(&json!({"contains": "alpha"}), "test").expect("match query");
+        let mut seen = HashSet::new();
+        let mut matched_count = 0usize;
+
+        let found = find_matching_row_in_rows(
+            &rows,
+            "subtitle",
+            &match_query,
+            false,
+            &mut seen,
+            &mut matched_count,
+            10,
+        );
+
+        assert!(found.is_none());
+        assert_eq!(matched_count, 2);
     }
 
     #[tokio::test]
@@ -7978,6 +8835,296 @@ mod tests {
         assert_eq!(
             details.get("possiblyApplied").and_then(Value::as_bool),
             Some(true)
+        );
+        assert_eq!(details.get("timeoutMs").and_then(Value::as_u64), Some(250));
+    }
+
+    #[test]
+    fn workflow_session_create_default_timeout_tracks_substituted_create_budget() {
+        let step = json!({
+            "tool": "ios.session.create",
+            "arguments": {
+                "udid": "{{udid}}",
+                "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}"
+            }
+        });
+        let obj = step.as_object().expect("step object");
+        let args = substitute_vars(
+            obj.get("arguments").cloned().expect("arguments"),
+            &json!({
+                "udid": "TEST-UDID",
+                "sessionCreateTimeoutMs": 610_000
+            }),
+        );
+
+        assert_eq!(
+            workflow_step_timeout_ms("ios.session.create", obj, &args),
+            610_000 + SESSION_CREATE_CLEANUP_BUFFER_MS
+        );
+    }
+
+    #[test]
+    fn workflow_session_create_explicit_shorter_timeout_is_honored() {
+        let step = json!({
+            "tool": "ios.session.create",
+            "timeoutMs": 1_000,
+            "arguments": {
+                "udid": "TEST-UDID",
+                "sessionCreateTimeoutMs": 600_000
+            }
+        });
+        let obj = step.as_object().expect("step object");
+        let args = obj.get("arguments").expect("arguments");
+
+        assert_eq!(
+            workflow_step_timeout_ms("ios.session.create", obj, args),
+            1_000
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn session_create_timeout_records_timeout_details_and_cleanup_attempt() {
+        let _env_guard = ENV_LOCK.lock().await;
+        let _state_env_guard = crate::state::TEST_ENV_LOCK.lock().await;
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let bin_dir = tmp.path().join("bin");
+        std::fs::create_dir(&bin_dir).expect("bin dir");
+        write_executable(
+            &bin_dir.join("xcrun"),
+            r#"#!/bin/sh
+cat <<'EOF'
+== Devices ==
+Test iPhone (17.0) (TEST-UDID)
+EOF
+"#,
+        );
+        write_executable(&bin_dir.join("pkill"), "#!/bin/sh\nexit 0\n");
+
+        let mut path = std::ffi::OsString::from(bin_dir.as_os_str());
+        path.push(":");
+        if let Some(existing) = std::env::var_os("PATH") {
+            path.push(existing);
+        }
+        let _path_guard = EnvVarGuard::set("PATH", path);
+        let _persist_guard = EnvVarGuard::remove("RZN_IOS_PERSIST_RUNTIME");
+        let _state_file_guard = EnvVarGuard::remove("RZN_IOS_RUNTIME_STATE_FILE");
+
+        let server = MockServer::start_async().await;
+        let _appium_url_guard = EnvVarGuard::set("RZN_IOS_APPIUM_URL", server.url(""));
+        let status_mock = server
+            .mock_async(|when, then| {
+                when.method(GET).path("/status");
+                then.status(200)
+                    .json_body(json!({"value": {"ready": true}}));
+            })
+            .await;
+        let create_mock = server
+            .mock_async(|when, then| {
+                when.method(POST).path("/session");
+                then.status(200)
+                    .delay(Duration::from_millis(100))
+                    .json_body(json!({"value": {"sessionId": "sess-1", "capabilities": {}}}));
+            })
+            .await;
+        let wda_mock = server
+            .mock_async(|when, then| {
+                when.method(GET).path("/wda/shutdown");
+                then.status(200).body("ok");
+            })
+            .await;
+
+        let state = AppState::new();
+        let err = session_create(
+            &state,
+            &json!({
+                "udid": "TEST-UDID",
+                "kind": "safari_web",
+                "sessionCreateTimeoutMs": 25,
+                "wdaLocalPort": server.port()
+            }),
+        )
+        .await
+        .expect_err("session create should time out");
+        let typed = err
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<ToolCallError>())
+            .expect("typed timeout");
+
+        assert_eq!(typed.code, ToolErrorCode::Timeout);
+        assert_eq!(
+            typed
+                .details
+                .get("sessionCreateTimeoutMs")
+                .and_then(Value::as_u64),
+            Some(25)
+        );
+        assert_eq!(
+            typed.details.get("cleanupBufferMs").and_then(Value::as_u64),
+            Some(SESSION_CREATE_CLEANUP_BUFFER_MS)
+        );
+        assert_eq!(
+            typed
+                .details
+                .get("failedSessionCleanupAttempted")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+
+        status_mock.assert_async().await;
+        create_mock.assert_async().await;
+        wda_mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn workflow_trace_sanitizes_artifacts_but_saveas_and_output_keep_raw() {
+        let state = AppState::new();
+        let ui_source =
+            r#"<?xml version="1.0"?><hierarchy><XCUIElementTypeButton name="secret"/></hierarchy>"#;
+        let page_source = r#"<!doctype html><html><body>secret page</body></html>"#;
+        let screenshot = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABsecret";
+
+        let result = run_steps(
+            &state,
+            &[json!({
+                "tool": "util.list.first",
+                "saveAs": "artifact",
+                "arguments": {
+                    "list": [{
+                        "source": ui_source,
+                        "pageSource": page_source,
+                        "screenshot": {
+                            "mimeType": "image/png",
+                            "data": screenshot
+                        },
+                        "data": screenshot
+                    }]
+                }
+            })],
+            false,
+            &json!({}),
+            Some(&json!({
+                "rawSource": "{{steps.artifact.value.source}}",
+                "rawPageSource": "{{steps.artifact.value.pageSource}}",
+                "rawScreenshot": "{{steps.artifact.value.screenshot.data}}",
+                "rawData": "{{steps.artifact.value.data}}"
+            })),
+            None,
+        )
+        .await
+        .expect("workflow result");
+
+        assert_eq!(
+            result.get("rawSource").and_then(Value::as_str),
+            Some(ui_source)
+        );
+        assert_eq!(
+            result.get("rawPageSource").and_then(Value::as_str),
+            Some(page_source)
+        );
+        assert_eq!(
+            result.get("rawScreenshot").and_then(Value::as_str),
+            Some(screenshot)
+        );
+        assert_eq!(
+            result.get("rawData").and_then(Value::as_str),
+            Some(screenshot)
+        );
+
+        let trace = result
+            .get("trace")
+            .and_then(Value::as_array)
+            .expect("trace");
+        assert_eq!(trace.len(), 1);
+        let entry = &trace[0];
+        assert_no_raw_artifact_fields(entry);
+        assert!(!value_contains_string(entry, ui_source));
+        assert!(!value_contains_string(entry, page_source));
+        assert!(!value_contains_string(entry, screenshot));
+
+        let value = entry
+            .get("result")
+            .and_then(|result| result.get("structuredContent"))
+            .and_then(|structured| structured.get("value"))
+            .expect("sanitized structured value");
+        assert_eq!(value.get("source"), None);
+        assert_eq!(
+            value
+                .get("sourceSummary")
+                .and_then(|summary| summary.get("length"))
+                .and_then(Value::as_u64),
+            Some(ui_source.len() as u64)
+        );
+        assert_eq!(
+            value
+                .get("pageSourceSummary")
+                .and_then(|summary| summary.get("mimeType"))
+                .and_then(Value::as_str),
+            Some("text/html")
+        );
+        assert_eq!(value.get("data"), None);
+        assert_eq!(
+            value
+                .get("dataSummary")
+                .and_then(|summary| summary.get("length"))
+                .and_then(Value::as_u64),
+            Some(screenshot.len() as u64)
+        );
+
+        let shot = value.get("screenshot").expect("screenshot summary object");
+        assert_eq!(shot.get("data"), None);
+        assert_eq!(
+            shot.get("dataSummary")
+                .and_then(|summary| summary.get("mimeType"))
+                .and_then(Value::as_str),
+            Some("image/png")
+        );
+    }
+
+    #[test]
+    fn trace_sanitizer_replaces_image_content_data_with_metadata() {
+        let screenshot = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABtracecontent";
+        let result = tool_success_with_content(
+            json!({
+                "ok": true,
+                "mimeType": "image/png",
+                "bytesBase64": screenshot.len(),
+                "data": screenshot
+            }),
+            vec![
+                json!({"type": "text", "text": "screenshot captured"}),
+                json!({"type": "image", "mimeType": "image/png", "data": screenshot}),
+            ],
+        );
+
+        let sanitized = sanitize_trace_result(&result);
+        assert_no_raw_artifact_fields(&sanitized);
+        assert!(!value_contains_string(&sanitized, screenshot));
+
+        let structured = sanitized
+            .get("structuredContent")
+            .expect("structured content");
+        assert_eq!(structured.get("data"), None);
+        assert_eq!(
+            structured
+                .get("dataSummary")
+                .and_then(|summary| summary.get("mimeType"))
+                .and_then(Value::as_str),
+            Some("image/png")
+        );
+
+        let image_block = sanitized
+            .get("content")
+            .and_then(Value::as_array)
+            .and_then(|items| items.get(1))
+            .expect("image content block");
+        assert_eq!(image_block.get("data"), None);
+        assert_eq!(
+            image_block
+                .get("dataSummary")
+                .and_then(|summary| summary.get("encoding"))
+                .and_then(Value::as_str),
+            Some("base64")
         );
     }
 

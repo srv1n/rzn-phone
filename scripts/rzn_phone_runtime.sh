@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SELF_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 CLI_HELPER="$ROOT/scripts/rzn_phone_cli.py"
 RELEASE_ARCHIVE_HELPER="$ROOT/scripts/release_archive.py"
+RELEASE_PUBLIC_KEY="$ROOT/scripts/rzn_phone_release_ed25519.pub"
 WORKER_BIN="$ROOT/libexec/rzn-phone-worker"
 TARGET_WORKER_BIN="$ROOT/target/release/rzn-phone-worker"
 VERSION_FILE="$ROOT/VERSION"
@@ -819,6 +820,22 @@ resolve_sha_ref() {
   printf '%s.sha256\n' "$archive_ref"
 }
 
+resolve_sig_ref() {
+  local archive_ref="$1"
+  printf '%s.sig\n' "$archive_ref"
+}
+
+is_remote_ref() {
+  case "$1" in
+    http://*|https://*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 update_workflows() {
   local source="${1:-}"
   local version="${2:-}"
@@ -855,8 +872,13 @@ update_workflows() {
   [[ -n "$archive_name" && "$archive_name" == *.tar.gz ]] || fail "workflow archive must be a .tar.gz file: $archive_ref"
   local archive_path="$tmpdir/$archive_name"
   local sha_path="$tmpdir/$archive_name.sha256"
+  local sig_path="$tmpdir/$archive_name.sig"
   read_source_to_file "$archive_ref" "$archive_path"
   read_source_to_file "$(resolve_sha_ref "$archive_ref")" "$sha_path"
+  if is_remote_ref "$archive_ref"; then
+    read_source_to_file "$(resolve_sig_ref "$archive_ref")" "$sig_path"
+    python3 "$RELEASE_ARCHIVE_HELPER" verify-signature --archive "$archive_path" --signature "$sig_path" --public-key "$RELEASE_PUBLIC_KEY"
+  fi
   python3 "$RELEASE_ARCHIVE_HELPER" verify-sha256 --archive "$archive_path" --sha256 "$sha_path"
   python3 "$RELEASE_ARCHIVE_HELPER" safe-extract --archive "$archive_path" --dest "$tmpdir" --root-name rzn-phone-workflows
   local pack_root="$tmpdir/rzn-phone-workflows"

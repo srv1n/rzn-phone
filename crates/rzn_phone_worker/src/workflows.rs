@@ -2,7 +2,12 @@
 
 use anyhow::{bail, Result};
 use serde_json::Value;
-use std::{collections::HashMap, env, fs, path::PathBuf};
+use std::{
+    collections::HashMap,
+    env, fs,
+    path::{Path, PathBuf},
+    time::SystemTime,
+};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct WorkflowInfo {
@@ -31,6 +36,43 @@ pub struct WorkflowLoadDiagnostic {
     pub path: String,
     pub reason: String,
 }
+
+#[derive(Debug, Clone)]
+struct WorkflowCatalog {
+    entries: Vec<WorkflowCatalogEntry>,
+    diagnostics: Vec<WorkflowLoadDiagnostic>,
+}
+
+#[derive(Debug, Clone)]
+struct WorkflowCatalogEntry {
+    def: FileWorkflowDefinition,
+    info: WorkflowInfo,
+}
+
+#[derive(Debug, Clone)]
+struct WorkflowCatalogCache {
+    signature: WorkflowCatalogSignature,
+    catalog: WorkflowCatalog,
+}
+
+type WorkflowCatalogSignature = Vec<WorkflowDirSignature>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WorkflowDirSignature {
+    path: PathBuf,
+    files: Vec<WorkflowFileSignature>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WorkflowFileSignature {
+    path: PathBuf,
+    len: u64,
+    modified: Option<SystemTime>,
+}
+
+static WORKFLOW_CATALOG_CACHE: once_cell::sync::Lazy<
+    std::sync::Mutex<Option<WorkflowCatalogCache>>,
+> = once_cell::sync::Lazy::new(|| std::sync::Mutex::new(None));
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowReference {
@@ -246,25 +288,10 @@ pub fn load_file_workflow(name: &str) -> Option<FileWorkflowDefinition> {
         return None;
     }
 
-    for dir in workflow_search_dirs() {
-        let Ok(entries) = fs::read_dir(&dir) else {
-            continue;
-        };
-
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
-            let Ok(raw) = fs::read_to_string(&path) else {
-                continue;
-            };
-            let Ok(def) = serde_json::from_str::<FileWorkflowDefinition>(&raw) else {
-                continue;
-            };
-            if workflow_matches(&def.name, want) {
-                return Some(def);
-            }
+    let catalog = cached_file_workflow_catalog();
+    for entry in catalog.entries {
+        if workflow_matches(&entry.def.name, want) {
+            return Some(entry.def);
         }
     }
 
@@ -646,6 +673,63 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    #[test]
+    fn workflow_catalog_cache_invalidates_when_directory_contents_change() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let old_extra = env::var_os("RZN_IOS_WORKFLOW_DIRS");
+        let old_plugin = env::var_os("RZN_PLUGIN_DIR");
+        let old_plugin_root = env::var_os("CLAUDE_PLUGIN_ROOT");
+        let root = env::temp_dir().join(format!(
+            "rzn-phone-workflow-cache-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).expect("workflow dir");
+        env::set_var("RZN_IOS_WORKFLOW_DIRS", &root);
+        env::remove_var("RZN_PLUGIN_DIR");
+        env::remove_var("CLAUDE_PLUGIN_ROOT");
+
+        fs::write(
+            root.join("demo_first.json"),
+            json!({
+                "name": "demo.first",
+                "version": "1.0.0",
+                "description": "First"
+            })
+            .to_string(),
+        )
+        .expect("first workflow");
+        let first = super::list_workflows(Some("demo"), None);
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].id, "demo/first");
+
+        fs::write(
+            root.join("demo_second.json"),
+            json!({
+                "name": "demo.second",
+                "version": "1.0.0",
+                "description": "Second"
+            })
+            .to_string(),
+        )
+        .expect("second workflow");
+        let second = super::list_workflows(Some("demo"), None);
+        let ids = second
+            .iter()
+            .map(|workflow| workflow.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(ids, vec!["demo/first", "demo/second"]);
+        assert!(super::load_file_workflow("demo/second").is_some());
+
+        restore_env("RZN_IOS_WORKFLOW_DIRS", old_extra);
+        restore_env("RZN_PLUGIN_DIR", old_plugin);
+        restore_env("CLAUDE_PLUGIN_ROOT", old_plugin_root);
+        let _ = fs::remove_dir_all(root);
+    }
+
     fn restore_env(name: &str, value: Option<std::ffi::OsString>) {
         if let Some(value) = value {
             env::set_var(name, value);
@@ -763,8 +847,41 @@ fn list_file_workflows(
     system_filter: Option<&str>,
     family_filter: Option<&str>,
 ) -> (Vec<WorkflowInfo>, Vec<WorkflowLoadDiagnostic>) {
+    let catalog = cached_file_workflow_catalog();
+    filter_file_workflow_catalog(&catalog, system_filter, family_filter)
+}
+
+fn cached_file_workflow_catalog() -> WorkflowCatalog {
+    let dirs = workflow_search_dirs();
+    let signature = workflow_catalog_signature(&dirs);
+    {
+        let guard = WORKFLOW_CATALOG_CACHE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(cache) = guard.as_ref() {
+            if cache.signature == signature {
+                return cache.catalog.clone();
+            }
+        }
+    }
+
+    let catalog = load_file_workflow_catalog(&dirs);
+    let mut guard = WORKFLOW_CATALOG_CACHE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *guard = Some(WorkflowCatalogCache {
+        signature,
+        catalog: catalog.clone(),
+    });
+    catalog
+}
+
+fn filter_file_workflow_catalog(
+    catalog: &WorkflowCatalog,
+    system_filter: Option<&str>,
+    family_filter: Option<&str>,
+) -> (Vec<WorkflowInfo>, Vec<WorkflowLoadDiagnostic>) {
     let mut out = Vec::new();
-    let mut diagnostics = Vec::new();
     let mut seen = HashMap::<String, ()>::new();
     let system_filter = system_filter
         .map(str::trim)
@@ -773,15 +890,37 @@ fn list_file_workflows(
         .map(str::trim)
         .filter(|value| !value.is_empty());
 
-    for dir in workflow_search_dirs() {
-        let Ok(entries) = fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+    for entry in &catalog.entries {
+        let info = &entry.info;
+        if let Some(filter) = system_filter {
+            if info.system != filter {
                 continue;
             }
+        }
+        if let Some(filter) = family_filter {
+            let Some(capability) = info.capability.as_ref() else {
+                continue;
+            };
+            if !capability.family.eq_ignore_ascii_case(filter) {
+                continue;
+            }
+        }
+        if seen.contains_key(&info.id) {
+            continue;
+        }
+        seen.insert(info.id.clone(), ());
+        out.push(info.clone());
+    }
+
+    (out, catalog.diagnostics.clone())
+}
+
+fn load_file_workflow_catalog(dirs: &[PathBuf]) -> WorkflowCatalog {
+    let mut entries = Vec::new();
+    let mut diagnostics = Vec::new();
+
+    for dir in dirs {
+        for path in workflow_json_paths(dir) {
             let raw = match fs::read_to_string(&path) {
                 Ok(raw) => raw,
                 Err(err) => {
@@ -809,29 +948,47 @@ fn list_file_workflows(
                 });
                 continue;
             }
-            let info = workflow_info_from_definition(def);
-            if let Some(filter) = system_filter {
-                if info.system != filter {
-                    continue;
-                }
-            }
-            if let Some(filter) = family_filter {
-                let Some(capability) = info.capability.as_ref() else {
-                    continue;
-                };
-                if !capability.family.eq_ignore_ascii_case(filter) {
-                    continue;
-                }
-            }
-            if seen.contains_key(&info.id) {
-                continue;
-            }
-            seen.insert(info.id.clone(), ());
-            out.push(info);
+            let info = workflow_info_from_definition(def.clone());
+            entries.push(WorkflowCatalogEntry { def, info });
         }
     }
 
-    (out, diagnostics)
+    WorkflowCatalog {
+        entries,
+        diagnostics,
+    }
+}
+
+fn workflow_catalog_signature(dirs: &[PathBuf]) -> WorkflowCatalogSignature {
+    dirs.iter()
+        .map(|dir| WorkflowDirSignature {
+            path: dir.clone(),
+            files: workflow_json_paths(dir)
+                .into_iter()
+                .filter_map(|path| {
+                    let metadata = fs::metadata(&path).ok()?;
+                    Some(WorkflowFileSignature {
+                        path,
+                        len: metadata.len(),
+                        modified: metadata.modified().ok(),
+                    })
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+fn workflow_json_paths(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut paths = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("json"))
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths
 }
 
 fn workflow_search_dirs() -> Vec<PathBuf> {

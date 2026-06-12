@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import shutil
 import tarfile
 from hashlib import sha256
 from pathlib import Path
+
+import release_archive
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,6 +25,11 @@ def parse_args() -> argparse.Namespace:
         "--out",
         default="dist/workflow-packs",
         help="Output root for packaged workflow assets.",
+    )
+    parser.add_argument(
+        "--signing-key",
+        default=os.environ.get("RZN_PHONE_RELEASE_SIGNING_KEY", ""),
+        help="Optional base64 Ed25519 private seed used to sign the workflow pack.",
     )
     return parser.parse_args()
 
@@ -68,6 +76,45 @@ def build_archive(source_dir: Path, archive_path: Path, root_name: str) -> None:
         archive.add(source_dir, arcname=root_name, filter=normalized_tarinfo)
 
 
+def write_archive_sidecars(archive_path: Path, signing_key: str) -> str:
+    archive_sha = sha256_file(archive_path)
+    write_text(
+        archive_path.with_name(f"{archive_path.name}.sha256"),
+        f"{archive_sha}  {archive_path.name}\n",
+    )
+    if signing_key:
+        release_archive.sign_file(
+            archive_path,
+            Path(signing_key).expanduser().resolve(),
+            archive_path.with_name(f"{archive_path.name}.sig"),
+        )
+    return archive_sha
+
+
+def assert_signing_key_matches_bundled_public(root: Path, signing_key: str) -> None:
+    if not signing_key:
+        return
+    key_path = Path(signing_key).expanduser().resolve()
+    seed = release_archive.read_base64_bytes(
+        key_path,
+        expected_len=32,
+        label="Ed25519 private seed",
+    )
+    expected_public = release_archive.read_base64_bytes(
+        root / "scripts" / "rzn_phone_release_ed25519.pub",
+        expected_len=32,
+        label="bundled Ed25519 public key",
+    )
+    actual_public = release_archive.ed25519_public_from_seed(seed)
+    if actual_public == expected_public:
+        return
+    if os.environ.get("RZN_PHONE_RELEASE_ALLOW_TEST_SIGNING_KEY") == "1":
+        return
+    raise SystemExit(
+        "release signing key does not match scripts/rzn_phone_release_ed25519.pub"
+    )
+
+
 def resolve_workflow_metadata(workflow_dir: Path) -> list[dict]:
     workflows = []
     for workflow_path in sorted(workflow_dir.glob("*.json")):
@@ -91,6 +138,7 @@ def main() -> int:
     out_dir = (root / args.out / plugin_id / version).resolve()
     pack_dir = out_dir / "package"
     reset_dir(pack_dir)
+    assert_signing_key_matches_bundled_public(root, args.signing_key)
 
     workflow_dir = root / "crates" / "rzn_phone_worker" / "resources" / "workflows"
     systems_dir = root / "crates" / "rzn_phone_worker" / "resources" / "systems"
@@ -133,8 +181,7 @@ def main() -> int:
     archive_name = f"{plugin_id}-workflows-{version}.tar.gz"
     archive_path = out_dir / archive_name
     build_archive(pack_dir, archive_path, f"{plugin_id}-workflows")
-    archive_sha = sha256_file(archive_path)
-    write_text(out_dir / f"{archive_name}.sha256", f"{archive_sha}  {archive_name}\n")
+    archive_sha = write_archive_sidecars(archive_path, args.signing_key)
     write_text(out_dir / "SHA256SUMS", f"{archive_sha}  {archive_name}\n")
     print(str(out_dir))
     return 0

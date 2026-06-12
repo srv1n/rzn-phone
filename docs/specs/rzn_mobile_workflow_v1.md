@@ -426,6 +426,7 @@ Example call shape for a worker tool like `ios.workflow.run`:
 
 - Steps with `requires_commit=true` MUST NOT execute unless `commit=true` is provided at run time.
 - Runners SHOULD surface “blocked by safety gate” as a distinct error code.
+- Current packaged mutating flows include Reddit, LinkedIn, Instagram, X, and App Store `appstore/post_review`; each needs both its workflow execute arg and `commit=true`.
 
 ### 6.2 Future: host-issued approval token
 

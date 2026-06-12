@@ -7,9 +7,9 @@ Use it when the user asks an agent to:
 - set up RZN Phone Automation locally
 - connect an iPhone and get workflows running
 - diagnose why the worker or workflows are failing
-- use Codex, Cloud Code, or another MCP-capable agent client to drive the plugin
+- use Codex, Claude Code, or another MCP-capable agent client to drive the plugin
 
-Prefer read-only verification first. Do not run mutating Reddit or LinkedIn workflows unless the user explicitly asks.
+Prefer read-only verification first. Do not run mutating Reddit, LinkedIn, Instagram, X, or App Store review-posting workflows unless the user explicitly asks.
 
 ## What the agent is setting up
 
@@ -145,12 +145,15 @@ These workflows can change app state:
 
 - Reddit like/comment/reply/DM workflows
 - LinkedIn like/comment/reply/create/update/delete workflows
+- Instagram like/comment/reply/DM workflows
+- X like/reply/post/DM workflows
+- App Store `appstore/post_review`
 
 Agents must:
 
 1. Avoid these by default.
 2. Prefer dry-run or draft-style execution first.
-3. Require explicit user confirmation before using `commit=true`.
+3. Require explicit user confirmation before using the workflow execute flag and `commit=true`.
 4. Preserve cleanup behavior with:
    - `disconnectOnFinish=true`
    - `backgroundAppOnFinish=true`
@@ -211,7 +214,7 @@ Check:
 ### Setup
 
 ```text
-Set up the installed RZN Phone Automation capability on this machine. Verify local prerequisites, confirm the connected iPhone is visible, ensure the shipped workflow pack is loaded, and stop after one read-only workflow succeeds. Do not run mutating Reddit or LinkedIn workflows.
+Set up the installed RZN Phone Automation capability on this machine. Verify local prerequisites, confirm the connected iPhone is visible, ensure the shipped workflow pack is loaded, and stop after one read-only workflow succeeds. Do not run mutating Reddit, LinkedIn, Instagram, X, or App Store post-review workflows.
 ```
 
 ### Diagnose

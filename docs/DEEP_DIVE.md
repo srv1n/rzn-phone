@@ -180,9 +180,9 @@ examples/**/*
 
 `pack.json` should include:
 
-- `packId` (stable)
+- `pack_id` (stable)
 - `version` (semver)
-- `minWorkerVersion`
+- `min_worker_version`
 - list of workflows included (name → file)
 - optional `signature` metadata (publisher, key id, hash)
 

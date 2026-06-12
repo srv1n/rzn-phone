@@ -2,13 +2,45 @@
 
 Drive a real, logged-in iPhone from macOS through a local CLI or MCP server, either directly as a human or through an LLM/agent.
 
-`rzn-phone` ships prebuilt workflows for common phone tasks such as interacting with Reddit, Instagram, and X, running Google searches in Safari, checking the App Store, getting OTPs from Messages, and more.
+`rzn-phone` ships prebuilt workflows for common phone tasks such as interacting with Reddit, Instagram, and X, running Google searches in Safari, checking the App Store, getting OTPs from Messages, and more. Calls and Notifications are exposed as direct read-only tools, not packaged workflow ids.
 
 When the workflow you need does not exist yet, it gives you out-of-the-box phone primitives so you can still drive the device without dropping all the way down to raw Appium calls. Think Playwright or Puppeteer for browser automation, but for a real iPhone.
 
 It is a higher-level layer on top of Appium + XCUITest that is easier for humans and LLMs to drive, inspect, and reuse. Once you have a flow working, you can turn it into a reusable workflow instead of keeping it as another one-off script.
 
 This is for developers who need real phone automation without building their own pile of Appium glue, one-off scripts, and "wait why did it tap that?" debugging sessions.
+
+## Workflow Packs
+
+`rzn-phone` ships built-in workflow packs for common iPhone jobs. For native apps that need authentication, assume the physical iPhone is already trusted, unlocked, and signed into the target app.
+
+When a packaged workflow fits, use it. When it does not, the CLI/MCP surface still gives an LLM enough direct tools to drive the phone in short observe-act-verify loops without falling back to raw Appium plumbing.
+
+| Icon | System | Example workflows and tools | What it covers |
+| --- | --- | --- | --- |
+| <img alt="Safari" src="https://www.google.com/s2/favicons?sz=64&domain=apple.com" width="24" height="24"> | Safari | `safari/google_search` | Mobile Safari search with extracted results and on-device proof. |
+| <img alt="App Store" src="https://www.google.com/s2/favicons?sz=64&domain=apps.apple.com" width="24" height="24"> | App Store | `appstore/typeahead`, `appstore/search_results`, `appstore/app_details`, `appstore/reviews`, `appstore/screenshots`, `appstore/version_history`, `appstore/post_review` | App discovery, listing research, review extraction, screenshots, version history, and commit-gated review drafts. |
+| <img alt="Google Maps" src="https://www.google.com/s2/favicons?sz=64&domain=maps.google.com" width="24" height="24"> | Google Maps | `google_maps/open_place`, `google_maps/open_directions`, `google_maps/start_navigation` | Place lookup, directions, route context, and commit-gated navigation start. |
+| <img alt="Reddit" src="https://www.google.com/s2/favicons?sz=64&domain=reddit.com" width="24" height="24"> | Reddit | `reddit/daily_scroll_digest`, `reddit/open_post`, `reddit/read_first_post`, `reddit/open_inbox`, `reddit/open_dm_thread`, comment/reply/like/DM workflows | Feed reading, post inspection, inbox/DM access, and commit-gated social actions. |
+| <img alt="LinkedIn" src="https://www.google.com/s2/favicons?sz=64&domain=linkedin.com" width="24" height="24"> | LinkedIn | `linkedin/read_feed`, `linkedin/daily_scroll_digest`, `linkedin/open_post`, `linkedin/create_post`, `linkedin/update_latest_post`, `linkedin/delete_latest_post`, like/comment/reply workflows | Feed extraction, post drafting, post maintenance, and commit-gated engagement. |
+| <img alt="Instagram" src="https://www.google.com/s2/favicons?sz=64&domain=instagram.com" width="24" height="24"> | Instagram | `instagram/daily_scroll_digest`, `instagram/open_post`, `instagram/open_inbox`, `instagram/open_dm_thread`, like/comment/reply/DM workflows | Feed digestion, post reading, inbox navigation, DMs, and commit-gated engagement. |
+| <img alt="X" src="https://www.google.com/s2/favicons?sz=64&domain=x.com" width="24" height="24"> | X | `x/daily_scroll_digest`, `x/open_post`, `x/open_inbox`, `x/open_dm_thread`, `x/create_post`, like/reply/DM workflows | Timeline reading, post inspection, inbox/DM access, and commit-gated posts or replies. |
+| <img alt="Messages" src="https://www.google.com/s2/favicons?sz=64&domain=apple.com" width="24" height="24"> | Messages | `phone_messages/find_recent_otp`, `phone_messages.list_recent_threads`, `phone_messages.read_latest_messages` | Recent thread reads, latest message inspection, and OTP/auth-code extraction. |
+| <img alt="Phone" src="https://www.google.com/s2/favicons?sz=64&domain=apple.com" width="24" height="24"> | Phone Calls | `phone_calls.list_recent_calls` | Read-only recent call history from the Phone app. |
+| <img alt="Notifications" src="https://www.google.com/s2/favicons?sz=64&domain=apple.com" width="24" height="24"> | Notifications | `phone_notifications.list_recent_notifications`, `phone_notifications.filter_notifications_by_app` | Read-only Notification Center rows and app-label filtering. |
+| <img alt="iOS" src="https://www.google.com/s2/favicons?sz=64&domain=developer.apple.com" width="24" height="24"> | Direct iOS Control | `ios.appium.ensure`, `ios.session.create`, `ios.ui.observe_compact`, `ios.action.*`, `ios.web.*` | Escape hatch for LLM-driven phone tasks: observe the screen, act, re-observe, and verify. |
+
+## Agent Quick Path
+
+This README is meant to be enough for CloudCoder, Codex, or another MCP-capable agent to install and use `rzn-phone` without spelunking through the repo.
+
+1. Install the latest release from the Install section below.
+2. Run `rzn-phone doctor` and fix the exact prerequisite it reports.
+3. Run `rzn-phone devices` and make sure one trusted physical iPhone is visible.
+4. Discover packaged workflows with `rzn-phone list --compact`, then inspect one with `rzn-phone show <system/workflow> --example`.
+5. Prefer `rzn-phone run <system/workflow> --args-json '{...}'` for known jobs.
+6. For new or ambiguous jobs, use `rzn-phone capability list` and `rzn-phone tool list --direct`, then drive the phone through `ios.appium.ensure -> ios.session.create -> ios.ui.observe_compact -> ios.action.* -> observe again`.
+7. Keep mutating workflows dry-run unless the task explicitly asks for the workflow execute flag and `--commit 1`.
 
 ## Why this exists
 
@@ -47,6 +79,7 @@ Blunt version: install this when you need real-phone automation to behave like a
 - A local `rzn-phone` CLI for `run`, `list`, `show`, `recent`, favorites, completion scripts, `capability list`, direct `tool` calls, and workflow pack refreshes
 - An MCP server entrypoint via `rzn-phone worker`, so Codex, Claude-style clients, or other MCP hosts can drive the runtime directly
 - 51 shipped default workflows covering Safari, App Store, Google Maps, Reddit, LinkedIn, Instagram, X, and Messages OTP lookup
+- Direct read-only CLI/MCP tools for Calls and Notifications (`phone_calls.*`, `phone_notifications.*`); these are not packaged workflow ids
 - A lower-level method surface through MCP tools such as `ios.*` and `phone_*`, so the shipped workflows are a starting point, not the ceiling
 - Read-oriented phone system tools for Messages, Calls, and Notifications
 - Structured JSON outputs, plus screenshot/UI-source artifacts where the workflow returns them
@@ -74,33 +107,108 @@ flowchart LR
 
 `rzn-phone` is built on top of Appium and the XCUITest driver. It is not trying to replace that stack. It packages it into something humans and LLMs can actually use.
 
-- macOS with Xcode and command line tools
-- A trusted, unlocked physical iPhone
-- Node.js plus Appium with the `xcuitest` driver
+- macOS with Xcode installed, opened once, and command line tools available
+- A trusted, unlocked physical iPhone connected over USB
+- Node.js/npm plus Appium with the `xcuitest` driver
 - App Store signed in on the device if you want stable App Store flows
+- App-specific login state already present on the device for Reddit, LinkedIn, Instagram, X, Maps, etc.
 
 If you are installing the shipped runtime, you do not need Python for `rzn-phone` itself. If you are building release artifacts from this repo, you still need Rust and Python 3 for the repo tooling.
 
 ## Install
 
-Build and install from this repo:
+Install the latest public macOS runtime from GitHub Releases:
+
+```bash
+TAG="$(curl -fsSL https://api.github.com/repos/srv1n/rzn-phone/releases/latest | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+VERSION="${TAG#v}"
+BASE="https://github.com/srv1n/rzn-phone/releases/download/${TAG}"
+
+curl -fsSL "$BASE/rzn-phone-install.sh" | bash -s -- \
+  --version "$VERSION" \
+  --archive "$BASE/rzn-phone-${VERSION}-macos_universal.tar.gz"
+```
+
+That installs the latest `rzn-phone-<version>-macos_universal.tar.gz`, verifies the adjacent checksum before extraction, and writes a `rzn-phone` shim. The First Run Setup below is the same checklist the updated installer prints after install: Appium, XCUITest, device trust, smoke tests, and MCP setup. Release assets built from this revision also verify the adjacent Ed25519 signature.
+
+Pin a specific release when you need repeatability:
+
+```bash
+TAG="v0.0.1"
+VERSION="${TAG#v}"
+BASE="https://github.com/srv1n/rzn-phone/releases/download/${TAG}"
+
+curl -fsSL "$BASE/rzn-phone-install.sh" | bash -s -- \
+  --version "$VERSION" \
+  --archive "$BASE/rzn-phone-${VERSION}-macos_universal.tar.gz"
+```
+
+The installer defaults to `~/.local/share/rzn-phone` for the versioned runtime and writes a `rzn-phone` shim into the first writable bin dir it finds, usually `~/.local/bin`. Use `--install-root <dir>` and `--bin-dir <dir>` when you need explicit locations.
+
+Install the local repo build when you are developing `rzn-phone` itself:
 
 ```bash
 make install
 rzn-phone version
-rzn-phone list
-rzn-phone list --compact
-rzn-phone list --family extract
-rzn-phone capability list
-rzn-phone completion zsh
-rzn-phone tool list --direct
+rzn-phone doctor
 ```
 
 Install from a staged release directory:
 
 ```bash
-sh install.sh --source /absolute/path/to/release-dir
+scripts/install_rzn_phone.sh --source /absolute/path/to/release-dir
 rzn-phone info
+```
+
+## First Run Setup
+
+```bash
+xcode-select --install
+node --version || brew install node
+npm i -g appium
+appium driver install xcuitest
+```
+
+Then connect the iPhone, unlock it, tap Trust, and run:
+
+```bash
+rzn-phone doctor
+rzn-phone devices
+rzn-phone list --compact
+rzn-phone run safari/google_search --args-json '{"query":"rzn-phone","limit":3}'
+```
+
+`rzn-phone` can start Appium when it is on PATH. For desktop or agent hosts, running Appium yourself and exporting the endpoint is often more predictable:
+
+```bash
+appium
+export RZN_IOS_APPIUM_URL="http://127.0.0.1:4723"
+```
+
+If WebDriverAgent provisioning fails, set the Apple signing environment Appium expects, usually `IOS_XCODE_ORG_ID`, `IOS_XCODE_SIGNING_ID`, and sometimes `IOS_UPDATED_WDA_BUNDLE_ID`.
+
+## Uninstall
+
+Remove the installed runtime and the installer-managed shim:
+
+```bash
+curl -fsSL https://github.com/srv1n/rzn-phone/releases/latest/download/rzn-phone-install.sh | bash -s -- --uninstall
+```
+
+Local history and favorites live under `~/.rzn-phone`. Remove them too when you want a full local cleanup:
+
+```bash
+curl -fsSL https://github.com/srv1n/rzn-phone/releases/latest/download/rzn-phone-install.sh | bash -s -- --uninstall --purge-state
+```
+
+If you installed with `--bin-dir` or `--install-root`, pass the same values to uninstall.
+
+Older release installers that do not know `--uninstall` can be removed manually:
+
+```bash
+rm -f "$HOME/.local/bin/rzn-phone"
+rm -rf "$HOME/.local/share/rzn-phone"
+rm -rf "$HOME/.rzn-phone" # optional: removes local history and favorites
 ```
 
 Useful runtime commands:
@@ -221,12 +329,12 @@ The direct loop is simple:
 
 ## Example flows
 
-| Use case | Workflow | What you get |
+| Use case | Workflow or direct tool | What you get |
 | --- | --- | --- |
 | Search the web in mobile Safari | `safari/google_search` | top results and on-device proof |
 | Audit App Store search and listing quality | `appstore/typeahead`, `appstore/search_results`, `appstore/app_details`, `appstore/reviews`, `appstore/screenshots`, `appstore/version_history` | ranking, metadata, reviews, screenshots, version history |
 | Pull a recent OTP from Messages | `phone_messages/find_recent_otp` | recent matching code without hand-driving the Messages UI |
-| Inspect calls or notifications | `phone_calls/list_recent_calls`, `phone_notifications/list_recent_notifications`, `phone_notifications/filter_notifications_by_app` | read-only device state from core phone surfaces |
+| Inspect calls or notifications | direct tools: `phone_calls.list_recent_calls`, `phone_notifications.list_recent_notifications`, `phone_notifications.filter_notifications_by_app` | read-only device state from core phone surfaces |
 | Open a place or directions in Maps | `google_maps/open_place`, `google_maps/open_directions` | captured on-device state for place and route lookup |
 | Build a social browsing digest | `reddit/daily_scroll_digest`, `linkedin/daily_scroll_digest`, `instagram/daily_scroll_digest`, `x/daily_scroll_digest` | structured feed rows for review or downstream ranking |
 | Open a post or DM thread before acting | `*/open_post`, `*/open_inbox`, `*/open_dm_thread` | deterministic targeting without side effects |
@@ -239,15 +347,15 @@ The direct loop is simple:
 | `rzn-phone` CLI | install, doctor, device listing, workflow execution, direct tool calls, workflow refresh | terminal-first use without wiring raw JSON-RPC by hand |
 | `rzn-phone worker` | stdio MCP server | plug into Codex, Claude-compatible clients, or any MCP-capable host |
 | Workflow pack | versioned JSON workflows under `resources/workflows/` | named flows you can ship, inspect, and update |
-| Phone systems | `phone_messages.*`, `phone_calls.*`, `phone_notifications.*` | read-oriented access to core phone surfaces |
+| Phone systems | direct tools: `phone_messages.*`, `phone_calls.*`, `phone_notifications.*` | read-oriented access to core phone surfaces |
 | Social card catalogs | catalog-backed Reddit/LinkedIn/Instagram/X actions in `cards/social/` | one pattern for browse/read/engage flows across apps |
 | Examples | starter payloads under `examples/` | copy, tweak, run |
 
 ## Safety model
 
-Read-only flows are the default path. Mutating flows require both of these:
+Read-only flows are the default path. Mutating flows, including Reddit, LinkedIn, Instagram, X, and App Store `appstore/post_review`, require both of these:
 
-1. A workflow-specific execute flag such as `execute_comment`, `execute_like`, `execute_send`, or `submit`
+1. A workflow-specific execute flag such as `execute_comment`, `execute_like`, `execute_reply`, `execute_send`, `execute_post`, `execute_submit`, or `submit`
 2. `--commit 1` at runtime
 
 That gives you a dry-run path by default:

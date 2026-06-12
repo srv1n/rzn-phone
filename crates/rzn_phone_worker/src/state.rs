@@ -14,7 +14,21 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use crate::ui_compact::TargetLocator;
 
-#[derive(Debug, Clone)]
+#[cfg(test)]
+pub(crate) static TEST_ENV_LOCK: once_cell::sync::Lazy<tokio::sync::Mutex<()>> =
+    once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(()));
+
+#[cfg(test)]
+type PersistenceWriteHook = std::sync::Arc<dyn Fn() + Send + Sync>;
+
+#[cfg(test)]
+static PERSISTENCE_WRITE_HOOK: once_cell::sync::Lazy<
+    std::sync::Mutex<Option<PersistenceWriteHook>>,
+> = once_cell::sync::Lazy::new(|| std::sync::Mutex::new(None));
+
+const DEFAULT_RUNTIME_CACHE_TTL_SECS: u64 = 300;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppiumSource {
     Env,
     Spawned,
@@ -42,6 +56,12 @@ struct RuntimeState {
     compact_observation: Option<CompactObservation>,
     last_udid: Option<String>,
     last_wda_local_port: Option<u16>,
+}
+
+#[derive(Debug)]
+enum RuntimePersistenceUpdate {
+    Clear,
+    Save(Box<PersistedRuntimeState>),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -96,7 +116,7 @@ impl AppState {
         let guard = self.inner.lock().await;
         StateSnapshot {
             appium_base_url: guard.appium_base_url.clone(),
-            appium_source: guard.appium_source.clone(),
+            appium_source: guard.appium_source,
             appium_pid: guard.appium_pid,
             session: guard.session.clone(),
         }
@@ -113,21 +133,53 @@ impl AppState {
         pid: Option<u32>,
         child: Option<Child>,
     ) {
-        let mut guard = self.inner.lock().await;
-        guard.appium_base_url = Some(base_url);
-        guard.appium_source = Some(source);
-        guard.appium_pid = pid;
-        guard.appium_child = child;
-        persist_runtime_state(&guard);
+        let persistence = {
+            let mut guard = self.inner.lock().await;
+            guard.appium_base_url = Some(base_url);
+            guard.appium_source = Some(source);
+            guard.appium_pid = pid;
+            guard.appium_child = child;
+            runtime_persistence_update(&guard)
+        };
+        persist_runtime_state(persistence).await;
+    }
+
+    pub async fn refresh_appium_metadata(
+        &self,
+        base_url: String,
+        source: AppiumSource,
+        pid: Option<u32>,
+    ) {
+        let persistence = {
+            let mut guard = self.inner.lock().await;
+            let preserve_spawned_child = matches!(source, AppiumSource::Spawned)
+                && matches!(guard.appium_source, Some(AppiumSource::Spawned))
+                && guard
+                    .appium_base_url
+                    .as_deref()
+                    .is_some_and(|existing| same_appium_server(existing, &base_url));
+
+            guard.appium_base_url = Some(base_url);
+            guard.appium_source = Some(source);
+            guard.appium_pid = pid;
+            if !preserve_spawned_child {
+                guard.appium_child = None;
+            }
+            runtime_persistence_update(&guard)
+        };
+        persist_runtime_state(persistence).await;
     }
 
     pub async fn clear_appium_metadata(&self) {
-        let mut guard = self.inner.lock().await;
-        guard.appium_base_url = None;
-        guard.appium_source = None;
-        guard.appium_pid = None;
-        guard.appium_child = None;
-        persist_runtime_state(&guard);
+        let persistence = {
+            let mut guard = self.inner.lock().await;
+            guard.appium_base_url = None;
+            guard.appium_source = None;
+            guard.appium_pid = None;
+            guard.appium_child = None;
+            runtime_persistence_update(&guard)
+        };
+        persist_runtime_state(persistence).await;
     }
 
     pub async fn set_session(
@@ -138,19 +190,22 @@ impl AppState {
         bundle_id: Option<String>,
         wda_local_port: Option<u16>,
     ) {
-        let mut guard = self.inner.lock().await;
-        guard.last_udid = Some(udid.clone());
-        guard.last_wda_local_port = wda_local_port;
-        guard.session = Some(SessionState {
-            session_id,
-            kind,
-            udid,
-            bundle_id,
-            wda_local_port,
-            created_at_epoch: now_epoch(),
-        });
-        guard.compact_observation = None;
-        persist_runtime_state(&guard);
+        let persistence = {
+            let mut guard = self.inner.lock().await;
+            guard.last_udid = Some(udid.clone());
+            guard.last_wda_local_port = wda_local_port;
+            guard.session = Some(SessionState {
+                session_id,
+                kind,
+                udid,
+                bundle_id,
+                wda_local_port,
+                created_at_epoch: now_epoch(),
+            });
+            guard.compact_observation = None;
+            runtime_persistence_update(&guard)
+        };
+        persist_runtime_state(persistence).await;
     }
 
     pub async fn active_session(&self) -> Option<SessionState> {
@@ -158,10 +213,13 @@ impl AppState {
     }
 
     pub async fn clear_session(&self) {
-        let mut guard = self.inner.lock().await;
-        guard.session = None;
-        guard.compact_observation = None;
-        persist_runtime_state(&guard);
+        let persistence = {
+            let mut guard = self.inner.lock().await;
+            guard.session = None;
+            guard.compact_observation = None;
+            runtime_persistence_update(&guard)
+        };
+        persist_runtime_state(persistence).await;
     }
 
     pub async fn last_udid(&self) -> Option<String> {
@@ -212,7 +270,7 @@ impl AppState {
     }
 
     pub async fn shutdown_spawned_appium(&self) {
-        let (child_to_kill, pid_to_kill) = {
+        let (child_to_kill, pid_to_kill, persistence) = {
             let mut guard = self.inner.lock().await;
             let child = guard.appium_child.take();
             let pid = guard.appium_pid;
@@ -223,9 +281,9 @@ impl AppState {
             guard.compact_observation = None;
             guard.last_udid = None;
             guard.last_wda_local_port = None;
-            persist_runtime_state(&guard);
-            (child, pid)
+            (child, pid, runtime_persistence_update(&guard))
         };
+        persist_runtime_state(persistence).await;
 
         if let Some(mut child) = child_to_kill {
             let _ = child.kill().await;
@@ -248,6 +306,10 @@ impl AppState {
         let Some(restored) = load_persisted_runtime_state() else {
             return false;
         };
+        if persisted_runtime_is_stale(&restored) {
+            clear_persisted_runtime_file();
+            return false;
+        }
 
         let mut guard = self.inner.lock().await;
         let mut changed = false;
@@ -283,8 +345,26 @@ impl AppState {
     }
 
     pub async fn touch_runtime(&self) {
-        let guard = self.inner.lock().await;
-        persist_runtime_state(&guard);
+        let persistence = {
+            let guard = self.inner.lock().await;
+            runtime_persistence_update(&guard)
+        };
+        persist_runtime_state(persistence).await;
+    }
+
+    #[cfg(test)]
+    pub async fn appium_child_id(&self) -> Option<u32> {
+        self.inner
+            .lock()
+            .await
+            .appium_child
+            .as_ref()
+            .and_then(Child::id)
+    }
+
+    #[cfg(test)]
+    pub async fn has_appium_child(&self) -> bool {
+        self.inner.lock().await.appium_child.is_some()
     }
 }
 
@@ -340,21 +420,12 @@ fn persistence_file_path() -> Option<PathBuf> {
     Some(base.join(".rzn-phone").join("runtime-state.json"))
 }
 
-fn persist_runtime_state(state: &RuntimeState) {
-    let Some(path) = persistence_file_path() else {
-        return;
-    };
-
+fn runtime_persistence_update(state: &RuntimeState) -> RuntimePersistenceUpdate {
     if state.appium_base_url.is_none() && state.session.is_none() {
-        clear_persisted_runtime_file();
-        return;
+        return RuntimePersistenceUpdate::Clear;
     }
 
-    if let Some(parent) = path.parent() {
-        let _ = create_private_dir(parent);
-    }
-
-    let payload = PersistedRuntimeState {
+    RuntimePersistenceUpdate::Save(Box::new(PersistedRuntimeState {
         appium_base_url: state.appium_base_url.clone(),
         appium_source: state.appium_source.as_ref().map(appium_source_name),
         appium_pid: state.appium_pid,
@@ -362,11 +433,36 @@ fn persist_runtime_state(state: &RuntimeState) {
         last_udid: state.last_udid.clone(),
         last_wda_local_port: state.last_wda_local_port,
         last_used_epoch_ms: now_epoch_ms(),
+    }))
+}
+
+async fn persist_runtime_state(update: RuntimePersistenceUpdate) {
+    let Some(path) = persistence_file_path() else {
+        return;
     };
+
+    let _ = tokio::task::spawn_blocking(move || persist_runtime_state_blocking(path, update)).await;
+}
+
+fn persist_runtime_state_blocking(path: PathBuf, update: RuntimePersistenceUpdate) {
+    match update {
+        RuntimePersistenceUpdate::Clear => {
+            let _ = fs::remove_file(path);
+        }
+        RuntimePersistenceUpdate::Save(payload) => write_persisted_runtime_state(path, *payload),
+    }
+}
+
+fn write_persisted_runtime_state(path: PathBuf, payload: PersistedRuntimeState) {
+    if let Some(parent) = path.parent() {
+        let _ = create_private_dir(parent);
+    }
 
     let Ok(json) = serde_json::to_vec_pretty(&payload) else {
         return;
     };
+
+    run_persistence_write_hook();
 
     let tmp_path = path.with_extension("tmp");
     if write_private_file(&tmp_path, &json).is_ok() {
@@ -375,10 +471,44 @@ fn persist_runtime_state(state: &RuntimeState) {
     }
 }
 
+#[cfg(test)]
+fn set_persistence_write_hook(hook: Option<PersistenceWriteHook>) {
+    *PERSISTENCE_WRITE_HOOK
+        .lock()
+        .expect("persistence hook lock") = hook;
+}
+
+#[cfg(test)]
+fn run_persistence_write_hook() {
+    let hook = PERSISTENCE_WRITE_HOOK
+        .lock()
+        .expect("persistence hook lock")
+        .clone();
+    if let Some(hook) = hook {
+        hook();
+    }
+}
+
+#[cfg(not(test))]
+fn run_persistence_write_hook() {}
+
 fn load_persisted_runtime_state() -> Option<PersistedRuntimeState> {
     let path = persistence_file_path()?;
     let raw = fs::read_to_string(path).ok()?;
     serde_json::from_str(&raw).ok()
+}
+
+fn persisted_runtime_is_stale(state: &PersistedRuntimeState) -> bool {
+    let ttl_ms = runtime_cache_ttl_ms();
+    ttl_ms != 0 && now_epoch_ms().saturating_sub(state.last_used_epoch_ms) > ttl_ms
+}
+
+fn runtime_cache_ttl_ms() -> u64 {
+    env::var("RZN_IOS_RUNTIME_CACHE_TTL_SECS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .unwrap_or(DEFAULT_RUNTIME_CACHE_TTL_SECS)
+        .saturating_mul(1000)
 }
 
 fn clear_persisted_runtime_file() {
@@ -401,6 +531,18 @@ fn parse_appium_source(value: &str) -> Option<AppiumSource> {
         "spawned" => Some(AppiumSource::Spawned),
         _ => None,
     }
+}
+
+fn same_appium_server(left: &str, right: &str) -> bool {
+    appium_server_key(left) == appium_server_key(right)
+}
+
+fn appium_server_key(value: &str) -> String {
+    value
+        .trim()
+        .trim_end_matches('/')
+        .trim_end_matches("/wd/hub")
+        .to_string()
 }
 
 fn create_private_dir(path: &Path) -> std::io::Result<()> {
@@ -482,14 +624,11 @@ async fn process_command_contains_appium(pid: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use once_cell::sync::Lazy;
-    use tokio::sync::Mutex as TokioMutex;
-
-    static ENV_LOCK: Lazy<TokioMutex<()>> = Lazy::new(|| TokioMutex::new(()));
+    use std::sync::{Arc, Condvar, Mutex as StdMutex};
 
     #[tokio::test]
     async fn persisted_runtime_round_trips_across_app_state_instances() {
-        let _guard = ENV_LOCK.lock().await;
+        let _guard = TEST_ENV_LOCK.lock().await;
         let root = env::temp_dir().join(format!(
             "rzn-phone-state-{}-{}",
             std::process::id(),
@@ -541,8 +680,135 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stale_persisted_runtime_is_not_restored() {
+        let _guard = TEST_ENV_LOCK.lock().await;
+        let root = env::temp_dir().join(format!(
+            "rzn-phone-stale-state-{}-{}",
+            std::process::id(),
+            now_epoch_ms()
+        ));
+        let state_path = root.join("runtime-state.json");
+        let old_persist = env::var_os("RZN_IOS_PERSIST_RUNTIME");
+        let old_state_file = env::var_os("RZN_IOS_RUNTIME_STATE_FILE");
+        let old_ttl = env::var_os("RZN_IOS_RUNTIME_CACHE_TTL_SECS");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("state dir");
+        env::set_var("RZN_IOS_PERSIST_RUNTIME", "1");
+        env::set_var("RZN_IOS_RUNTIME_STATE_FILE", &state_path);
+        env::set_var("RZN_IOS_RUNTIME_CACHE_TTL_SECS", "1");
+
+        let stale = PersistedRuntimeState {
+            appium_base_url: Some("http://127.0.0.1:4723".to_string()),
+            appium_source: Some("spawned".to_string()),
+            appium_pid: Some(4242),
+            session: Some(SessionState {
+                session_id: "session-stale".to_string(),
+                kind: "safari_web".to_string(),
+                udid: "udid-1".to_string(),
+                bundle_id: None,
+                wda_local_port: Some(8100),
+                created_at_epoch: now_epoch().saturating_sub(60),
+            }),
+            last_udid: Some("udid-1".to_string()),
+            last_wda_local_port: Some(8100),
+            last_used_epoch_ms: now_epoch_ms().saturating_sub(10_000),
+        };
+        fs::write(&state_path, serde_json::to_vec(&stale).unwrap()).expect("state file");
+
+        let restored = AppState::new();
+        assert!(!restored.restore_persisted_runtime().await);
+        let snapshot = restored.snapshot().await;
+        assert!(snapshot.appium_base_url.is_none());
+        assert!(snapshot.session.is_none());
+        assert!(
+            !state_path.exists(),
+            "stale runtime cache should be discarded"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+        restore_env("RZN_IOS_PERSIST_RUNTIME", old_persist);
+        restore_env("RZN_IOS_RUNTIME_STATE_FILE", old_state_file);
+        restore_env("RZN_IOS_RUNTIME_CACHE_TTL_SECS", old_ttl);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn persistence_write_does_not_hold_state_mutex() {
+        let _guard = TEST_ENV_LOCK.lock().await;
+        let root = env::temp_dir().join(format!(
+            "rzn-phone-nonblocking-state-{}-{}",
+            std::process::id(),
+            now_epoch_ms()
+        ));
+        let state_path = root.join("runtime-state.json");
+        let old_persist = env::var_os("RZN_IOS_PERSIST_RUNTIME");
+        let old_state_file = env::var_os("RZN_IOS_RUNTIME_STATE_FILE");
+        let _ = fs::remove_dir_all(&root);
+        env::set_var("RZN_IOS_PERSIST_RUNTIME", "1");
+        env::set_var("RZN_IOS_RUNTIME_STATE_FILE", &state_path);
+
+        let entered = Arc::new((StdMutex::new(false), Condvar::new()));
+        let release = Arc::new((StdMutex::new(false), Condvar::new()));
+        let hook_entered = Arc::clone(&entered);
+        let hook_release = Arc::clone(&release);
+        set_persistence_write_hook(Some(Arc::new(move || {
+            let (entered_lock, entered_cvar) = &*hook_entered;
+            *entered_lock.lock().expect("entered lock") = true;
+            entered_cvar.notify_all();
+
+            let (release_lock, release_cvar) = &*hook_release;
+            let mut released = release_lock.lock().expect("release lock");
+            while !*released {
+                released = release_cvar.wait(released).expect("release wait");
+            }
+        })));
+
+        let state = Arc::new(AppState::new());
+        let writer_state = Arc::clone(&state);
+        let writer = tokio::spawn(async move {
+            writer_state
+                .set_appium(
+                    "http://127.0.0.1:4723".to_string(),
+                    AppiumSource::Spawned,
+                    Some(4242),
+                    None,
+                )
+                .await;
+        });
+
+        let mut saw_hook = false;
+        for _ in 0..100 {
+            if *entered.0.lock().expect("entered lock") {
+                saw_hook = true;
+                break;
+            }
+            sleep(Duration::from_millis(10)).await;
+        }
+
+        let snapshot_result =
+            tokio::time::timeout(Duration::from_millis(200), state.snapshot()).await;
+
+        *release.0.lock().expect("release lock") = true;
+        release.1.notify_all();
+        let writer_result = tokio::time::timeout(Duration::from_secs(2), writer).await;
+        set_persistence_write_hook(None);
+        let _ = fs::remove_dir_all(&root);
+        restore_env("RZN_IOS_PERSIST_RUNTIME", old_persist);
+        restore_env("RZN_IOS_RUNTIME_STATE_FILE", old_state_file);
+
+        assert!(saw_hook, "persistence write hook was not reached");
+        writer_result
+            .expect("writer should finish after hook release")
+            .expect("writer task");
+        let snapshot = snapshot_result.expect("snapshot should not wait for persistence write");
+        assert_eq!(
+            snapshot.appium_base_url.as_deref(),
+            Some("http://127.0.0.1:4723")
+        );
+    }
+
+    #[tokio::test]
     async fn runtime_guardrails_persisted_pid_kill_is_disabled_by_default() {
-        let _guard = ENV_LOCK.lock().await;
+        let _guard = TEST_ENV_LOCK.lock().await;
         env::remove_var("RZN_IOS_ALLOW_PERSISTED_APPIUM_PID_KILL");
 
         assert!(!should_kill_persisted_appium_pid(std::process::id()).await);
@@ -551,7 +817,7 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn privacy_persisted_runtime_uses_private_unix_permissions() {
-        let _guard = ENV_LOCK.lock().await;
+        let _guard = TEST_ENV_LOCK.lock().await;
         let root = env::temp_dir().join(format!(
             "rzn-phone-private-state-{}-{}",
             std::process::id(),
@@ -580,5 +846,13 @@ mod tests {
         let _ = fs::remove_dir(&root);
         env::remove_var("RZN_IOS_PERSIST_RUNTIME");
         env::remove_var("RZN_IOS_RUNTIME_STATE_FILE");
+    }
+
+    fn restore_env(name: &str, value: Option<std::ffi::OsString>) {
+        if let Some(value) = value {
+            env::set_var(name, value);
+        } else {
+            env::remove_var(name);
+        }
     }
 }

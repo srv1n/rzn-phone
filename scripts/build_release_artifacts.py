@@ -9,6 +9,8 @@ from typing import Optional
 from hashlib import sha256
 from pathlib import Path
 
+import release_archive
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -28,6 +30,11 @@ def parse_args() -> argparse.Namespace:
         "--out",
         default="dist/releases",
         help="Output root for installable release artifacts.",
+    )
+    parser.add_argument(
+        "--signing-key",
+        default=os.environ.get("RZN_PHONE_RELEASE_SIGNING_KEY", ""),
+        help="Path to a base64 Ed25519 private seed used to sign release tarballs.",
     )
     return parser.parse_args()
 
@@ -81,6 +88,54 @@ def build_archive(source_dir: Path, archive_path: Path, root_name: str) -> None:
         archive.add(source_dir, arcname=root_name, filter=normalized_tarinfo)
 
 
+def resolve_signing_key(root: Path, explicit: str) -> Path:
+    candidates = []
+    if explicit:
+        candidates.append(Path(explicit).expanduser())
+    candidates.append(root / ".secrets" / "plugin-signing" / "ed25519.private")
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate.resolve()
+    raise SystemExit(
+        "missing release signing key; set RZN_PHONE_RELEASE_SIGNING_KEY or pass --signing-key"
+    )
+
+
+def assert_signing_key_matches_bundled_public(root: Path, signing_key: Path) -> None:
+    seed = release_archive.read_base64_bytes(
+        signing_key,
+        expected_len=32,
+        label="Ed25519 private seed",
+    )
+    expected_public = release_archive.read_base64_bytes(
+        root / "scripts" / "rzn_phone_release_ed25519.pub",
+        expected_len=32,
+        label="bundled Ed25519 public key",
+    )
+    actual_public = release_archive.ed25519_public_from_seed(seed)
+    if actual_public == expected_public:
+        return
+    if os.environ.get("RZN_PHONE_RELEASE_ALLOW_TEST_SIGNING_KEY") == "1":
+        return
+    raise SystemExit(
+        "release signing key does not match scripts/rzn_phone_release_ed25519.pub"
+    )
+
+
+def write_archive_sidecars(archive_path: Path, signing_key: Path) -> str:
+    archive_sha = sha256_file(archive_path)
+    write_text(
+        archive_path.with_name(f"{archive_path.name}.sha256"),
+        f"{archive_sha}  {archive_path.name}\n",
+    )
+    release_archive.sign_file(
+        archive_path,
+        signing_key,
+        archive_path.with_name(f"{archive_path.name}.sig"),
+    )
+    return archive_sha
+
+
 def resolve_workflow_metadata(workflow_dir: Path) -> list[dict]:
     workflows = []
     for workflow_path in sorted(workflow_dir.glob("*.json")):
@@ -120,6 +175,8 @@ def main() -> int:
     platform = str(args.platform).strip()
     out_dir = (root / args.out / plugin_id / version / platform).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    signing_key = resolve_signing_key(root, args.signing_key)
+    assert_signing_key_matches_bundled_public(root, signing_key)
 
     package_dir = out_dir / "package"
     workflow_pack_dir = out_dir / "workflow-pack"
@@ -193,13 +250,8 @@ def main() -> int:
     build_archive(package_dir, archive_path, plugin_id)
     build_archive(workflow_pack_dir, workflow_archive_path, f"{plugin_id}-workflows")
 
-    archive_sha = sha256_file(archive_path)
-    workflow_archive_sha = sha256_file(workflow_archive_path)
-    write_text(out_dir / f"{archive_name}.sha256", f"{archive_sha}  {archive_name}\n")
-    write_text(
-        out_dir / f"{workflow_archive_name}.sha256",
-        f"{workflow_archive_sha}  {workflow_archive_name}\n",
-    )
+    archive_sha = write_archive_sidecars(archive_path, signing_key)
+    workflow_archive_sha = write_archive_sidecars(workflow_archive_path, signing_key)
     write_text(
         out_dir / "SHA256SUMS",
         "\n".join(
@@ -212,6 +264,11 @@ def main() -> int:
     )
     write_text(out_dir / "VERSION", version + "\n")
     copy_file(installer, out_dir / "install.sh", 0o755)
+    copy_file(root / "scripts" / "release_archive.py", out_dir / "release_archive.py", 0o755)
+    copy_file(
+        root / "scripts" / "rzn_phone_release_ed25519.pub",
+        out_dir / "rzn_phone_release_ed25519.pub",
+    )
 
     print(str(out_dir))
     return 0

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 failures=0
 
 section() {
@@ -103,6 +104,9 @@ fi
 section "Summary"
 if [[ "$failures" -eq 0 ]]; then
   printf 'Environment looks ready for tester-kit setup.\n'
+  if [[ -z "${RZN_TESTER_DOCTOR_CALLED_BY_PREP:-}" && -x "$ROOT/scripts/prepare_mcp_plugin.sh" ]]; then
+    printf 'Next action: run ./scripts/prepare_mcp_plugin.sh from the tester kit root.\n'
+  fi
 else
   printf 'Found %d blocking issue(s). Fix those first, then rerun this script.\n' "$failures"
   exit 1

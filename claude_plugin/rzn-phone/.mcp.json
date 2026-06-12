@@ -1,11 +1,11 @@
 {
   "mcpServers": {
     "rzn-phone": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/../../dist/bin/macos/universal/rzn-phone-worker",
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/macos/universal/rzn-phone-worker",
       "args": [],
-      "cwd": "${CLAUDE_PLUGIN_ROOT}/../..",
+      "cwd": "${CLAUDE_PLUGIN_ROOT}",
       "env": {
-        "RZN_IOS_APPIUM_URL": ""
+        "RZN_PLUGIN_DIR": "${CLAUDE_PLUGIN_ROOT}"
       }
     }
   }

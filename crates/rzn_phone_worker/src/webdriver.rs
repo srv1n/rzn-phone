@@ -7,6 +7,12 @@ use std::time::Duration;
 const W3C_ELEMENT_KEY: &str = "element-6066-11e4-a52e-4f735466cecf";
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_CREATE_SESSION_TIMEOUT: Duration = Duration::from_secs(600);
+static WEBDRIVER_HTTP_CLIENT: once_cell::sync::Lazy<Client> = once_cell::sync::Lazy::new(|| {
+    Client::builder()
+        .timeout(DEFAULT_REQUEST_TIMEOUT)
+        .build()
+        .expect("build WebDriver HTTP client")
+});
 
 #[derive(Debug, Clone)]
 pub struct WebDriverClient {
@@ -56,10 +62,7 @@ impl WebDriverClient {
 
         Ok(Self {
             base_url: trimmed.to_string(),
-            client: Client::builder()
-                .timeout(DEFAULT_REQUEST_TIMEOUT)
-                .build()
-                .context("build reqwest client")?,
+            client: WEBDRIVER_HTTP_CLIENT.clone(),
         })
     }
 

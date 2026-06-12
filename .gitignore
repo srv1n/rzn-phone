@@ -13,13 +13,7 @@
 /.tmp/
 /artifacts/
 /.playwright-cli/
-/.tusker/
 /tusker/
-/tusker.yaml
-/.beads/
-
-# Local agent instructions and workspace state
-/AGENTS.md
 
 # OS / editor noise
 .DS_Store

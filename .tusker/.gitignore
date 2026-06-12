@@ -1,0 +1,11 @@
+# tusker
+_generated/
+_system/generated/
+dashboards/
+events/
+attempts/
+evidence/
+scratch/
+.obsidian/workspace*
+.obsidian/cache
+.trash/
