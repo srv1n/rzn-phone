@@ -1,0 +1,251 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "instagram.like_post",
+  "version": "1.0.1",
+  "description": "Optionally like a visible Instagram feed post with dual execute and commit gating.",
+  "capability": {
+    "family": "interact",
+    "intent": "like_post",
+    "surface": "native_app",
+    "mutating": true
+  },
+  "inputs": {
+    "execute_like": { "type": "boolean", "default": false },
+    "post_position": { "type": "integer", "default": 1, "min": 1, "max": 4 },
+    "maxNodes": { "type": "integer", "default": 240, "min": 80, "max": 420 }
+  },
+  "notes": [
+    "Dry-run by default.",
+    "The workflow force-relaunches Instagram before reading the feed so open comments, composer, or media-viewer state cannot hijack the like target.",
+    "It also normalizes back to a visible Home feed surface because Instagram keeps hidden off-screen trees mounted and they can fool naive waits.",
+    "Actual mutation requires both args.execute_like=true and commit=true."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.burbn.instagram",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.app.activate",
+      "arguments": {
+        "bundleId": "com.burbn.instagram",
+        "terminateFirst": true
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 1200, "maxMs": 1200 } },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "visibleBack1",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeButton",
+          "label": "Back",
+          "max": 1,
+          "visibleOnly": true
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "visibleBackCount1",
+      "arguments": { "list": "{{steps.visibleBack1.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.visibleBackCount1.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (label == 'Back' OR name == 'Back')"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.visibleBackCount1.count", "truthy": true },
+      "arguments": { "minMs": 900, "maxMs": 900 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "visibleBack2",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeButton",
+          "label": "Back",
+          "max": 1,
+          "visibleOnly": true
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "visibleBackCount2",
+      "arguments": { "list": "{{steps.visibleBack2.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.visibleBackCount2.count", "truthy": true },
+      "arguments": {
+        "target": {
+          "using": "-ios predicate string",
+          "value": "type == 'XCUIElementTypeButton' AND (label == 'Back' OR name == 'Back')"
+        }
+      }
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.visibleBackCount2.count", "truthy": true },
+      "arguments": { "minMs": 900, "maxMs": 900 }
+    },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "visibleHomeTab",
+      "arguments": {
+        "query": {
+          "type": "XCUIElementTypeButton",
+          "name": "mainfeed-tab",
+          "max": 1,
+          "visibleOnly": true
+        },
+        "limit": 1,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "visibleHomeTabCount",
+      "arguments": { "list": "{{steps.visibleHomeTab.texts}}" }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.visibleHomeTabCount.count", "truthy": true },
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "mainfeed-tab" }
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 900, "maxMs": 900 } },
+    {
+      "tool": "ios.action.scroll",
+      "arguments": { "direction": "down", "distance": 0.22 }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 850, "maxMs": 850 } },
+    {
+      "tool": "ios.ui.extract_rows",
+      "saveAs": "feedRows",
+      "arguments": {
+        "row": {
+          "type": "XCUIElementTypeCell",
+          "name": "media-cell",
+          "ancestorName": "main-feed"
+        },
+        "primary": {
+          "type": "XCUIElementTypeOther",
+          "attr": "value",
+          "pick": "longest"
+        },
+        "fields": [
+          {
+            "name": "username",
+            "query": {
+              "type": "XCUIElementTypeButton",
+              "name": "feed-item-header-user-button",
+              "max": 1
+            },
+            "attr": "label",
+            "pick": "first"
+          }
+        ],
+        "visibleOnly": true,
+        "limit": 4,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.nth",
+      "saveAs": "selectedPost",
+      "arguments": { "list": "{{steps.feedRows.rows}}", "index": "{{post_position}}" }
+    },
+    {
+      "tool": "ios.ui.extract_rows",
+      "saveAs": "visibleLikeButtons",
+      "arguments": {
+        "row": {
+          "type": "XCUIElementTypeButton",
+          "name": "like-button"
+        },
+        "primary": {
+          "type": "XCUIElementTypeButton",
+          "attr": "name",
+          "pick": "first"
+        },
+        "visibleOnly": true,
+        "limit": 4,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "util.list.nth",
+      "saveAs": "selectedLikeButton",
+      "arguments": { "list": "{{steps.visibleLikeButtons.rows}}", "index": "{{post_position}}" }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "beforeLikeScreenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "beforeLikeUiSource" },
+    {
+      "tool": "ios.ui.observe_compact",
+      "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" },
+      "saveAs": "beforeLikeCompactSnapshot"
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "execute_like", "truthy": true },
+      "requiresCommit": true,
+      "arguments": {
+        "point": {
+          "x": "{{steps.selectedLikeButton.value.tapX}}",
+          "y": "{{steps.selectedLikeButton.value.tapY}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.ui.screenshot",
+      "when": { "var": "execute_like", "truthy": true },
+      "arguments": {},
+      "saveAs": "afterLikeScreenshot"
+    }
+  ],
+  "output": {
+    "requestedLike": "{{execute_like}}",
+    "selectedPost": "{{steps.selectedPost.value}}",
+    "selectedPostIndex": "{{steps.selectedLikeButton.value.position}}",
+    "screenshot": "{{steps.beforeLikeScreenshot}}",
+    "uiSource": "{{steps.beforeLikeUiSource}}",
+    "compactSnapshot": "{{steps.beforeLikeCompactSnapshot}}",
+    "afterLikeScreenshot": "{{steps.afterLikeScreenshot}}"
+  }
+}

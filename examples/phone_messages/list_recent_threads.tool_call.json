@@ -1,0 +1,8 @@
+{
+  "name": "phone_messages.list_recent_threads",
+  "arguments": {
+    "deviceId": "<UDID>",
+    "maxThreads": 25,
+    "backgroundAppOnFinish": true
+  }
+}

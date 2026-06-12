@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rzn.mobile.workflow.v1",
+  "title": "RZN Mobile Workflow v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "rzn.mobile.workflow.v1"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "required_variables": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["ios", "android"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/input_def" }
+    },
+    "capability": {
+      "$ref": "#/$defs/capability"
+    },
+    "help": {
+      "$ref": "#/$defs/help"
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "steps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "output": {
+      "type": "object"
+    },
+    "presentation": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "input_def": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "integer", "number", "boolean", "object", "array"]
+        },
+        "required": { "type": "boolean", "default": false },
+        "default": {},
+        "description": { "type": "string" },
+        "example": {},
+        "group": {
+          "type": "string",
+          "enum": ["core", "safety", "advanced", "internal"]
+        },
+        "min": { "type": "number" },
+        "max": { "type": "number" }
+      }
+    },
+    "help_example": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "args": { "type": "object" }
+      }
+    },
+    "help_parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "example": {},
+        "group": {
+          "type": "string",
+          "enum": ["core", "safety", "advanced", "internal"]
+        },
+        "structure": { "type": "string" }
+      }
+    },
+    "help": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "when_to_use": { "type": "string" },
+        "returns": { "type": "string" },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/help_parameter" }
+        },
+        "examples": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/help_example" }
+        }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "intent", "surface", "mutating"],
+      "properties": {
+        "family": {
+          "type": "string",
+          "enum": ["observe", "navigate", "extract", "interact", "verify", "session", "workflow", "utility"]
+        },
+        "intent": { "type": "string", "minLength": 1 },
+        "surface": { "type": "string", "minLength": 1 },
+        "mutating": { "type": "boolean" }
+      }
+    },
+    "when": {
+      "oneOf": [
+        { "type": "boolean" },
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["var"],
+          "properties": {
+            "var": { "type": "string", "minLength": 1 },
+            "equals": {},
+            "notEquals": {},
+            "exists": { "type": "boolean" },
+            "truthy": { "type": "boolean" }
+          },
+          "oneOf": [
+            { "required": ["equals"] },
+            { "required": ["notEquals"] },
+            { "required": ["exists"] },
+            { "required": ["truthy"] }
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["platform"],
+          "properties": {
+            "platform": { "type": "string", "enum": ["ios", "android"] }
+          }
+        }
+      ]
+    },
+    "tool_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool"],
+      "properties": {
+        "id": { "type": "string" },
+        "when": { "$ref": "#/$defs/when" },
+        "timeout_ms": { "type": "integer", "minimum": 1 },
+        "timeoutMs": { "type": "integer", "minimum": 1 },
+        "retries": { "type": "integer", "minimum": 0, "maximum": 10, "default": 0 },
+        "requires_commit": { "type": "boolean", "default": false },
+        "requiresCommit": { "type": "boolean" },
+        "save_as": { "type": "string" },
+        "saveAs": { "type": "string" },
+        "tool": { "type": "string", "minLength": 1 },
+        "arguments": { "type": "object", "default": {} },
+        "args": { "type": "object" }
+      }
+    },
+    "action_step": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["type"],
+      "properties": {
+        "id": { "type": "string" },
+        "when": { "$ref": "#/$defs/when" },
+        "timeout_ms": { "type": "integer", "minimum": 1 },
+        "retries": { "type": "integer", "minimum": 0, "maximum": 10, "default": 0 },
+        "requires_commit": { "type": "boolean", "default": false },
+        "save_as": { "type": "string" },
+        "type": { "type": "string", "minLength": 1 },
+        "target_spec": { "type": "object" }
+      }
+    },
+    "step": {
+      "oneOf": [
+        { "$ref": "#/$defs/tool_step" },
+        { "$ref": "#/$defs/action_step" }
+      ]
+    }
+  }
+}

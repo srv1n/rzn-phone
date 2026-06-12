@@ -1,0 +1,8 @@
+{
+  "name": "phone_calls.list_recent_calls",
+  "arguments": {
+    "deviceId": "<UDID>",
+    "maxCalls": 25,
+    "backgroundAppOnFinish": true
+  }
+}

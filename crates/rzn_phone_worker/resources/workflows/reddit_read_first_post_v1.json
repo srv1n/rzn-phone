@@ -1,0 +1,111 @@
+{
+  "schema_version": "rzn.mobile.workflow.v1",
+  "name": "reddit.read_first_post",
+  "version": "1.3.2",
+  "description": "Open Reddit on iOS, open the first feed post, and return UI artifacts + extracted text (read-only).",
+  "capability": {
+    "family": "extract",
+    "intent": "read_post",
+    "surface": "native_app",
+    "mutating": false
+  },
+  "inputs": {
+    "post_index": { "type": "integer", "default": 0, "min": 0, "max": 40 },
+    "post_cell_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__post_cell' OR label CONTAINS 'reddit_feed__post__post_cell'" },
+    "post_open_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__title_text'" },
+    "post_ready_predicate": { "type": "string", "default": "name CONTAINS 'reddit__comment_composer__comment_text_view' OR name CONTAINS 'reddit_post__post_detail__post_node' OR (type == 'XCUIElementTypeButton' AND (label == 'Close' OR name == 'Close'))" },
+    "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
+  },
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.reddit.Reddit",
+        "reuseActiveSession": true,
+        "replaceExisting": false,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "initialUiSource" },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "postDetailProbe",
+      "arguments": {
+        "source": "{{steps.initialUiSource.source}}",
+        "query": {
+          "type": "XCUIElementTypeOther",
+          "nameContains": "reddit_post__post_detail__post_node",
+          "max": 5
+        },
+        "limit": 5,
+        "unique": false,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "when": { "var": "steps.postDetailProbe.count", "truthy": false },
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_cell_predicate}}" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "util.sleep",
+      "when": { "var": "steps.postDetailProbe.count", "truthy": false },
+      "arguments": { "minMs": 450, "maxMs": 1250 }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.postDetailProbe.count", "truthy": false },
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_open_predicate}}", "index": "{{post_index}}" }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "when": { "var": "steps.postDetailProbe.count", "truthy": false },
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{post_ready_predicate}}" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 700, "maxMs": 1800 } },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "uiSource" },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "postText",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeStaticText", "max": 200 },
+        "limit": 80,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "screenshot" },
+    { "tool": "ios.ui.observe_compact", "arguments": { "nodeFilter": "all", "maxNodes": "{{maxNodes}}" }, "saveAs": "compact" }
+  ],
+  "output": {
+    "texts": "{{steps.postText.texts}}",
+    "textCount": "{{steps.postText.count}}",
+    "screenshot": "{{steps.screenshot}}",
+    "uiSource": "{{steps.uiSource}}",
+    "compactSnapshot": "{{steps.compact}}"
+  }
+}

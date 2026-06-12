@@ -1,0 +1,27 @@
+# Rust build artifacts
+/target/
+
+# Plugin build outputs
+/dist/
+/output/
+/libexec/
+
+# Local secrets (plugin signing keys)
+/.secrets/
+
+# Local scratch / validation artifacts
+/.tmp/
+/artifacts/
+/.playwright-cli/
+/.tusker/
+/tusker/
+/tusker.yaml
+/.beads/
+
+# Local agent instructions and workspace state
+/AGENTS.md
+
+# OS / editor noise
+.DS_Store
+**/.DS_Store
+**/__pycache__/
