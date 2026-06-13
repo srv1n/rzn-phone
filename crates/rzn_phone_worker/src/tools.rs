@@ -7224,11 +7224,7 @@ fn summarize_trace(trace: &[Value]) -> Value {
 /// strings that merely embed a placeholder among other text (those go through
 /// `substitute_string`, which preserves unmatched literals inline).
 fn exact_placeholder_key(input: &str) -> Option<&str> {
-    let inner = input
-        .trim()
-        .strip_prefix("{{")?
-        .strip_suffix("}}")?
-        .trim();
+    let inner = input.trim().strip_prefix("{{")?.strip_suffix("}}")?.trim();
     if inner.is_empty() || inner.contains("{{") || inner.contains("}}") {
         return None;
     }
@@ -7571,7 +7567,10 @@ mod tests {
 
     #[test]
     fn exact_placeholder_key_matches_only_whole_placeholders() {
-        assert_eq!(exact_placeholder_key("{{wdaLocalPort}}"), Some("wdaLocalPort"));
+        assert_eq!(
+            exact_placeholder_key("{{wdaLocalPort}}"),
+            Some("wdaLocalPort")
+        );
         assert_eq!(exact_placeholder_key("  {{ udid }} "), Some("udid"));
         assert_eq!(exact_placeholder_key("steps.x.y"), None);
         assert_eq!(exact_placeholder_key("port {{wdaLocalPort}}"), None);

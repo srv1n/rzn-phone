@@ -541,17 +541,16 @@ async fn handle_setup(args: &SetupArgs) -> Result<()> {
                     obj.insert("replaceExisting".to_string(), json!(false));
                 }
                 let state = AppState::new();
-                let payload = match tools::handle_tool_call(&state, "ios.session.create", create)
-                    .await
-                {
-                    Ok(p) => p,
-                    Err(err) => tools::tool_error_from_anyhow(&err, "ios.session.create"),
-                };
-                let is_error = payload.get("isError").and_then(Value::as_bool).unwrap_or(false);
-                let structured = payload
-                    .get("structuredContent")
-                    .cloned()
-                    .unwrap_or(payload);
+                let payload =
+                    match tools::handle_tool_call(&state, "ios.session.create", create).await {
+                        Ok(p) => p,
+                        Err(err) => tools::tool_error_from_anyhow(&err, "ios.session.create"),
+                    };
+                let is_error = payload
+                    .get("isError")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let structured = payload.get("structuredContent").cloned().unwrap_or(payload);
                 verify = json!({
                     "ran": true,
                     "ok": !is_error,
@@ -591,7 +590,8 @@ fn setup_next_hint(have_team: bool, is_free: Option<bool>, verify_ok: Option<boo
     }
     match verify_ok {
         Some(false) => {
-            "WDA verification failed — see verify.result.remediation, or run `rzn-phone doctor`.".to_string()
+            "WDA verification failed — see verify.result.remediation, or run `rzn-phone doctor`."
+                .to_string()
         }
         Some(true) | None => {
             let mut hint = "Ready. Try: rzn-phone run safari google_search --args-json '{\"query\":\"hello\"}'".to_string();
@@ -803,9 +803,7 @@ fn config_set(cfg: &mut RznConfig, key: &str, value: &str) -> Result<()> {
         "signing.xcode_org_id" => cfg.signing.xcode_org_id = s(),
         "signing.xcode_signing_id" => cfg.signing.xcode_signing_id = s(),
         "signing.updated_wda_bundle_id" => cfg.signing.updated_wda_bundle_id = s(),
-        "signing.allow_provisioning_updates" => {
-            cfg.signing.allow_provisioning_updates = Some(b()?)
-        }
+        "signing.allow_provisioning_updates" => cfg.signing.allow_provisioning_updates = Some(b()?),
         "signing.allow_provisioning_device_registration" => {
             cfg.signing.allow_provisioning_device_registration = Some(b()?)
         }

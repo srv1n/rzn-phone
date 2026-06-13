@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "reddit.reply_to_comment",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Open a Reddit post, draft a reply to a comment, and optionally submit it (commit-gated).",
   "capability": {
     "family": "interact",
@@ -387,7 +387,7 @@
   ],
   "output": {
     "requestedReply": "{{execute_reply}}",
-    "selectedFeedPost": "{{steps.selectedFeedPost.value}}",
+    "selectedCommentRow": "{{steps.selectedCommentRow.value}}",
     "draftReplyScreenshot": "{{steps.draftReplyScreenshot}}",
     "draftReplyUiSource": "{{steps.draftReplyUiSource}}",
     "draftReplyCompactSnapshot": "{{steps.draftReplyCompactSnapshot}}",

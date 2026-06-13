@@ -205,7 +205,9 @@ pub struct WdaRemediation {
 // ---------------------------------------------------------------------------
 
 fn home() -> PathBuf {
-    env::var_os("HOME").map(PathBuf::from).unwrap_or_else(env::temp_dir)
+    env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(env::temp_dir)
 }
 
 fn xdg_dir(xdg_var: &str, default_suffix: &str) -> PathBuf {
@@ -521,8 +523,10 @@ fn run_capture(_cmd: &str, _args: &[&str]) -> Option<String> {
 
 /// All teams signed into Xcode (`IDEProvisioningTeams`), paid first.
 pub fn read_xcode_teams() -> Vec<Team> {
-    let Some(text) = run_capture("defaults", &["read", "com.apple.dt.Xcode", "IDEProvisioningTeams"])
-    else {
+    let Some(text) = run_capture(
+        "defaults",
+        &["read", "com.apple.dt.Xcode", "IDEProvisioningTeams"],
+    ) else {
         return Vec::new();
     };
     let mut teams = parse_xcode_teams(&text);
@@ -590,7 +594,9 @@ fn parse_apple_development_identities(text: &str) -> Vec<(String, Option<String>
         if !line.contains("Apple Development") && !line.contains("iPhone Developer") {
             continue;
         }
-        let Some(open) = line.rfind('(') else { continue };
+        let Some(open) = line.rfind('(') else {
+            continue;
+        };
         let Some(rel_close) = line[open..].find(')') else {
             continue;
         };
@@ -659,7 +665,11 @@ pub fn signing_doctor() -> Vec<DoctorCheck> {
             })
             .collect::<Vec<_>>()
             .join(", ");
-        checks.push(DoctorCheck::ok("xcode_account", "Apple ID in Xcode", summary));
+        checks.push(DoctorCheck::ok(
+            "xcode_account",
+            "Apple ID in Xcode",
+            summary,
+        ));
     }
 
     // 3. Chosen signing team + free-team caveat.
@@ -728,7 +738,11 @@ pub fn signing_doctor() -> Vec<DoctorCheck> {
         checks.push(DoctorCheck::ok(
             "config",
             "rzn-phone config",
-            format!("{} -> signing.xcode_org_id = {}", config_path().display(), org),
+            format!(
+                "{} -> signing.xcode_org_id = {}",
+                config_path().display(),
+                org
+            ),
         ));
     } else {
         checks.push(DoctorCheck::warn(
