@@ -741,10 +741,12 @@ if [[ "$UNINSTALL" == "1" ]]; then
 fi
 
 if [[ -z "$STAGE" && -z "$ARCHIVE" && -z "$SOURCE" ]]; then
+  # Default path downloads the macos_universal release; gate it to macOS.
+  # Explicit --stage/--archive/--source installs are platform-agnostic.
+  assert_supported_platform
   configure_latest_release_source
 fi
 
-assert_supported_platform
 VERSION="$(discover_version)"
 validate_release_version "$VERSION"
 BIN_DIR="$(select_bin_dir)"
