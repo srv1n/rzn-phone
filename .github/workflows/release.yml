@@ -173,11 +173,20 @@ jobs:
 
       - name: Build universal runtime archive
         shell: bash
+        env:
+          RELEASE_SIGNING_KEY_B64: ${{ secrets.RZN_PHONE_RELEASE_SIGNING_KEY }}
         run: |
           scripts/build_universal.sh
           test -x dist/bin/macos/universal/rzn-phone
           test -x dist/bin/macos/universal/rzn-phone-worker
-          python scripts/build_release_artifacts.py --platform macos_universal
+          if [[ -z "$RELEASE_SIGNING_KEY_B64" ]]; then
+            echo "RZN_PHONE_RELEASE_SIGNING_KEY secret is not set" >&2
+            exit 1
+          fi
+          KEYFILE="$(mktemp)"
+          trap 'rm -f "$KEYFILE"' EXIT
+          printf '%s' "$RELEASE_SIGNING_KEY_B64" > "$KEYFILE"
+          python scripts/build_release_artifacts.py --platform macos_universal --signing-key "$KEYFILE"
 
       - name: Upload universal runtime assets
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
