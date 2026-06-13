@@ -1,8 +1,8 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "reddit.open_post",
-  "version": "1.0.1",
-  "description": "Open a Reddit feed post by index for read-only inspection.",
+  "version": "1.0.2",
+  "description": "Open a Reddit feed text post for read-only inspection. Skips promoted ads and external link posts, which open the in-app browser instead of a post thread.",
   "capability": {
     "family": "navigate",
     "intent": "open_post",
@@ -12,7 +12,7 @@
   "inputs": {
     "post_index": { "type": "integer", "default": 0, "min": 0, "max": 40 },
     "post_cell_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__post_cell' OR label CONTAINS 'reddit_feed__post__post_cell'" },
-    "post_open_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__title_text'" },
+    "post_open_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__text_preview'" },
     "post_ready_predicate": { "type": "string", "default": "name CONTAINS 'reddit__comment_composer__comment_text_view' OR name CONTAINS 'reddit_post__post_detail__post_node' OR (type == 'XCUIElementTypeButton' AND (label == 'Close' OR name == 'Close'))" },
     "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
   },
@@ -45,11 +45,15 @@
         }
       }
     },
+    { "tool": "ios.app.activate", "arguments": { "bundleId": "com.reddit.Reddit", "terminateFirst": true } },
     {
-      "tool": "ios.action.wait",
+      "tool": "ios.action.scroll_until",
       "arguments": {
-        "target": { "using": "-ios predicate string", "value": "{{post_cell_predicate}}" },
-        "timeoutMs": 30000
+        "direction": "down",
+        "maxScrolls": 10,
+        "settleMs": 600,
+        "timeoutMs": 40000,
+        "target": { "using": "-ios predicate string", "value": "{{post_open_predicate}}" }
       },
       "retries": 1
     },

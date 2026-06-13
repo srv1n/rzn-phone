@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "reddit.reply_to_comment",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "description": "Open a Reddit post, draft a reply to a comment, and optionally submit it (commit-gated).",
   "capability": {
     "family": "interact",
@@ -20,7 +20,7 @@
     "max_comment_scrolls": { "type": "integer", "default": 6, "min": 0, "max": 25 },
     "target_comment_contains": { "type": "string" },
     "post_cell_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__post_cell' OR label CONTAINS 'reddit_feed__post__post_cell'" },
-    "post_open_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__title_text'" },
+    "post_open_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__text_preview'" },
     "feed_post_has_comments_regex": { "type": "string", "default": "(^|, )([1-9][0-9]*)\\s+[Cc]omments?\\b" },
     "post_ready_predicate": { "type": "string", "default": "name CONTAINS 'reddit__comment_composer__comment_text_view' OR name CONTAINS 'reddit_post__post_detail__post_node' OR (type == 'XCUIElementTypeButton' AND (label == 'Close' OR name == 'Close'))" },
     "next_comment_button_predicate": { "type": "string", "default": "name == 'reddit_video__video_player__next_comment_button' OR label == 'Jump to Next Comment'" },
@@ -60,6 +60,8 @@
         }
       }
     },
+    { "tool": "ios.app.activate", "arguments": { "bundleId": "com.reddit.Reddit", "terminateFirst": true } },
+    { "tool": "util.sleep", "arguments": { "minMs": 1500, "maxMs": 2500 } },
     { "tool": "ios.ui.source", "arguments": {}, "saveAs": "initialUiSource" },
     {
       "tool": "ios.ui.extract_text",
@@ -159,59 +161,21 @@
       "arguments": { "minMs": 1200, "maxMs": 1800 }
     },
     {
-      "tool": "ios.action.wait",
+      "tool": "ios.action.scroll_until",
       "arguments": {
-        "target": { "using": "-ios predicate string", "value": "{{post_cell_predicate}}" },
-        "timeoutMs": 30000
+        "direction": "down",
+        "maxScrolls": 10,
+        "settleMs": 600,
+        "timeoutMs": 40000,
+        "target": { "using": "-ios predicate string", "value": "{{post_open_predicate}}" }
       },
       "retries": 1
     },
-    {
-      "tool": "util.sleep",
-      "arguments": { "minMs": 450, "maxMs": 1250 }
-    },
-    {
-      "tool": "ios.ui.find_row",
-      "saveAs": "selectedFeedPost",
-      "arguments": {
-        "row": {
-          "type": "XCUIElementTypeOther",
-          "namePrefix": "reddit_feed__post__post_cell"
-        },
-        "primary": {
-          "type": "XCUIElementTypeOther",
-          "attr": "label",
-          "pick": "first"
-        },
-        "match": {
-          "field": "rawLabel",
-          "regex": "{{feed_post_has_comments_regex}}"
-        },
-        "matchIndex": "{{post_index}}",
-        "maxScrolls": "{{max_feed_scan_scrolls}}",
-        "scroll": { "direction": "down", "distance": 0.62, "settleMs": 450 },
-        "order": "y"
-      }
-    },
-    {
-      "tool": "util.fail",
-      "when": { "var": "steps.selectedFeedPost.found", "truthy": false },
-      "arguments": {
-        "message": "No Reddit feed post with visible comments was found in the current scan window.",
-        "details": {
-          "postIndex": "{{post_index}}",
-          "maxFeedScanPosts": "{{max_feed_scan_posts}}",
-          "maxFeedScanScrolls": "{{max_feed_scan_scrolls}}"
-        }
-      }
-    },
+    { "tool": "util.sleep", "arguments": { "minMs": 450, "maxMs": 1250 } },
     {
       "tool": "ios.action.tap",
       "arguments": {
-        "point": {
-          "x": "{{steps.selectedFeedPost.value.tapX}}",
-          "y": "{{steps.selectedFeedPost.value.tapY}}"
-        }
+        "target": { "using": "-ios predicate string", "value": "{{post_open_predicate}}", "index": "{{post_index}}" }
       }
     },
     {
@@ -272,7 +236,6 @@
         "row": {
           "type": "XCUIElementTypeCell",
           "nameContains": "CommentSliceViewModel",
-          "ancestorNameContains": "CommentSheetView",
           "visibleOnly": true
         },
         "primary": {
@@ -319,7 +282,6 @@
         "row": {
           "type": "XCUIElementTypeCell",
           "nameContains": "CommentSliceViewModel",
-          "ancestorNameContains": "CommentSheetView",
           "visibleOnly": true
         },
         "primary": {

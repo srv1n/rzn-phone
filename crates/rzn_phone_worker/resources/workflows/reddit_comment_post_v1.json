@@ -1,8 +1,8 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "reddit.comment_post",
-  "version": "1.0.1",
-  "description": "Open a Reddit post, draft a comment, and optionally submit it (commit-gated).",
+  "version": "1.0.2",
+  "description": "Scroll to a commentable Reddit text post, draft a comment, and optionally submit it (commit-gated). Skips promoted ads and external link posts, which open the in-app browser instead of a comment thread.",
   "capability": {
     "family": "interact",
     "intent": "comment_post",
@@ -14,9 +14,9 @@
     "execute_comment": { "type": "boolean", "default": false },
     "post_index": { "type": "integer", "default": 0, "min": 0, "max": 40 },
     "post_cell_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__post_cell' OR label CONTAINS 'reddit_feed__post__post_cell'" },
-    "post_open_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__title_text'" },
+    "post_open_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__text_preview'" },
     "post_ready_predicate": { "type": "string", "default": "name CONTAINS 'reddit__comment_composer__comment_text_view' OR name CONTAINS 'reddit_post__post_detail__post_node' OR (type == 'XCUIElementTypeButton' AND (label == 'Close' OR name == 'Close'))" },
-    "comment_field_predicate": { "type": "string", "default": "name CONTAINS 'reddit__comment_composer__comment_text_view' OR type == 'XCUIElementTypeTextView' OR label CONTAINS[c] 'comment' OR value CONTAINS[c] 'comment'" },
+    "comment_field_predicate": { "type": "string", "default": "name CONTAINS 'reddit__comment_composer__comment_text_view'" },
     "comment_submit_predicate": { "type": "string", "default": "name CONTAINS 'reddit__comment_composer__reply_button' OR label == 'Reply' OR label == 'Post' OR label == 'Send'" },
     "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
   },
@@ -49,11 +49,15 @@
         }
       }
     },
+    { "tool": "ios.app.activate", "arguments": { "bundleId": "com.reddit.Reddit", "terminateFirst": true } },
     {
-      "tool": "ios.action.wait",
+      "tool": "ios.action.scroll_until",
       "arguments": {
-        "target": { "using": "-ios predicate string", "value": "{{post_cell_predicate}}" },
-        "timeoutMs": 30000
+        "direction": "down",
+        "maxScrolls": 10,
+        "settleMs": 600,
+        "timeoutMs": 40000,
+        "target": { "using": "-ios predicate string", "value": "{{post_open_predicate}}" }
       },
       "retries": 1
     },
@@ -68,7 +72,7 @@
       "tool": "ios.action.wait",
       "arguments": {
         "target": { "using": "-ios predicate string", "value": "{{post_ready_predicate}}" },
-        "timeoutMs": 20000
+        "timeoutMs": 30000
       },
       "retries": 1
     },
@@ -81,6 +85,13 @@
       },
       "retries": 1
     },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "-ios predicate string", "value": "{{comment_field_predicate}}" }
+      }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 400, "maxMs": 900 } },
     {
       "tool": "ios.action.type",
       "arguments": {

@@ -141,46 +141,71 @@ fn chrono_like_now() -> String {
 }
 
 fn build_session_json(udid: &str) -> Value {
+    // Only forward env vars that are actually set. Everything omitted here is
+    // resolved by the core (env > ~/.config/rzn-phone/config.json > built-in)
+    // inside ios.session.create, so the config file is honored on the run path
+    // exactly like on `tool call` and the MCP worker.
+    let mut session = Map::new();
+    session.insert("udid".to_string(), json!(udid));
+
     let mut signing = Map::new();
-    if let Ok(value) = env::var("IOS_XCODE_ORG_ID") {
+    if let Some(value) = env_present_str("IOS_XCODE_ORG_ID") {
         signing.insert("xcodeOrgId".to_string(), json!(value));
     }
-    if let Ok(value) = env::var("IOS_XCODE_SIGNING_ID") {
+    if let Some(value) = env_present_str("IOS_XCODE_SIGNING_ID") {
         signing.insert("xcodeSigningId".to_string(), json!(value));
     }
-    if let Ok(value) = env::var("IOS_UPDATED_WDA_BUNDLE_ID") {
+    if let Some(value) = env_present_str("IOS_UPDATED_WDA_BUNDLE_ID") {
         signing.insert("updatedWDABundleId".to_string(), json!(value));
     }
-    json!({
-        "udid": udid,
-        "showXcodeLog": env_bool("IOS_SHOW_XCODE_LOG"),
-        "allowProvisioningUpdates": env_bool("IOS_ALLOW_PROVISIONING_UPDATES"),
-        "allowProvisioningDeviceRegistration": env_bool("IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION"),
-        "sessionCreateTimeoutMs": env_int("IOS_SESSION_CREATE_TIMEOUT_MS", 600000),
-        "wdaLaunchTimeoutMs": env_int("IOS_WDA_LAUNCH_TIMEOUT_MS", 240000),
-        "wdaConnectionTimeoutMs": env_int("IOS_WDA_CONNECTION_TIMEOUT_MS", 120000),
-        "signing": Value::Object(signing)
-    })
+    if !signing.is_empty() {
+        session.insert("signing".to_string(), Value::Object(signing));
+    }
+
+    if let Some(value) = env_present_bool("IOS_SHOW_XCODE_LOG") {
+        session.insert("showXcodeLog".to_string(), json!(value));
+    }
+    if let Some(value) = env_present_bool("IOS_ALLOW_PROVISIONING_UPDATES") {
+        session.insert("allowProvisioningUpdates".to_string(), json!(value));
+    }
+    if let Some(value) = env_present_bool("IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION") {
+        session.insert(
+            "allowProvisioningDeviceRegistration".to_string(),
+            json!(value),
+        );
+    }
+    if let Some(value) = env_present_int("IOS_SESSION_CREATE_TIMEOUT_MS") {
+        session.insert("sessionCreateTimeoutMs".to_string(), json!(value));
+    }
+    if let Some(value) = env_present_int("IOS_WDA_LAUNCH_TIMEOUT_MS") {
+        session.insert("wdaLaunchTimeoutMs".to_string(), json!(value));
+    }
+    if let Some(value) = env_present_int("IOS_WDA_CONNECTION_TIMEOUT_MS") {
+        session.insert("wdaConnectionTimeoutMs".to_string(), json!(value));
+    }
+
+    Value::Object(session)
 }
 
-fn env_bool(name: &str) -> bool {
+fn env_present_str(name: &str) -> Option<String> {
     env::var(name)
         .ok()
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "yes"
-            )
-        })
-        .unwrap_or(false)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
-fn env_int(name: &str, default: i64) -> i64 {
-    env::var(name)
-        .ok()
-        .and_then(|value| value.trim().parse::<i64>().ok())
-        .unwrap_or(default)
+fn env_present_bool(name: &str) -> Option<bool> {
+    match env_present_str(name)?.to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
 }
+
+fn env_present_int(name: &str) -> Option<i64> {
+    env_present_str(name)?.parse::<i64>().ok()
+}
+
 
 async fn resolve_run_udid(explicit_udid: Option<String>) -> Result<String> {
     if let Some(udid) = explicit_udid.map(|value| value.trim().to_string()) {

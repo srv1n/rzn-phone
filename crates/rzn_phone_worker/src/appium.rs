@@ -33,6 +33,11 @@ pub fn parse_port_value(value: Option<&Value>, field_name: &str) -> Result<Optio
     let Some(value) = value else {
         return Ok(None);
     };
+    // A null value (e.g. an unprovided `{{wdaLocalPort}}` placeholder resolved to
+    // null by the workflow templater) means "absent": fall back to the default.
+    if value.is_null() {
+        return Ok(None);
+    }
     let Some(raw) = value.as_u64() else {
         return Err(anyhow!("{field_name} must be an integer in 1..=65535"));
     };
@@ -319,6 +324,11 @@ mod tests {
         assert!(parse_port_value(Some(&json!(0)), "port").is_err());
         assert!(parse_port_value(Some(&json!(65536)), "port").is_err());
         assert!(parse_port_value(Some(&json!("4723")), "port").is_err());
+        // Absent and null both mean "use the default" — a null arrives when an
+        // unprovided `{{wdaLocalPort}}` placeholder is resolved to null by the
+        // workflow templater. A real non-numeric string is still rejected above.
+        assert_eq!(parse_port_value(None, "port").unwrap(), None);
+        assert_eq!(parse_port_value(Some(&json!(null)), "port").unwrap(), None);
     }
 
     #[tokio::test]

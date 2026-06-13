@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "google_maps.open_directions",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Open a Google Maps place sheet, tap Directions, and capture the post-tap route context.",
   "capability": {
     "family": "navigate",
@@ -73,8 +73,20 @@
         "pressEnter": true
       }
     },
+    { "tool": "util.sleep", "arguments": { "minMs": 1400, "maxMs": 2400 } },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "placeProbe",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "Directions", "max": 3 },
+        "limit": 3,
+        "unique": true,
+        "order": "y"
+      }
+    },
     {
       "tool": "ios.action.wait",
+      "when": { "var": "steps.placeProbe.count", "truthy": false },
       "arguments": {
         "target": {
           "using": "xpath",
@@ -87,6 +99,7 @@
     { "tool": "util.sleep", "arguments": { "minMs": 400, "maxMs": 900 } },
     {
       "tool": "ios.action.tap",
+      "when": { "var": "steps.placeProbe.count", "truthy": false },
       "arguments": {
         "target": {
           "using": "xpath",
@@ -94,7 +107,16 @@
         }
       }
     },
-    { "tool": "util.sleep", "arguments": { "minMs": 1200, "maxMs": 2200 } },
+    { "tool": "util.sleep", "arguments": { "minMs": 900, "maxMs": 1600 } },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "xpath", "value": "//XCUIElementTypeButton[@name='Directions' or @label='Directions']" },
+        "timeoutMs": 20000
+      },
+      "retries": 1
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 300, "maxMs": 700 } },
     {
       "tool": "ios.action.tap",
       "arguments": {

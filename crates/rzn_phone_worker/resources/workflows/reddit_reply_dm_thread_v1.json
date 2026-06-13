@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "reddit.reply_dm_thread",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Open a Reddit DM thread, draft a reply, and optionally send it (commit-gated).",
   "capability": {
     "family": "interact",
@@ -105,6 +105,16 @@
       "retries": 1
     },
     { "tool": "util.sleep", "arguments": { "minMs": 650, "maxMs": 1600 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{message_field_predicate}}" } }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 500, "maxMs": 1000 } },
+    {
+      "tool": "ios.action.wait",
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{message_field_predicate}}" }, "timeoutMs": 10000 },
+      "retries": 1
+    },
     {
       "tool": "ios.action.type",
       "arguments": {

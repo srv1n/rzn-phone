@@ -1,4 +1,5 @@
 pub mod appium;
+pub mod config;
 pub mod errors;
 pub mod jsonrpc;
 pub mod mcp;

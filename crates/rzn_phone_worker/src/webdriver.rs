@@ -37,6 +37,15 @@ pub struct SessionCreateRequest {
     pub xcode_org_id: Option<String>,
     pub xcode_signing_id: Option<String>,
     pub updated_wda_bundle_id: Option<String>,
+    /// URL Safari is pointed at during session create. Defaulting this (rather
+    /// than leaving it unset under `noReset`) forces appium to attach to a known
+    /// page instead of guessing among existing tabs / Safari extension pages.
+    pub safari_initial_url: Option<String>,
+    /// Comma-separated hostnames whose pages appium should ignore when picking a
+    /// web context (e.g. Safari Web Extension UUID hosts).
+    pub safari_ignore_web_hostnames: Option<String>,
+    /// How long appium waits to connect to the web view/remote debugger.
+    pub webview_connect_timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +126,26 @@ impl WebDriverClient {
         }
         if let Some(value) = request.updated_wda_bundle_id {
             caps["appium:updatedWDABundleId"] = json!(value);
+        }
+
+        // Default safariInitialUrl to about:blank. Under noReset, leaving this
+        // unset makes appium skip the initial navigation and attach to whatever
+        // pages already exist — which, when Safari Web Extensions are installed,
+        // can stall web-context selection at session create. Pointing Safari at a
+        // known page makes context selection deterministic.
+        let safari_initial_url = request
+            .safari_initial_url
+            .filter(|url| !url.trim().is_empty())
+            .unwrap_or_else(|| "about:blank".to_string());
+        caps["appium:safariInitialUrl"] = json!(safari_initial_url);
+        if let Some(value) = request
+            .safari_ignore_web_hostnames
+            .filter(|value| !value.trim().is_empty())
+        {
+            caps["appium:safariIgnoreWebHostnames"] = json!(value);
+        }
+        if let Some(value) = request.webview_connect_timeout_ms {
+            caps["appium:webviewConnectTimeout"] = json!(value);
         }
 
         let payload = json!({
@@ -252,6 +281,39 @@ impl WebDriverClient {
         let value = self.get_json(&path).await?;
         extract_value_as_string(&value)
             .ok_or_else(|| anyhow!("missing title in WebDriver response"))
+    }
+
+    /// Handle of the window/page WebDriver commands currently target.
+    pub async fn current_window_handle(&self, session_id: &str) -> Result<String> {
+        let path = format!("/session/{session_id}/window");
+        let value = self.get_json(&path).await?;
+        extract_value_as_string(&value)
+            .ok_or_else(|| anyhow!("missing window handle in WebDriver response"))
+    }
+
+    /// All open window/page handles for the session. On Safari this includes any
+    /// `safari-web-extension://` background pages alongside real browser tabs.
+    pub async fn window_handles(&self, session_id: &str) -> Result<Vec<String>> {
+        let path = format!("/session/{session_id}/window/handles");
+        let value = self.get_json(&path).await?;
+        let handles = value
+            .get("value")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item.as_str().map(str::to_string))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        Ok(handles)
+    }
+
+    /// Point subsequent commands (navigation, script eval) at a specific window/page.
+    pub async fn switch_to_window(&self, session_id: &str, handle: &str) -> Result<()> {
+        let path = format!("/session/{session_id}/window");
+        let _ = self.post_json(&path, json!({ "handle": handle })).await?;
+        Ok(())
     }
 
     pub async fn find_elements_css(&self, session_id: &str, selector: &str) -> Result<Vec<String>> {
@@ -754,6 +816,9 @@ mod tests {
                 xcode_org_id: None,
                 xcode_signing_id: None,
                 updated_wda_bundle_id: None,
+                safari_initial_url: None,
+                safari_ignore_web_hostnames: None,
+                webview_connect_timeout_ms: None,
             })
             .await
             .expect("session");

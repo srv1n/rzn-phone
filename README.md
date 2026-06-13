@@ -128,7 +128,7 @@ That one line finds the latest GitHub release, installs `rzn-phone-<version>-mac
 Pin a specific release when you need repeatability:
 
 ```bash
-TAG="v0.0.1"
+TAG="v0.0.2"
 VERSION="${TAG#v}"
 BASE="https://github.com/srv1n/rzn-phone/releases/download/${TAG}"
 

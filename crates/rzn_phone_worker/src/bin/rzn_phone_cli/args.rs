@@ -21,6 +21,13 @@ enum CommandKind {
     Worker,
     /// Check local iOS automation prerequisites.
     Doctor(JsonOutputArgs),
+    /// Detect signing identity and write a starter config.
+    Setup(SetupArgs),
+    /// View or edit persistent configuration.
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommand,
+    },
     /// List connected physical iPhones.
     Devices(JsonOutputArgs),
     /// Show cached runtime/session status.
@@ -105,6 +112,38 @@ enum CommandKind {
 #[derive(Subcommand)]
 enum CapabilityCommand {
     List(JsonOutputArgs),
+}
+
+#[derive(Args, Clone)]
+struct SetupArgs {
+    /// Signing team ID to write (skips auto-detection when provided).
+    #[arg(long = "team-id")]
+    team_id: Option<String>,
+    /// Overwrite an existing config file.
+    #[arg(long)]
+    force: bool,
+    /// Device UDID to warm WDA against during verification.
+    #[arg(long)]
+    udid: Option<String>,
+    /// Skip the WDA build/launch verification step.
+    #[arg(long = "no-verify", default_value_t = false)]
+    no_verify: bool,
+    #[arg(long, help = "Emit raw JSON.")]
+    json: bool,
+    #[arg(long, help = "Force rich terminal rendering.")]
+    pretty: bool,
+}
+
+#[derive(Subcommand)]
+enum ConfigCommand {
+    /// Show the effective config file contents.
+    Show(JsonOutputArgs),
+    /// Print config/state/data paths rzn-phone uses.
+    Path(JsonOutputArgs),
+    /// Get a single config value (dotted key, e.g. signing.xcode_org_id).
+    Get { key: String },
+    /// Set a single config value (dotted key, e.g. signing.xcode_org_id).
+    Set { key: String, value: String },
 }
 
 #[derive(Subcommand)]
@@ -287,11 +326,11 @@ struct RunArgs {
     #[arg(
         long = "disconnect-on-finish",
         action = clap::ArgAction::Set,
-        default_value_t = true,
+        default_value_t = false,
         default_missing_value = "true",
         num_args = 0..=1,
         value_parser = parse_bool_flag,
-        help = "Disconnect the WebDriver session after the workflow; accepts 0/1 or true/false."
+        help = "Disconnect the WebDriver session after the workflow; default false keeps WDA warm. Accepts 0/1 or true/false."
     )]
     disconnect_on_finish: bool,
     #[arg(

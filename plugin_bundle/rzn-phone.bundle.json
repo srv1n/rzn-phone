@@ -1,6 +1,6 @@
 {
   "id": "rzn-phone",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "name": "RZN Phone",
   "description": "Public phone automation capability for RZN, implemented by the rzn-phone worker runtime",
   "min_host_version": "0.1.0",

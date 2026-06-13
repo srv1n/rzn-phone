@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "reddit.send_dm_by_username",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Open Reddit chat, search for a username, draft a message, and optionally send it (commit-gated).",
   "capability": {
     "family": "interact",
@@ -14,6 +14,7 @@
     "message_text": { "type": "string", "required": true },
     "execute_send": { "type": "boolean", "default": false },
     "inbox_tab_predicate": { "type": "string", "default": "name == 'reddit_tab_bar__chat_button' OR label == 'Chat' OR name CONTAINS[c] 'Inbox' OR label CONTAINS[c] 'Inbox' OR name CONTAINS[c] 'Chat' OR label CONTAINS[c] 'Chat'" },
+    "chat_tab_predicate": { "type": "string", "default": "name == 'reddit_feed__tab_item__label' AND label == 'Chat'" },
     "start_chat_button_predicate": { "type": "string", "default": "name == 'Start Chatting' OR label == 'Start Chatting'" },
     "username_search_field_predicate": { "type": "string", "default": "name == 'Search for a username' OR label == 'Search for a username' OR value == 'Search for a username'" },
     "create_button_predicate": { "type": "string", "default": "(name == 'Create' OR label == 'Create') AND enabled == 1" },
@@ -72,6 +73,12 @@
       "tool": "ios.action.tap",
       "arguments": { "target": { "using": "-ios predicate string", "value": "{{inbox_tab_predicate}}" } }
     },
+    { "tool": "util.sleep", "arguments": { "minMs": 1500, "maxMs": 2500 } },
+    {
+      "tool": "ios.action.tap",
+      "arguments": { "target": { "using": "-ios predicate string", "value": "{{chat_tab_predicate}}" } }
+    },
+    { "tool": "util.sleep", "arguments": { "minMs": 1500, "maxMs": 2500 } },
     {
       "tool": "ios.action.wait",
       "arguments": {

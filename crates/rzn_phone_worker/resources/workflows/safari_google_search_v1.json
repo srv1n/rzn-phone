@@ -1,9 +1,11 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "safari.google_search",
-  "version": "1.2.3",
-  "description": "Open Safari on iOS, run a Google search, and extract top organic results.",
-  "required_variables": ["query"],
+  "version": "1.2.4",
+  "description": "Open Safari on iOS, run a Google search, and extract top organic results (mobile + desktop layouts).",
+  "required_variables": [
+    "query"
+  ],
   "capability": {
     "family": "extract",
     "intent": "search_results",
@@ -114,12 +116,14 @@
     },
     {
       "tool": "ios.web.goto",
-      "arguments": { "url": "https://www.google.com/search?q={{query}}" }
+      "arguments": {
+        "url": "https://www.google.com/search?q={{query}}"
+      }
     },
     {
       "tool": "ios.web.wait_js",
       "arguments": {
-        "script": "return document.querySelectorAll('#rso h3, #search h3, h3.yuRUbf').length;",
+        "script": "return document.querySelectorAll('#rso h3, #search h3, h3.yuRUbf, #rso a[href] [role=\"heading\"], #search a[href] [role=\"heading\"]').length;",
         "timeoutMs": 15000,
         "intervalMs": 250
       }
@@ -128,24 +132,34 @@
       "tool": "ios.web.eval_js",
       "saveAs": "results",
       "arguments": {
-        "script": "const limit = Number(arguments[0] || 5);\nconst containers = [document.querySelector('#rso'), document.querySelector('#search')].filter(Boolean);\nconst roots = containers.length ? containers : [document.body];\nconst out = [];\nconst seen = new Set();\nconst isGoogleInternal = (url) => {\n  try {\n    const u = new URL(url, location.href);\n    if (u.origin !== location.origin) return false;\n    return u.pathname.startsWith('/search') || u.pathname.startsWith('/preferences') || u.pathname.startsWith('/advanced_search') || u.pathname.startsWith('/setprefs') || u.pathname.startsWith('/sorry') || u.pathname.startsWith('/httpservice') || u.pathname.startsWith('/imgres');\n  } catch {\n    return true;\n  }\n};\nconst clean = (value) => (value || '').replace(/\\s+/g, ' ').trim();\nconst pushResult = (title, rawUrl, card) => {\n  if (!title || !rawUrl || seen.has(rawUrl) || isGoogleInternal(rawUrl)) return false;\n  let snippet = '';\n  const snippetRoots = [card, card && card.nextElementSibling, card && card.parentElement, card && card.parentElement && card.parentElement.nextElementSibling].filter(Boolean);\n  for (const root of snippetRoots) {\n    const snippetNodes = root.querySelectorAll('div.VwiC3b, div[data-sncf=\"1\"], div[data-content-feature=\"1\"], span.aCOpRe, div.yXK7lf, div.s3v9rd, div.hgKElc, div.kb0PBd, div.fYyStc, div.IBr9hb, div.wHYlTd');\n    for (const node of snippetNodes) {\n      const text = clean(node.textContent);\n      if (text && text !== title) {\n        snippet = text;\n        break;\n      }\n    }\n    if (snippet) break;\n  }\n  if (!snippet && card) {\n    const fallbackText = clean(card.textContent).replace(title, '').replace(rawUrl, '').trim();\n    snippet = fallbackText.slice(0, 280);\n  }\n  seen.add(rawUrl);\n  out.push({ position: out.length + 1, title, url: rawUrl, snippet });\n  return out.length >= limit;\n};\nfor (const root of roots) {\n  const headings = root.querySelectorAll('h3');\n  for (const heading of headings) {\n    const title = clean(heading.textContent);\n    if (!title) continue;\n    const link = heading.querySelector('a[href]') || heading.closest('a[href]') || heading.parentElement?.querySelector('a[href]');\n    const rawUrl = link && link.href ? link.href : '';\n    const card = heading.closest('div.tF2Cxc, div.Xv4xee, div[data-snc], div.g, div[data-hveid], div[data-ved], div.MjjYud, div.N54PNb, div.kvH3mc, article, div') || link?.parentElement || root;\n    if (pushResult(title, rawUrl, card)) return out;\n  }\n  const legacyHeadings = root.querySelectorAll('a h3');\n  for (const heading of legacyHeadings) {\n    const title = clean(heading.textContent);\n    if (!title) continue;\n    const link = heading.closest('a[href]');\n    const rawUrl = link && link.href ? link.href : '';\n    const card = link?.closest('div.tF2Cxc, div.Xv4xee, div[data-snc], div.g, div[data-hveid], div[data-ved], div.MjjYud, div.N54PNb, div.kvH3mc, article, div') || root;\n    if (pushResult(title, rawUrl, card)) return out;\n  }\n}\nreturn out;",
-        "args": ["{{limit}}"]
+        "script": "const limit = Number(arguments[0] || 5);\nconst clean = (value) => (value || '').replace(/\\s+/g, ' ').trim();\nconst isGoogleInternal = (url) => {\n  try {\n    const u = new URL(url, location.href);\n    if (/(^|\\.)google\\.[a-z.]+$/i.test(u.hostname)) return true;\n    if (/(^|\\.)(gstatic|googleusercontent|googleadservices|googleadservices)\\.com$/i.test(u.hostname)) return true;\n    return false;\n  } catch {\n    return true;\n  }\n};\nconst containers = [document.querySelector('#rso'), document.querySelector('#search')].filter(Boolean);\nconst roots = containers.length ? containers : [document.body];\nconst cardSelector = 'div.tF2Cxc, div.Xv4xee, div[data-snc], div.g, div[data-hveid], div[data-ved], div.MjjYud, div.N54PNb, div.kvH3mc, article, div';\nconst out = [];\nconst seen = new Set();\nconst pushResult = (title, rawUrl, card) => {\n  if (!title || !rawUrl || seen.has(rawUrl) || isGoogleInternal(rawUrl)) return false;\n  let snippet = '';\n  const snippetRoots = [card, card && card.nextElementSibling, card && card.parentElement, card && card.parentElement && card.parentElement.nextElementSibling].filter(Boolean);\n  for (const root of snippetRoots) {\n    const snippetNodes = root.querySelectorAll('div.VwiC3b, div[data-sncf=\"1\"], div[data-content-feature=\"1\"], span.aCOpRe, div.yXK7lf, div.s3v9rd, div.hgKElc, div.kb0PBd, div.fYyStc, div.IBr9hb, div.wHYlTd, div[role=\"text\"]');\n    for (const node of snippetNodes) {\n      const text = clean(node.textContent);\n      if (text && text !== title) { snippet = text; break; }\n    }\n    if (snippet) break;\n  }\n  if (!snippet && card) {\n    const fallbackText = clean(card.textContent).replace(title, '').replace(rawUrl, '').trim();\n    snippet = fallbackText.slice(0, 280);\n  }\n  seen.add(rawUrl);\n  out.push({ position: out.length + 1, title, url: rawUrl, snippet });\n  return out.length >= limit;\n};\nfor (const root of roots) {\n  // Match legacy desktop (<h3>) and current iOS Safari mobile ([role=\"heading\"]) result titles.\n  const headings = root.querySelectorAll('h3, [role=\"heading\"]');\n  for (const heading of headings) {\n    const title = clean(heading.textContent);\n    if (!title) continue;\n    const link = heading.closest('a[href]') || heading.querySelector('a[href]') || (heading.parentElement && heading.parentElement.querySelector('a[href]'));\n    const rawUrl = link && link.href ? link.href : '';\n    if (!rawUrl) continue;\n    const card = (link && link.closest(cardSelector)) || (link && link.parentElement) || root;\n    if (pushResult(title, rawUrl, card)) return out;\n  }\n}\nreturn out;",
+        "args": [
+          "{{limit}}"
+        ]
       }
     },
     {
       "tool": "util.list.length",
       "saveAs": "count",
-      "arguments": { "list": "{{steps.results.result}}" }
+      "arguments": {
+        "list": "{{steps.results.result}}"
+      }
     },
     {
       "tool": "ios.web.screenshot",
-      "when": { "var": "captureScreenshot", "truthy": true },
+      "when": {
+        "var": "captureScreenshot",
+        "truthy": true
+      },
       "arguments": {},
       "saveAs": "screenshot"
     },
     {
       "tool": "ios.web.page_source",
-      "when": { "var": "capturePageSource", "truthy": true },
+      "when": {
+        "var": "capturePageSource",
+        "truthy": true
+      },
       "arguments": {},
       "saveAs": "pageSource"
     }

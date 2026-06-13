@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "linkedin.read_feed",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Open LinkedIn Home feed and extract top visible feed cards (read-only).",
   "capability": {
     "family": "extract",
@@ -42,6 +42,8 @@
         }
       }
     },
+    { "tool": "ios.app.activate", "arguments": { "bundleId": "com.linkedin.LinkedIn", "terminateFirst": true } },
+    { "tool": "util.sleep", "arguments": { "minMs": 3500, "maxMs": 4500 } },
     {
       "tool": "ios.ui.extract_text",
       "saveAs": "menuOverlay",

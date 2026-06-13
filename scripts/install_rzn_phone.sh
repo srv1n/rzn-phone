@@ -642,7 +642,16 @@ EOF
    rzn-phone doctor
    rzn-phone devices
 
-5. Run a read-only smoke test.
+5. Configure code signing (one-time, auto-detected).
+   rzn-phone setup
+   Detects the Apple team signed into Xcode and writes ~/.config/rzn-phone/config.json
+   (xcode_org_id + allow_provisioning_updates). Your first run also auto-detects and
+   saves this, so this step is optional. Inspect or change it anytime:
+   rzn-phone config show
+   rzn-phone config set signing.xcode_org_id <TEAMID>
+   If signing fails, sign into Xcode > Settings > Accounts first, then rerun setup.
+
+6. Run a read-only smoke test.
    rzn-phone list --compact
    rzn-phone run safari/google_search --args-json '{"query":"rzn-phone","limit":3}'
 

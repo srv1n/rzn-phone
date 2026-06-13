@@ -290,10 +290,8 @@ fn is_retryable_webdriver_error(err: &anyhow::Error) -> bool {
 }
 
 fn session_create_timeout_ms_arg(arguments: &Value) -> u64 {
-    arguments
-        .get("sessionCreateTimeoutMs")
-        .and_then(Value::as_u64)
-        .unwrap_or(DEFAULT_SESSION_CREATE_TIMEOUT_MS)
+    // arg > env (IOS_SESSION_CREATE_TIMEOUT_MS) > config > built-in default.
+    crate::config::session_create_timeout_ms(arguments, DEFAULT_SESSION_CREATE_TIMEOUT_MS)
 }
 
 fn session_create_deadline_ms(arguments: &Value) -> u64 {
@@ -848,14 +846,16 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
         }
     }
 
-    let signing = arguments
-        .get("signing")
-        .cloned()
-        .unwrap_or_else(|| json!({}));
+    // Resolve signing/provisioning from: call args > env vars > config file.
+    // Consulted here (the single chokepoint) so the CLI run path, `tool call`,
+    // and the MCP worker are all configured seamlessly.
+    let resolved_signing = crate::config::resolve_signing(arguments);
 
     let wda_local_port = parse_port_value(arguments.get("wdaLocalPort"), "wdaLocalPort")?;
 
     let session_create_timeout_ms = session_create_timeout_ms_arg(arguments);
+
+    let safari_web = crate::config::resolve_safari_web(arguments);
 
     let request = SessionCreateRequest {
         udid: udid.clone(),
@@ -869,25 +869,14 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
             .unwrap_or(60),
         session_create_timeout_ms: Some(session_create_timeout_ms),
         wda_local_port,
-        wda_launch_timeout_ms: Some(
-            arguments
-                .get("wdaLaunchTimeoutMs")
-                .and_then(Value::as_u64)
-                .unwrap_or(240_000),
-        ),
-        wda_connection_timeout_ms: Some(
-            arguments
-                .get("wdaConnectionTimeoutMs")
-                .and_then(Value::as_u64)
-                .unwrap_or(120_000),
-        ),
-        show_xcode_log: arguments.get("showXcodeLog").and_then(Value::as_bool),
-        allow_provisioning_updates: arguments
-            .get("allowProvisioningUpdates")
-            .and_then(Value::as_bool),
-        allow_provisioning_device_registration: arguments
-            .get("allowProvisioningDeviceRegistration")
-            .and_then(Value::as_bool),
+        wda_launch_timeout_ms: Some(crate::config::wda_launch_timeout_ms(arguments, 240_000)),
+        wda_connection_timeout_ms: Some(crate::config::wda_connection_timeout_ms(
+            arguments, 120_000,
+        )),
+        show_xcode_log: resolved_signing.show_xcode_log,
+        allow_provisioning_updates: resolved_signing.allow_provisioning_updates,
+        allow_provisioning_device_registration: resolved_signing
+            .allow_provisioning_device_registration,
         language: arguments
             .get("language")
             .and_then(Value::as_str)
@@ -896,24 +885,12 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
             .get("locale")
             .and_then(Value::as_str)
             .map(ToString::to_string),
-        xcode_org_id: signing
-            .get("xcodeOrgId")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToString::to_string),
-        xcode_signing_id: signing
-            .get("xcodeSigningId")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToString::to_string),
-        updated_wda_bundle_id: signing
-            .get("updatedWDABundleId")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToString::to_string),
+        xcode_org_id: resolved_signing.xcode_org_id,
+        xcode_signing_id: resolved_signing.xcode_signing_id,
+        updated_wda_bundle_id: resolved_signing.updated_wda_bundle_id,
+        safari_initial_url: safari_web.safari_initial_url,
+        safari_ignore_web_hostnames: safari_web.safari_ignore_web_hostnames,
+        webview_connect_timeout_ms: safari_web.webview_connect_timeout_ms,
     };
 
     let create_deadline = Duration::from_millis(session_create_deadline_ms(arguments));
@@ -956,6 +933,21 @@ async fn session_create(state: &AppState, arguments: &Value) -> Result<Value> {
                     kind,
                     requested_bundle_id.as_deref(),
                     session_create_timeout_ms,
+                )
+                .into());
+            }
+            let raw = format!("failed to create {} session: {:#}", kind, err);
+            if let Some(remediation) = crate::config::classify_wda_failure(&raw) {
+                return Err(ToolCallError::new(
+                    ToolErrorCode::ActionFailed,
+                    remediation.summary.clone(),
+                    json!({
+                        "tool": "ios.session.create",
+                        "cause": remediation.cause,
+                        "remediation": remediation,
+                        "hint": "run `rzn-phone doctor` for a full readiness checklist",
+                        "rawError": raw,
+                    }),
                 )
                 .into());
             }
@@ -3711,6 +3703,12 @@ async fn web_goto(state: &AppState, arguments: &Value) -> Result<Value> {
     let session_id = resolve_session_id(state, arguments).await?;
     let url = required_str(arguments, "url")?;
     let driver = driver_from_state(state).await?;
+    // Page/web-context selection is handled at session create via the
+    // `safariInitialUrl` capability (see config::resolve_safari_web): pointing
+    // Safari at a known page makes appium attach to the real tab rather than a
+    // phantom `safari-web-extension://` page. Switching windows here instead
+    // *fights* that selection (it can land eval on a stale/blank handle), so we
+    // deliberately do not touch the active window — just navigate it.
     driver.goto_url(&session_id, url).await?;
 
     Ok(tool_success(
@@ -7074,8 +7072,14 @@ fn now_epoch_ms() -> i64 {
 fn substitute_vars(value: Value, vars: &Value) -> Value {
     match value {
         Value::String(s) => {
-            if let Some(exact) = substitute_exact_value(&s, vars) {
-                exact
+            if let Some(key) = exact_placeholder_key(&s) {
+                // Whole value is a single `{{ key }}` placeholder: resolve it to the
+                // referenced value, or null when the var is absent. We must never leave
+                // the literal `{{...}}` text in the args — integer/port validators reject
+                // the literal (e.g. `wdaLocalPort`), and string consumers would otherwise
+                // treat `"{{x}}"` as real text. Optional consumers read null as "use
+                // default" via `Value::as_u64()`/`as_bool()`/`as_str()` returning None.
+                lookup_var_value(vars, key).unwrap_or(Value::Null)
             } else {
                 Value::String(substitute_string(&s, vars))
             }
@@ -7215,19 +7219,20 @@ fn summarize_trace(trace: &[Value]) -> Value {
     })
 }
 
-fn substitute_exact_value(input: &str, vars: &Value) -> Option<Value> {
-    let trimmed = input.trim();
-    if !trimmed.starts_with("{{") || !trimmed.ends_with("}}") {
-        return None;
-    }
-    let key = trimmed
-        .trim_start_matches("{{")
-        .trim_end_matches("}}")
+/// If `input` is exactly one `{{ key }}` placeholder (ignoring surrounding
+/// whitespace), return the trimmed key. Returns None for plain strings or
+/// strings that merely embed a placeholder among other text (those go through
+/// `substitute_string`, which preserves unmatched literals inline).
+fn exact_placeholder_key(input: &str) -> Option<&str> {
+    let inner = input
+        .trim()
+        .strip_prefix("{{")?
+        .strip_suffix("}}")?
         .trim();
-    if key.is_empty() {
+    if inner.is_empty() || inner.contains("{{") || inner.contains("}}") {
         return None;
     }
-    lookup_var_value(vars, key)
+    Some(inner)
 }
 
 fn substitute_string(input: &str, vars: &Value) -> String {
@@ -7562,6 +7567,41 @@ mod tests {
                 std::env::remove_var(self.key);
             }
         }
+    }
+
+    #[test]
+    fn exact_placeholder_key_matches_only_whole_placeholders() {
+        assert_eq!(exact_placeholder_key("{{wdaLocalPort}}"), Some("wdaLocalPort"));
+        assert_eq!(exact_placeholder_key("  {{ udid }} "), Some("udid"));
+        assert_eq!(exact_placeholder_key("steps.x.y"), None);
+        assert_eq!(exact_placeholder_key("port {{wdaLocalPort}}"), None);
+        assert_eq!(exact_placeholder_key("{{a}} {{b}}"), None);
+        assert_eq!(exact_placeholder_key("{{}}"), None);
+    }
+
+    #[test]
+    fn substitute_vars_nulls_unresolved_exact_placeholders() {
+        // An unprovided exact placeholder must resolve to null (not the literal
+        // `{{...}}` text), so strict consumers like the port parser see "absent"
+        // and apply their default instead of failing on a non-numeric literal.
+        let vars = json!({ "udid": "ABC", "steps": {} });
+        let args = json!({
+            "udid": "{{udid}}",
+            "wdaLocalPort": "{{wdaLocalPort}}",
+            "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+            "label": "q={{query}}",
+        });
+        let out = substitute_vars(args, &vars);
+        assert_eq!(out["udid"], json!("ABC"));
+        assert_eq!(out["wdaLocalPort"], Value::Null);
+        assert_eq!(out["sessionCreateTimeoutMs"], Value::Null);
+        // Embedded (non-exact) placeholders keep the literal-passthrough contract.
+        assert_eq!(out["label"], json!("q={{query}}"));
+        // The previously-failing port path now reads null as "use default".
+        assert_eq!(
+            crate::appium::parse_port_value(out.get("wdaLocalPort"), "wdaLocalPort").unwrap(),
+            None
+        );
     }
 
     #[cfg(unix)]

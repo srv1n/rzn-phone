@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "google_maps.start_navigation",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Open a Google Maps place sheet and optionally tap Start to begin navigation (commit-gated).",
   "capability": {
     "family": "navigate",
@@ -74,8 +74,20 @@
         "pressEnter": true
       }
     },
+    { "tool": "util.sleep", "arguments": { "minMs": 1400, "maxMs": 2400 } },
+    {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "placeProbe",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "Directions", "max": 3 },
+        "limit": 3,
+        "unique": true,
+        "order": "y"
+      }
+    },
     {
       "tool": "ios.action.wait",
+      "when": { "var": "steps.placeProbe.count", "truthy": false },
       "arguments": {
         "target": {
           "using": "xpath",
@@ -88,6 +100,7 @@
     { "tool": "util.sleep", "arguments": { "minMs": 400, "maxMs": 900 } },
     {
       "tool": "ios.action.tap",
+      "when": { "var": "steps.placeProbe.count", "truthy": false },
       "arguments": {
         "target": {
           "using": "xpath",
@@ -130,10 +143,32 @@
     },
     { "tool": "util.sleep", "arguments": { "minMs": 1200, "maxMs": 2200 } },
     {
+      "tool": "ios.ui.extract_text",
+      "saveAs": "startPointProbe",
+      "arguments": {
+        "query": { "type": "XCUIElementTypeButton", "name": "Choose starting point", "max": 2 },
+        "limit": 2,
+        "unique": true,
+        "order": "y"
+      }
+    },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.startPointProbe.count", "truthy": true },
+      "arguments": { "target": { "using": "xpath", "value": "//XCUIElementTypeButton[@name='Choose starting point' or @label='Choose starting point']" } }
+    },
+    { "tool": "util.sleep", "when": { "var": "steps.startPointProbe.count", "truthy": true }, "arguments": { "minMs": 800, "maxMs": 1500 } },
+    {
+      "tool": "ios.action.tap",
+      "when": { "var": "steps.startPointProbe.count", "truthy": true },
+      "arguments": { "target": { "using": "xpath", "value": "(//*[@name='Your location' or @label='Your location'])[1]" } }
+    },
+    { "tool": "util.sleep", "when": { "var": "steps.startPointProbe.count", "truthy": true }, "arguments": { "minMs": 1500, "maxMs": 2800 } },
+    {
       "tool": "ios.action.wait",
       "arguments": {
         "target": { "using": "xpath", "value": "//XCUIElementTypeButton[@name='Start' or @label='Start']" },
-        "timeoutMs": 20000
+        "timeoutMs": 25000
       },
       "retries": 1
     },

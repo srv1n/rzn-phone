@@ -1,7 +1,7 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "linkedin.reply_to_comment",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Open a LinkedIn feed post, draft a reply to a comment, and optionally submit it (commit-gated).",
   "capability": {
     "family": "interact",
@@ -54,6 +54,8 @@
         }
       }
     },
+    { "tool": "ios.app.activate", "arguments": { "bundleId": "com.linkedin.LinkedIn", "terminateFirst": true } },
+    { "tool": "util.sleep", "arguments": { "minMs": 3500, "maxMs": 4500 } },
     {
       "tool": "ios.ui.extract_text",
       "saveAs": "menuOverlay",

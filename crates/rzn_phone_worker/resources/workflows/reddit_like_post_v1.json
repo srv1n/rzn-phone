@@ -1,8 +1,8 @@
 {
   "schema_version": "rzn.mobile.workflow.v1",
   "name": "reddit.like_post",
-  "version": "1.0.2",
-  "description": "Open a Reddit post and optionally upvote it (commit-gated).",
+  "version": "1.0.3",
+  "description": "Open a Reddit text post and optionally upvote it (commit-gated). Skips promoted ads and external link posts, which open the in-app browser instead of a post thread.",
   "capability": {
     "family": "interact",
     "intent": "like_post",
@@ -13,7 +13,7 @@
     "execute_like": { "type": "boolean", "default": false },
     "post_index": { "type": "integer", "default": 0, "min": 0, "max": 40 },
     "post_cell_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__post_cell' OR label CONTAINS 'reddit_feed__post__post_cell'" },
-    "post_open_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__title_text'" },
+    "post_open_predicate": { "type": "string", "default": "name CONTAINS 'reddit_feed__post__text_preview'" },
     "post_ready_predicate": { "type": "string", "default": "name CONTAINS 'reddit__comment_composer__comment_text_view' OR name CONTAINS 'reddit_post__post_detail__post_node' OR (type == 'XCUIElementTypeButton' AND (label == 'Close' OR name == 'Close'))" },
     "like_button_predicate": { "type": "string", "default": "label CONTAINS[c] 'upvote' OR name CONTAINS[c] 'upvote' OR label == 'Upvote' OR name == 'Upvote'" },
     "maxNodes": { "type": "integer", "default": 220, "min": 80, "max": 420 }
@@ -47,6 +47,7 @@
         }
       }
     },
+    { "tool": "ios.app.activate", "arguments": { "bundleId": "com.reddit.Reddit", "terminateFirst": true } },
     { "tool": "ios.ui.source", "arguments": {}, "saveAs": "initialUiSource" },
     {
       "tool": "ios.ui.extract_text",
@@ -64,11 +65,14 @@
       }
     },
     {
-      "tool": "ios.action.wait",
+      "tool": "ios.action.scroll_until",
       "when": { "var": "steps.postDetailProbe.count", "truthy": false },
       "arguments": {
-        "target": { "using": "-ios predicate string", "value": "{{post_cell_predicate}}" },
-        "timeoutMs": 30000
+        "direction": "down",
+        "maxScrolls": 10,
+        "settleMs": 600,
+        "timeoutMs": 40000,
+        "target": { "using": "-ios predicate string", "value": "{{post_open_predicate}}" }
       },
       "retries": 1
     },
