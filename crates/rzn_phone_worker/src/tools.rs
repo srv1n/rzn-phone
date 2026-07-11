@@ -9016,7 +9016,7 @@ EOF
     }
 
     #[tokio::test]
-    async fn workflow_trace_sanitizes_artifacts_but_saveas_and_output_keep_raw() {
+    async fn workflow_trace_sanitizes_artifacts_but_saveas_and_output_keep_raw_primary() {
         let state = AppState::new();
         let ui_source =
             r#"<?xml version="1.0"?><hierarchy><XCUIElementTypeButton name="secret"/></hierarchy>"#;
@@ -9121,7 +9121,7 @@ EOF
     }
 
     #[test]
-    fn trace_sanitizer_replaces_image_content_data_with_metadata() {
+    fn trace_sanitizer_replaces_image_content_data_with_metadata_primary() {
         let screenshot = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABtracecontent";
         let result = tool_success_with_content(
             json!({
