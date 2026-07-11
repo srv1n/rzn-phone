@@ -9168,6 +9168,158 @@ EOF
     }
 
     #[tokio::test]
+    async fn workflow_trace_sanitizes_artifacts_but_saveas_and_output_keep_raw() {
+        let state = AppState::new();
+        let ui_source =
+            r#"<?xml version="1.0"?><hierarchy><XCUIElementTypeButton name="secret"/></hierarchy>"#;
+        let page_source = r#"<!doctype html><html><body>secret page</body></html>"#;
+        let screenshot = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABsecret";
+
+        let result = run_steps(
+            &state,
+            &[json!({
+                "tool": "util.list.first",
+                "saveAs": "artifact",
+                "arguments": {
+                    "list": [{
+                        "source": ui_source,
+                        "pageSource": page_source,
+                        "screenshot": {
+                            "mimeType": "image/png",
+                            "data": screenshot
+                        },
+                        "data": screenshot
+                    }]
+                }
+            })],
+            false,
+            &json!({}),
+            Some(&json!({
+                "rawSource": "{{steps.artifact.value.source}}",
+                "rawPageSource": "{{steps.artifact.value.pageSource}}",
+                "rawScreenshot": "{{steps.artifact.value.screenshot.data}}",
+                "rawData": "{{steps.artifact.value.data}}"
+            })),
+            None,
+        )
+        .await
+        .expect("workflow result");
+
+        assert_eq!(
+            result.get("rawSource").and_then(Value::as_str),
+            Some(ui_source)
+        );
+        assert_eq!(
+            result.get("rawPageSource").and_then(Value::as_str),
+            Some(page_source)
+        );
+        assert_eq!(
+            result.get("rawScreenshot").and_then(Value::as_str),
+            Some(screenshot)
+        );
+        assert_eq!(
+            result.get("rawData").and_then(Value::as_str),
+            Some(screenshot)
+        );
+
+        let trace = result
+            .get("trace")
+            .and_then(Value::as_array)
+            .expect("trace");
+        assert_eq!(trace.len(), 1);
+        let entry = &trace[0];
+        assert_no_raw_artifact_fields(entry);
+        assert!(!value_contains_string(entry, ui_source));
+        assert!(!value_contains_string(entry, page_source));
+        assert!(!value_contains_string(entry, screenshot));
+
+        let value = entry
+            .get("result")
+            .and_then(|result| result.get("structuredContent"))
+            .and_then(|structured| structured.get("value"))
+            .expect("sanitized structured value");
+        assert_eq!(value.get("source"), None);
+        assert_eq!(
+            value
+                .get("sourceSummary")
+                .and_then(|summary| summary.get("length"))
+                .and_then(Value::as_u64),
+            Some(ui_source.len() as u64)
+        );
+        assert_eq!(
+            value
+                .get("pageSourceSummary")
+                .and_then(|summary| summary.get("mimeType"))
+                .and_then(Value::as_str),
+            Some("text/html")
+        );
+        assert_eq!(value.get("data"), None);
+        assert_eq!(
+            value
+                .get("dataSummary")
+                .and_then(|summary| summary.get("length"))
+                .and_then(Value::as_u64),
+            Some(screenshot.len() as u64)
+        );
+
+        let shot = value.get("screenshot").expect("screenshot summary object");
+        assert_eq!(shot.get("data"), None);
+        assert_eq!(
+            shot.get("dataSummary")
+                .and_then(|summary| summary.get("mimeType"))
+                .and_then(Value::as_str),
+            Some("image/png")
+        );
+    }
+
+    #[test]
+    fn trace_sanitizer_replaces_image_content_data_with_metadata() {
+        let screenshot = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABtracecontent";
+        let result = tool_success_with_content(
+            json!({
+                "ok": true,
+                "mimeType": "image/png",
+                "bytesBase64": screenshot.len(),
+                "data": screenshot
+            }),
+            vec![
+                json!({"type": "text", "text": "screenshot captured"}),
+                json!({"type": "image", "mimeType": "image/png", "data": screenshot}),
+            ],
+        );
+
+        let sanitized = sanitize_trace_result(&result);
+        assert_no_raw_artifact_fields(&sanitized);
+        assert!(!value_contains_string(&sanitized, screenshot));
+
+        let structured = sanitized
+            .get("structuredContent")
+            .expect("structured content");
+        assert_eq!(structured.get("data"), None);
+        assert_eq!(
+            structured
+                .get("dataSummary")
+                .and_then(|summary| summary.get("mimeType"))
+                .and_then(Value::as_str),
+            Some("image/png")
+        );
+
+        let image_block = sanitized
+            .get("content")
+            .and_then(Value::as_array)
+            .and_then(|items| items.get(1))
+            .expect("image content block");
+        assert_eq!(image_block.get("data"), None);
+        assert_eq!(
+            image_block
+                .get("dataSummary")
+                .and_then(|summary| summary.get("encoding"))
+                .and_then(Value::as_str),
+            Some("base64")
+        );
+    }
+
+    #[tokio::test]
     async fn run_steps_renders_presentation_and_null_for_skipped_saved_steps() {
         let state = AppState::new();
         let result = run_steps(
