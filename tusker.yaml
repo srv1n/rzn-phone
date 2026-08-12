@@ -1,4 +1,0 @@
-schema: tusker.config/v1
-project_id: rzn-phone
-runtime:
-  mutation_mode: single_user_local

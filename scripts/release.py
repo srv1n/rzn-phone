@@ -84,7 +84,7 @@ def print_plan(version: str, tag: str, branch: str) -> None:
     print("planned actions:")
     print("  1. git pull --rebase origin <branch>")
     print("  2. update bundle + Cargo versions")
-    print("  3. cargo test -p rzn_phone_worker")
+    print("  3. cargo test -p rzn_phone_worker --features cli")
     print("  4. git commit -m 'Release <tag>'")
     print("  5. git tag -a <tag> -m 'Release <tag>'")
     print("  6. git push origin HEAD")
@@ -117,13 +117,14 @@ def main() -> int:
         run(["git", "pull", "--rebase", "origin", args.branch])
         set_version(target_version)
         version_files_written = True
-        run(["cargo", "test", "-p", "rzn_phone_worker"])
+        run(["cargo", "test", "-p", "rzn_phone_worker", "--features", "cli"])
         run(
             [
                 "git",
                 "add",
                 "plugin_bundle/rzn-phone.bundle.json",
                 "crates/rzn_phone_worker/Cargo.toml",
+                "claude_plugin/rzn-phone/.claude-plugin/plugin.json",
                 "Cargo.lock",
             ]
         )

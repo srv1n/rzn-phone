@@ -2,20 +2,6 @@ use serde_json::{json, Value};
 
 use super::registry::tool;
 
-#[cfg(test)]
-pub(crate) const TOOL_NAMES: &[&str] = &[
-    "ios.ui.source",
-    "ios.ui.screenshot",
-    "ios.ui.observe_compact",
-    "ios.ui.extract_rows",
-    "ios.ui.extract_text",
-    "ios.ui.find_row",
-    "ios.target.resolve",
-    "ios.element.text",
-    "ios.element.attribute",
-    "ios.element.rect",
-];
-
 pub(crate) fn definitions() -> Vec<Value> {
     vec![
         tool(

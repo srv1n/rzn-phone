@@ -14,15 +14,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / "crates" / "rzn_phone_worker" / "resources" / "workflows"
-SYSTEMS_DIR = ROOT / "crates" / "rzn_phone_worker" / "resources" / "systems"
 SCHEMA_PATH = ROOT / "schema" / "rzn-mobile-workflow-v1.schema.json"
 BUNDLE_CONFIG = ROOT / "plugin_bundle" / "rzn-phone.bundle.json"
 CARGO_TOML = ROOT / "crates" / "rzn_phone_worker" / "Cargo.toml"
-LEGACY_PLUGIN_JSON = ROOT / "claude_plugin" / "rzn-phone" / ".claude-plugin" / "plugin.json"
 TOOLS_RS = ROOT / "crates" / "rzn_phone_worker" / "src" / "tools.rs"
 TOOLS_DIR = ROOT / "crates" / "rzn_phone_worker" / "src" / "tools"
 DEFAULT_OUTPUT_DIR = ROOT / ".tmp" / "rzn-phone-workflow-validation"
-DEFAULT_RUNNER = ROOT / "scripts" / "rzn_phone_runtime.sh"
+DEFAULT_RUNNER = ROOT / "target" / "release" / "rzn-phone"
 RUNNER = os.environ.get(
     "RZN_PHONE_BIN",
     str(DEFAULT_RUNNER if DEFAULT_RUNNER.exists() else "rzn-phone"),
@@ -416,38 +414,15 @@ def validate_catalog_metadata(workflows: list[tuple[Path, dict]], errors: list[s
     if version != cargo_version:
         errors.append(f"bundle version {version!r} does not match Cargo version {cargo_version!r}")
 
-    if LEGACY_PLUGIN_JSON.exists():
-        legacy = read_json(LEGACY_PLUGIN_JSON)
-        legacy_version = str(legacy.get("version", "")).strip()
-        if legacy_version != cargo_version:
-            errors.append(
-                f"legacy plugin version {legacy_version!r} does not match Cargo version {cargo_version!r}"
-            )
-
-    resource_paths = {
-        str(item.get("path", "")).strip()
-        for item in config.get("resources", [])
+    payload_paths = {
+        str(item.get("dest", "")).strip()
+        for item in config.get("payloads", []) + config.get("shared_payloads", [])
         if isinstance(item, dict)
     }
-    workflow_resources = {
-        f"resources/workflows/{path.name}" for path, _ in workflows
-    }
-    system_resources = {
-        f"resources/systems/{path.relative_to(SYSTEMS_DIR).as_posix()}"
-        for path in sorted(SYSTEMS_DIR.rglob("*"))
-        if path.is_file()
-    }
-    missing = sorted((workflow_resources | system_resources) - resource_paths)
-    extra = sorted(
-        path
-        for path in resource_paths
-        if path.startswith("resources/workflows/") or path.startswith("resources/systems/")
-        if path not in workflow_resources and path not in system_resources
-    )
+    expected = {"resources/workflows", "resources/systems"}
+    missing = sorted(expected - payload_paths)
     for path in missing:
-        errors.append(f"bundle resources missing {path}")
-    for path in extra:
-        errors.append(f"bundle resources references missing file {path}")
+        errors.append(f"bundle payloads missing {path}")
 
 
 def validate_offline(json_output: bool = False) -> int:

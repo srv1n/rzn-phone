@@ -2,19 +2,6 @@ use serde_json::{json, Value};
 
 use super::registry::tool;
 
-#[cfg(test)]
-pub(crate) const TOOL_NAMES: &[&str] = &[
-    "util.rank_by_name",
-    "util.list.length",
-    "util.list.first",
-    "util.list.nth",
-    "util.list.find",
-    "util.rect.relative_point",
-    "util.fail",
-    "util.sleep",
-    "util.date.bucket_counts",
-];
-
 pub(crate) fn definitions() -> Vec<Value> {
     vec![
         tool(

@@ -2,23 +2,6 @@ use serde_json::{json, Value};
 
 use super::registry::tool;
 
-#[cfg(test)]
-pub(crate) const TOOL_NAMES: &[&str] = &[
-    "ios.app.activate",
-    "ios.action.tap",
-    "ios.action.type",
-    "ios.action.typeahead",
-    "ios.action.wait",
-    "ios.action.scroll",
-    "ios.action.swipe",
-    "ios.action.back",
-    "ios.action.scroll_until",
-    "ios.alert.text",
-    "ios.alert.accept",
-    "ios.alert.dismiss",
-    "ios.alert.wait",
-];
-
 pub(crate) fn definitions() -> Vec<Value> {
     vec![
         tool(

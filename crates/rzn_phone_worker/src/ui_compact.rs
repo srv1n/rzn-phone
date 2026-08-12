@@ -262,6 +262,11 @@ pub fn locator_to_json(locator: &TargetLocator) -> Value {
     })
 }
 
+pub(crate) fn normalize_text(value: String) -> Option<String> {
+    let trimmed = value.trim().to_string();
+    (!trimmed.is_empty()).then_some(trimmed)
+}
+
 fn new_snapshot_id() -> String {
     let epoch_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -269,15 +274,6 @@ fn new_snapshot_id() -> String {
         .as_millis();
     let seq = SNAP_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("snap_{epoch_ms}_{seq}")
-}
-
-fn normalize_text(value: String) -> Option<String> {
-    let trimmed = value.trim().to_string();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed)
-    }
 }
 
 fn truncate(value: Option<String>, max_len: usize) -> Option<String> {

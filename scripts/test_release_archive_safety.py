@@ -14,6 +14,7 @@ import unittest
 from pathlib import Path
 
 import release_archive
+import release_package
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -82,6 +83,18 @@ class QuietHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 class ReleaseArchiveSafetyTest(unittest.TestCase):
+    def test_release_tar_is_path_independent(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            source = tmp / "source"
+            source.mkdir()
+            (source / "payload.txt").write_text("same payload\n", encoding="utf-8")
+            first = tmp / "first.tar.gz"
+            second = tmp / "nested" / "second.tar.gz"
+            release_package.build_tar_gz(source, first, "package")
+            release_package.build_tar_gz(source, second, "package")
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+
     def test_safe_archive_extracts_under_expected_root(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             tmp = Path(raw)

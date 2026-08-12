@@ -27,7 +27,6 @@ crates/rzn_phone_worker/resources/workflows/*.json
 crates/rzn_phone_worker/resources/systems/**/*
 schema/rzn-mobile-workflow-v1.schema.json
 scripts/rzn_phone.sh
-scripts/rzn_phone_runtime.sh
 ```
 
 `scripts/rzn_phone.sh` is repo-maintainer convenience glue. For agent-facing usage, prefer the installed `rzn-phone` CLI directly.

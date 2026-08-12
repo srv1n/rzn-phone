@@ -121,6 +121,15 @@ worker_bin() {
   echo "$bin"
 }
 
+cli_bin() {
+  local bin="$ROOT/target/release/rzn-phone"
+  if [[ "${RZN_PHONE_SKIP_BUILD:-0}" != "1" && ( "${RZN_PHONE_FORCE_BUILD:-0}" == "1" || ! -x "$bin" ) ]]; then
+    cargo build -p rzn_phone_worker --release --features cli --bin rzn-phone >/dev/null
+  fi
+  [[ -x "$bin" ]] || { echo "missing CLI binary at $bin (run make build-cli or unset RZN_PHONE_SKIP_BUILD)" >&2; exit 1; }
+  echo "$bin"
+}
+
 bool_json() {
   local value="${1:-0}"
   if [[ "$value" == "1" || "$value" == "true" ]]; then
@@ -650,43 +659,21 @@ case "$cmd" in
     "$ROOT/scripts/run_smoke.sh"
     ;;
   doctor)
-    BIN="$(worker_bin)"
-    cat <<'JSON' | "$BIN"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
-{"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"doctor-1","method":"tools/call","params":{"name":"ios.env.doctor","arguments":{}}}
-JSON
+    "$(cli_bin)" doctor --json
     ;;
   devices)
-    BIN="$(worker_bin)"
-    cat <<'JSON' | "$BIN"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
-{"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"devices-1","method":"tools/call","params":{"name":"ios.device.list","arguments":{"includeSimulators":false}}}
-JSON
+    "$(cli_bin)" devices --json
     ;;
   shutdown)
     STOP_APPIUM="${1:-1}"
-    STOP_APPIUM_JSON="true"
-    if [[ "$STOP_APPIUM" == "0" ]]; then
-      STOP_APPIUM_JSON="false"
-    fi
-    SHUTDOWN_ARGS_JSON="$(build_shutdown_args_json "$STOP_APPIUM_JSON")"
-    BIN="$(worker_bin)"
-    cat <<JSON | "$BIN"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
-{"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
-JSON
+    "$(cli_bin)" shutdown \
+      --stop-appium "$STOP_APPIUM" \
+      --background-on-exit "${IOS_BACKGROUND_APP_ON_EXIT:-0}" \
+      --lock-device-on-exit "${IOS_LOCK_DEVICE_ON_EXIT:-0}"
     ;;
   wda-shutdown)
     PORT="${1:-8100}"
-    BIN="$(worker_bin)"
-    cat <<JSON | "$BIN"
-{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
-{"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"wda-1","method":"tools/call","params":{"name":"ios.wda.shutdown","arguments":{"port":$PORT}}}
-JSON
+    "$(cli_bin)" tool call ios.wda.shutdown --args-json "{\"port\":$PORT}"
     ;;
   package)
     if [[ "$#" -eq 0 ]]; then

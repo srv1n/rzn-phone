@@ -2,16 +2,6 @@ use serde_json::{json, Value};
 
 use super::registry::tool;
 
-#[cfg(test)]
-pub(crate) const TOOL_NAMES: &[&str] = &[
-    "phone_messages.list_recent_threads",
-    "phone_messages.read_latest_messages",
-    "phone_messages.find_recent_otp",
-    "phone_calls.list_recent_calls",
-    "phone_notifications.list_recent_notifications",
-    "phone_notifications.filter_notifications_by_app",
-];
-
 pub(crate) fn definitions() -> Vec<Value> {
     vec![
         tool(

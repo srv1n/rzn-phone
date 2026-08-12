@@ -3,8 +3,8 @@
 ```mermaid
 flowchart LR
   A["make release NEXT_VERSION=x.y.z"] --> B["scripts/release.py"]
-  B --> C["Bump bundle + Cargo versions"]
-  B --> D["cargo test -p rzn_phone_worker"]
+  B --> C["Bump bundle + Cargo + legacy plugin versions"]
+  B --> D["cargo test -p rzn_phone_worker --features cli"]
   D --> E["Commit + tag vX.Y.Z"]
   E --> F["Push branch + tag"]
   F --> G["GitHub Actions: .github/workflows/release.yml"]
@@ -33,7 +33,7 @@ The asset story is honest:
 ## Release Command
 
 ```bash
-make release NEXT_VERSION=0.2.0
+make release NEXT_VERSION="<version>"
 ```
 
 What it does:
@@ -41,15 +41,15 @@ What it does:
 1. Verifies version sync and a clean git tree.
 2. Requires the release to be cut from `main`.
 3. Pulls `origin/main` with rebase.
-4. Bumps `plugin_bundle/rzn-phone.bundle.json` and `crates/rzn_phone_worker/Cargo.toml`.
-5. Runs `cargo test -p rzn_phone_worker`.
+4. Bumps bundle, Cargo, and legacy plugin metadata versions together.
+5. Runs `cargo test -p rzn_phone_worker --features cli`.
 6. Commits `Release vX.Y.Z`, creates tag `vX.Y.Z`, pushes branch and tag.
 7. Lets GitHub Actions do the slow part: build, notes, publish.
 
 Preview it without touching git:
 
 ```bash
-make release-dry-run NEXT_VERSION=0.2.0
+make release-dry-run NEXT_VERSION="<version>"
 ```
 
 ## GitHub Actions Setup
@@ -75,8 +75,8 @@ curl -fsSL https://raw.githubusercontent.com/srv1n/rzn-phone/main/scripts/instal
 Pin a version with a direct archive URL when validating an exact release:
 
 ```bash
-TAG="v0.2.0"
-VERSION="${TAG#v}"
+VERSION="<version>"
+TAG="v${VERSION}"
 BASE="https://github.com/srv1n/rzn-phone/releases/download/${TAG}"
 
 curl -fsSL "$BASE/rzn-phone-install.sh" | bash -s -- \

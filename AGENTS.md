@@ -1,19 +1,5 @@
 # Agent Instructions
 
-This project uses **Tusker** for issue tracking. Start with the repo-local Tusker vault and the installed `tusker` skill.
-
-## Quick Reference
-
-```bash
-tusker next --vault ./.tusker
-tusker list --vault ./.tusker --open
-tusker show <TASK-ID> --vault ./.tusker --capsule
-tusker packet <TASK-ID> --vault ./.tusker --for agent
-tusker status <TASK-ID> ready|review|rework|done --vault ./.tusker --actor agent:<name> --reason "<reason>"
-```
-
-Use `tusker new task --vault ./.tusker --epic <ACR> --title "<title>"` for follow-up work. Do not use Beads in this repo.
-
 ## Specs And Patterns (Start Here For New Apps)
 
 - Mobile workflow format (portable): `docs/specs/rzn_mobile_workflow_v1.md`
@@ -57,34 +43,20 @@ steps below. Work is NOT complete until `git push` succeeds.
 
 **MANDATORY WORKFLOW:**
 
-1. **File issues for remaining work** - Create Tusker tasks for anything that needs follow-up
+1. **Document remaining work** - Include anything that still needs follow-up in the handoff
 2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished Tusker work, update review/rework state
-4. **PUSH TO REMOTE** - This is MANDATORY:
+3. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
    git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+4. **Clean up** - Clear stashes, prune remote branches
+5. **Verify** - All changes committed AND pushed
+6. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
-
-<!-- tusker:epic-index:begin -->
-## Tusker
-
-Use Tusker for tracked repo work.
-
-- Task mechanics live in the installed `tusker` skill.
-- Project knowledge starts at `.tusker/SKILL.md`.
-- Start runnable work with `tusker next`; inspect named work with `tusker show <TASK-ID> --capsule`.
-- Do not read `.tusker/events`, `_generated`, `attempts`, `evidence`, `Attachments`, raw logs, or full task files unless the task explicitly requires it.
-- Keep proof compact: use capsules, path-scoped status/search, and command + PASS/FAIL summaries; put noisy logs in `.tusker/scratch/<TASK-ID>/`.
-- Record concise Tusker/product friction with `tusker feedback add`; skip routine progress reports.
-<!-- tusker:epic-index:end -->

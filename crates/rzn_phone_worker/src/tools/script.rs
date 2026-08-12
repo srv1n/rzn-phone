@@ -2,9 +2,6 @@ use serde_json::{json, Value};
 
 use super::registry::tool;
 
-#[cfg(test)]
-pub(crate) const TOOL_NAMES: &[&str] = &["ios.script.run"];
-
 pub(crate) fn definitions() -> Vec<Value> {
     vec![tool(
         "ios.script.run",

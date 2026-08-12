@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import hashlib
 import json
 import os
 import shutil
@@ -9,6 +8,8 @@ import zipfile
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
+
+from release_package import load_json, sha256_file
 
 
 FIXED_ZIP_DT = (1980, 1, 1, 0, 0, 0)
@@ -28,11 +29,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out", default="dist/plugins", help="Output directory.")
     parser.add_argument("--devkit", default="", help="Path to rzn-plugin-devkit binary.")
     return parser.parse_args()
-
-
-def load_json(path: Path) -> dict:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
 
 
 def expand_env(raw: str) -> str:
@@ -91,17 +87,6 @@ def collect_payloads(config: dict, platform: str) -> dict[str, PayloadFile]:
     return payloads
 
 
-def sha256_file(path: Path) -> str:
-    hasher = hashlib.sha256()
-    with path.open("rb") as handle:
-        while True:
-            chunk = handle.read(1024 * 1024)
-            if not chunk:
-                break
-            hasher.update(chunk)
-    return hasher.hexdigest()
-
-
 def build_manifest(config: dict, platform: str, sha_map: OrderedDict) -> OrderedDict:
     manifest = OrderedDict()
     manifest["v"] = 1
@@ -131,7 +116,11 @@ def build_manifest(config: dict, platform: str, sha_map: OrderedDict) -> Ordered
             worker_out["tools_namespace"] = worker["tools_namespace"]
         workers.append(worker_out)
     manifest["workers"] = workers
-    manifest["resources"] = config.get("resources", [])
+    manifest["resources"] = [
+        {"path": path}
+        for path in sha_map
+        if path.startswith(("resources/workflows/", "resources/systems/"))
+    ]
     manifest["sha256"] = sha_map
     return manifest
 
@@ -210,15 +199,6 @@ def main() -> int:
     sha_map = OrderedDict()
     for dest in sorted(payloads.keys()):
         sha_map[dest] = sha256_file(payloads[dest].source)
-
-    resources = config.get("resources", [])
-    for resource in resources:
-        if isinstance(resource, dict):
-            resource_path = resource.get("path", "")
-        else:
-            resource_path = str(resource)
-        if resource_path and resource_path not in sha_map:
-            raise SystemExit(f"resource path missing from payloads: {resource_path}")
 
     out_dir = Path(args.out).resolve()
     stage = out_dir / config["id"] / config["version"] / platform

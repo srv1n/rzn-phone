@@ -2,14 +2,21 @@
 from __future__ import annotations
 
 import argparse
-import os
 import json
-import shutil
-import tarfile
-from hashlib import sha256
+import os
 from pathlib import Path
 
 import release_archive
+from release_package import (
+    build_tar_gz,
+    copy_tree,
+    file_paths,
+    load_json,
+    reset_dir,
+    sha256_file,
+    workflow_metadata,
+    write_text,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,48 +39,6 @@ def parse_args() -> argparse.Namespace:
         help="Optional base64 Ed25519 private seed used to sign the workflow pack.",
     )
     return parser.parse_args()
-
-
-def load_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def reset_dir(path: Path) -> None:
-    if path.exists():
-        shutil.rmtree(path)
-    path.mkdir(parents=True, exist_ok=True)
-
-
-def copy_tree(src: Path, dest: Path) -> None:
-    shutil.copytree(src, dest, dirs_exist_ok=True)
-
-
-def write_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-
-
-def sha256_file(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def normalized_tarinfo(info: tarfile.TarInfo) -> tarfile.TarInfo:
-    info.uid = 0
-    info.gid = 0
-    info.uname = "root"
-    info.gname = "root"
-    info.mtime = 0
-    return info
-
-
-def build_archive(source_dir: Path, archive_path: Path, root_name: str) -> None:
-    archive_path.parent.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(archive_path, "w:gz", format=tarfile.PAX_FORMAT) as archive:
-        archive.add(source_dir, arcname=root_name, filter=normalized_tarinfo)
 
 
 def write_archive_sidecars(archive_path: Path, signing_key: str) -> str:
@@ -115,20 +80,6 @@ def assert_signing_key_matches_bundled_public(root: Path, signing_key: str) -> N
     )
 
 
-def resolve_workflow_metadata(workflow_dir: Path) -> list[dict]:
-    workflows = []
-    for workflow_path in sorted(workflow_dir.glob("*.json")):
-        raw = load_json(workflow_path)
-        workflows.append(
-            {
-                "name": raw.get("name", workflow_path.stem),
-                "version": raw.get("version", ""),
-                "path": f"resources/workflows/{workflow_path.name}",
-            }
-        )
-    return workflows
-
-
 def main() -> int:
     args = parse_args()
     root = Path(__file__).resolve().parent.parent
@@ -148,17 +99,9 @@ def main() -> int:
     copy_tree(systems_dir, pack_dir / "resources" / "systems")
     copy_tree(examples_dir, pack_dir / "examples")
 
-    workflows = resolve_workflow_metadata(workflow_dir)
-    examples = [
-        str(path.relative_to(examples_dir).as_posix())
-        for path in sorted(examples_dir.rglob("*"))
-        if path.is_file()
-    ]
-    systems = [
-        f"resources/systems/{path.relative_to(systems_dir).as_posix()}"
-        for path in sorted(systems_dir.rglob("*"))
-        if path.is_file()
-    ]
+    workflows = workflow_metadata(workflow_dir)
+    examples = file_paths(examples_dir, "")
+    systems = file_paths(systems_dir, "resources/systems")
 
     write_text(pack_dir / "VERSION", version + "\n")
     write_text(
@@ -180,7 +123,7 @@ def main() -> int:
 
     archive_name = f"{plugin_id}-workflows-{version}.tar.gz"
     archive_path = out_dir / archive_name
-    build_archive(pack_dir, archive_path, f"{plugin_id}-workflows")
+    build_tar_gz(pack_dir, archive_path, f"{plugin_id}-workflows")
     archive_sha = write_archive_sidecars(archive_path, args.signing_key)
     write_text(out_dir / "SHA256SUMS", f"{archive_sha}  {archive_name}\n")
     print(str(out_dir))

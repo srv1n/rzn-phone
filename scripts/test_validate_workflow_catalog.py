@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import unittest
+from collections import OrderedDict
 from pathlib import Path
+from unittest import mock
 
+import build_bundle
 import validate_workflow_catalog as catalog
 
 
@@ -96,17 +99,43 @@ class WorkflowCatalogValidatorTest(unittest.TestCase):
     def test_catalog_metadata_detects_duplicate_ids_and_bundle_drift(self) -> None:
         workflow = base_workflow()
         errors: list[str] = []
-        catalog.validate_catalog_metadata(
-            [
-                (Path("test_one.json"), workflow),
-                (Path("test_two.json"), workflow),
-            ],
-            errors,
-        )
+        with mock.patch.object(
+            catalog,
+            "read_json",
+            return_value={"version": catalog.load_cargo_version(), "payloads": []},
+        ):
+            catalog.validate_catalog_metadata(
+                [
+                    (Path("test_one.json"), workflow),
+                    (Path("test_two.json"), workflow),
+                ],
+                errors,
+            )
 
         self.assertTrue(any("duplicate workflow id" in error for error in errors))
         self.assertTrue(
-            any("bundle resources" in error or "version" in error for error in errors)
+            any("bundle payloads" in error for error in errors)
+        )
+
+    def test_bundle_resources_are_derived_from_packaged_payloads(self) -> None:
+        manifest = build_bundle.build_manifest(
+            {"id": "test", "version": "1.0.0", "name": "Test", "workers": []},
+            "macos_arm64",
+            OrderedDict(
+                [
+                    ("resources/workflows/test.json", "a"),
+                    ("resources/systems/test.yaml", "b"),
+                    ("skills/test.md", "c"),
+                ]
+            ),
+        )
+
+        self.assertEqual(
+            manifest["resources"],
+            [
+                {"path": "resources/workflows/test.json"},
+                {"path": "resources/systems/test.yaml"},
+            ],
         )
 
 

@@ -14,7 +14,7 @@ use self::policy as tool_policy;
 use crate::appium::{ensure_appium, parse_port_value, probe_webdriver_base, EnsureOptions};
 use crate::errors::{ToolCallError, ToolErrorCode};
 use crate::state::{AppState, AppiumSource};
-use crate::ui_compact::{build_compact_snapshot, locator_to_json, NodeFilter};
+use crate::ui_compact::{build_compact_snapshot, locator_to_json, normalize_text, NodeFilter};
 use crate::webdriver::{SessionCreateRequest, WebDriverClient};
 use crate::workflow_failure_report::{
     self, FailureArtifactPolicy, FlowFailureContext, FlowFailureReportDraft,
@@ -28,7 +28,6 @@ pub mod policy;
 pub mod registry;
 pub mod script;
 pub mod session;
-pub mod spec;
 pub mod ui;
 pub mod utility;
 pub mod web;
@@ -42,7 +41,7 @@ const MIN_WORKFLOW_STEP_TIMEOUT_MS: u64 = 250;
 const MAX_EXPLICIT_WORKFLOW_STEP_TIMEOUT_MS: u64 = 600_000;
 const FAILURE_ARTIFACT_SOURCE_MAX_BYTES: usize = 50_000;
 
-pub use spec::list_tool_definitions;
+pub use registry::list_tool_definitions;
 
 pub async fn handle_tool_call(
     state: &AppState,
@@ -58,6 +57,10 @@ async fn handle_tool_call_unchecked(
     tool_name: &str,
     arguments: Value,
 ) -> Result<Value> {
+    if let Some(result) = web::handle(state, tool_name, &arguments).await {
+        return result;
+    }
+
     match tool_name {
         "rzn.worker.health" => worker_health(state).await,
         "rzn.worker.shutdown" => worker_shutdown(state, &arguments).await,
@@ -92,15 +95,6 @@ async fn handle_tool_call_unchecked(
         "ios.alert.accept" => alert_accept(state, &arguments).await,
         "ios.alert.dismiss" => alert_dismiss(state, &arguments).await,
         "ios.alert.wait" => alert_wait(state, &arguments).await,
-        "ios.web.goto" => web_goto(state, &arguments).await,
-        "ios.web.wait_css" => web_wait_css(state, &arguments).await,
-        "ios.web.wait_js" => web_wait_js(state, &arguments).await,
-        "ios.web.click_css" => web_click_css(state, &arguments).await,
-        "ios.web.type_css" => web_type_css(state, &arguments).await,
-        "ios.web.press_key" => web_press_key(state, &arguments).await,
-        "ios.web.page_source" => web_page_source(state, &arguments).await,
-        "ios.web.screenshot" => web_screenshot(state, &arguments).await,
-        "ios.web.eval_js" => web_eval_js(state, &arguments).await,
         "ios.workflow.list" => workflow_list(&arguments).await,
         "ios.capability.list" => capability_list(&arguments).await,
         "ios.workflow.run" => workflow_run(state, &arguments).await,
@@ -135,7 +129,7 @@ async fn handle_tool_call_unchecked(
     }
 }
 
-fn tool_success(structured: Value, message: &str) -> Value {
+pub(crate) fn tool_success(structured: Value, message: &str) -> Value {
     json!({
         "content": [
             { "type": "text", "text": message }
@@ -154,7 +148,7 @@ fn tool_success_with_content(structured: Value, mut content: Vec<Value>) -> Valu
     })
 }
 
-fn screenshot_tool_result(session_id: &str, data: String) -> Value {
+pub(crate) fn screenshot_tool_result(session_id: &str, data: String) -> Value {
     let mime_type = "image/png";
     let bytes_base64 = data.len();
     tool_success_with_content(
@@ -270,7 +264,7 @@ fn error_chain_indicates_timeout(err: &anyhow::Error) -> bool {
         || lowered.contains("deadline has elapsed")
 }
 
-fn is_retryable_webdriver_error(err: &anyhow::Error) -> bool {
+pub(crate) fn is_retryable_webdriver_error(err: &anyhow::Error) -> bool {
     if error_chain_indicates_timeout(err) {
         return true;
     }
@@ -1830,7 +1824,7 @@ async fn action_tap(state: &AppState, arguments: &Value) -> Result<Value> {
             ToolErrorCode::ElementNotFound,
             format!(
                 "no elements found for locator using='{}' value='{}'",
-                &resolved.using, &resolved.value
+                resolved.using, resolved.value
             ),
             json!({"using": &resolved.using, "value": &resolved.value}),
         )
@@ -1841,8 +1835,8 @@ async fn action_tap(state: &AppState, arguments: &Value) -> Result<Value> {
             ToolErrorCode::AmbiguousMatch,
             format!(
                 "expected exactly one match for using='{}' value='{}', got {}",
-                &resolved.using,
-                &resolved.value,
+                resolved.using,
+                resolved.value,
                 ids.len()
             ),
             json!({"using": &resolved.using, "value": &resolved.value, "matchCount": ids.len()}),
@@ -1856,8 +1850,8 @@ async fn action_tap(state: &AppState, arguments: &Value) -> Result<Value> {
             format!(
                 "no element at index {} for locator using='{}' value='{}' (found {})",
                 resolved.index,
-                &resolved.using,
-                &resolved.value,
+                resolved.using,
+                resolved.value,
                 ids.len()
             ),
             json!({"using": &resolved.using, "value": &resolved.value, "index": resolved.index, "matchCount": ids.len()}),
@@ -1905,7 +1899,7 @@ async fn action_type(state: &AppState, arguments: &Value) -> Result<Value> {
             ToolErrorCode::ElementNotFound,
             format!(
                 "no elements found for locator using='{}' value='{}'",
-                &resolved.using, &resolved.value
+                resolved.using, resolved.value
             ),
             json!({"using": &resolved.using, "value": &resolved.value}),
         )
@@ -1916,8 +1910,8 @@ async fn action_type(state: &AppState, arguments: &Value) -> Result<Value> {
             ToolErrorCode::AmbiguousMatch,
             format!(
                 "expected exactly one match for using='{}' value='{}', got {}",
-                &resolved.using,
-                &resolved.value,
+                resolved.using,
+                resolved.value,
                 ids.len()
             ),
             json!({"using": &resolved.using, "value": &resolved.value, "matchCount": ids.len()}),
@@ -1931,8 +1925,8 @@ async fn action_type(state: &AppState, arguments: &Value) -> Result<Value> {
             format!(
                 "no element at index {} for locator using='{}' value='{}' (found {})",
                 resolved.index,
-                &resolved.using,
-                &resolved.value,
+                resolved.using,
+                resolved.value,
                 ids.len()
             ),
             json!({"using": &resolved.using, "value": &resolved.value, "index": resolved.index, "matchCount": ids.len()}),
@@ -2052,8 +2046,8 @@ async fn action_wait(state: &AppState, arguments: &Value) -> Result<Value> {
                 ToolErrorCode::AmbiguousMatch,
                 format!(
                     "expected exactly one match for using='{}' value='{}', got {}",
-                    &resolved.using,
-                    &resolved.value,
+                    resolved.using,
+                    resolved.value,
                     ids.len()
                 ),
                 json!({"using": &resolved.using, "value": &resolved.value, "matchCount": ids.len()}),
@@ -2076,7 +2070,7 @@ async fn action_wait(state: &AppState, arguments: &Value) -> Result<Value> {
                 ToolErrorCode::Timeout,
                 format!(
                     "timeout waiting for locator using='{}' value='{}'",
-                    &resolved.using, &resolved.value
+                    resolved.using, resolved.value
                 ),
                 json!({
                     "using": &resolved.using,
@@ -2237,8 +2231,8 @@ async fn action_scroll_until(state: &AppState, arguments: &Value) -> Result<Valu
                     ToolErrorCode::AmbiguousMatch,
                     format!(
                         "expected exactly one match for using='{}' value='{}', got {}",
-                        &resolved.using,
-                        &resolved.value,
+                        resolved.using,
+                        resolved.value,
                         ids.len()
                     ),
                     json!({"using": &resolved.using, "value": &resolved.value, "matchCount": ids.len()}),
@@ -2501,15 +2495,6 @@ async fn alert_wait(state: &AppState, arguments: &Value) -> Result<Value> {
                 tokio::time::sleep(Duration::from_millis(250)).await;
             }
         }
-    }
-}
-
-fn normalize_text(value: String) -> Option<String> {
-    let trimmed = value.trim().to_string();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed)
     }
 }
 
@@ -3696,337 +3681,6 @@ async fn wda_shutdown(state: &AppState, arguments: &Value) -> Result<Value> {
             "shutdownOk": ok
         }),
         "wda shutdown attempted",
-    ))
-}
-
-async fn web_goto(state: &AppState, arguments: &Value) -> Result<Value> {
-    let session_id = resolve_session_id(state, arguments).await?;
-    let url = required_str(arguments, "url")?;
-    let driver = driver_from_state(state).await?;
-    // Page/web-context selection is handled at session create via the
-    // `safariInitialUrl` capability (see config::resolve_safari_web): pointing
-    // Safari at a known page makes appium attach to the real tab rather than a
-    // phantom `safari-web-extension://` page. Switching windows here instead
-    // *fights* that selection (it can land eval on a stale/blank handle), so we
-    // deliberately do not touch the active window — just navigate it.
-    driver.goto_url(&session_id, url).await?;
-
-    Ok(tool_success(
-        json!({"ok": true, "sessionId": session_id, "url": url}),
-        "navigation complete",
-    ))
-}
-
-async fn web_wait_css(state: &AppState, arguments: &Value) -> Result<Value> {
-    let session_id = resolve_session_id(state, arguments).await?;
-    let selector = required_str(arguments, "selector")?;
-    let index = arguments
-        .get("index")
-        .and_then(Value::as_u64)
-        .unwrap_or(0)
-        .clamp(0, 10_000) as usize;
-    let require_unique = arguments
-        .get("requireUnique")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let timeout_ms = arguments
-        .get("timeoutMs")
-        .and_then(Value::as_u64)
-        .unwrap_or(10_000)
-        .clamp(500, 120_000);
-
-    let driver = driver_from_state(state).await?;
-    let element_id = wait_for_selector(
-        &driver,
-        &session_id,
-        selector,
-        index,
-        require_unique,
-        Duration::from_millis(timeout_ms),
-    )
-    .await?;
-
-    Ok(tool_success(
-        json!({
-            "ok": true,
-            "sessionId": session_id,
-            "selector": selector,
-            "index": index,
-            "elementId": element_id
-        }),
-        "selector found",
-    ))
-}
-
-fn js_value_is_truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(value) => *value,
-        Value::Number(value) => value
-            .as_f64()
-            .map(|number| number.is_finite() && number != 0.0)
-            .unwrap_or(false),
-        Value::String(value) => !value.trim().is_empty(),
-        Value::Array(values) => !values.is_empty(),
-        Value::Object(_) => true,
-    }
-}
-
-async fn web_wait_js(state: &AppState, arguments: &Value) -> Result<Value> {
-    let session_id = resolve_session_id(state, arguments).await?;
-    let script = required_str(arguments, "script")?;
-    let args = arguments.get("args").cloned().unwrap_or_else(|| json!([]));
-    if !args.is_array() {
-        bail!("args must be an array for ios.web.wait_js");
-    }
-
-    let timeout_ms = arguments
-        .get("timeoutMs")
-        .and_then(Value::as_u64)
-        .unwrap_or(10_000)
-        .clamp(500, 120_000);
-    let interval_ms = arguments
-        .get("intervalMs")
-        .and_then(Value::as_u64)
-        .unwrap_or(250)
-        .clamp(50, 5_000);
-
-    let driver = driver_from_state(state).await?;
-    let deadline = std::time::Instant::now() + Duration::from_millis(timeout_ms);
-    let mut last_retryable_error: Option<String> = None;
-    loop {
-        let response = match driver
-            .execute_script(&session_id, script, args.clone())
-            .await
-        {
-            Ok(response) => Some(response),
-            Err(err) if is_retryable_webdriver_error(&err) => {
-                last_retryable_error = Some(format!("{err:#}"));
-                None
-            }
-            Err(err) => return Err(err),
-        };
-        if let Some(response) = response {
-            let result = response.get("value").cloned().unwrap_or(Value::Null);
-            if js_value_is_truthy(&result) {
-                return Ok(tool_success(
-                    json!({
-                        "ok": true,
-                        "sessionId": session_id,
-                        "result": result
-                    }),
-                    "script condition satisfied",
-                ));
-            }
-        }
-
-        if std::time::Instant::now() >= deadline {
-            return Err(ToolCallError::new(
-                ToolErrorCode::Timeout,
-                "timeout waiting for JavaScript condition",
-                json!({
-                    "tool": "ios.web.wait_js",
-                    "timeoutMs": timeout_ms,
-                    "lastRetryableError": last_retryable_error
-                }),
-            )
-            .into());
-        }
-
-        tokio::time::sleep(Duration::from_millis(interval_ms)).await;
-    }
-}
-
-async fn web_click_css(state: &AppState, arguments: &Value) -> Result<Value> {
-    let session_id = resolve_session_id(state, arguments).await?;
-    let selector = required_str(arguments, "selector")?;
-    let index = arguments
-        .get("index")
-        .and_then(Value::as_u64)
-        .unwrap_or(0)
-        .clamp(0, 10_000) as usize;
-    let require_unique = arguments
-        .get("requireUnique")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let driver = driver_from_state(state).await?;
-
-    let ids = driver.find_elements_css(&session_id, selector).await?;
-    if ids.is_empty() {
-        return Err(ToolCallError::new(
-            ToolErrorCode::ElementNotFound,
-            format!("no elements found for selector '{selector}'"),
-            json!({"selector": selector}),
-        )
-        .into());
-    }
-    if require_unique && ids.len() != 1 {
-        return Err(ToolCallError::new(
-            ToolErrorCode::AmbiguousMatch,
-            format!(
-                "expected exactly one match for selector '{selector}', got {}",
-                ids.len()
-            ),
-            json!({"selector": selector, "matchCount": ids.len()}),
-        )
-        .into());
-    }
-    let element_id = ids.get(index).ok_or_else(|| {
-        ToolCallError::new(
-            ToolErrorCode::ElementNotFound,
-            format!(
-                "no element at index {index} for selector '{selector}' (found {})",
-                ids.len()
-            ),
-            json!({"selector": selector, "index": index, "matchCount": ids.len()}),
-        )
-    })?;
-    driver.click_element(&session_id, element_id).await?;
-
-    Ok(tool_success(
-        json!({
-            "ok": true,
-            "sessionId": session_id,
-            "selector": selector,
-            "index": index,
-            "elementId": element_id
-        }),
-        "click complete",
-    ))
-}
-
-async fn web_type_css(state: &AppState, arguments: &Value) -> Result<Value> {
-    let session_id = resolve_session_id(state, arguments).await?;
-    let selector = required_str(arguments, "selector")?;
-    let index = arguments
-        .get("index")
-        .and_then(Value::as_u64)
-        .unwrap_or(0)
-        .clamp(0, 10_000) as usize;
-    let require_unique = arguments
-        .get("requireUnique")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let text = required_str(arguments, "text")?;
-    let clear_first = arguments
-        .get("clearFirst")
-        .and_then(Value::as_bool)
-        .unwrap_or(true);
-
-    let driver = driver_from_state(state).await?;
-    let ids = driver.find_elements_css(&session_id, selector).await?;
-    if ids.is_empty() {
-        return Err(ToolCallError::new(
-            ToolErrorCode::ElementNotFound,
-            format!("no elements found for selector '{selector}'"),
-            json!({"selector": selector}),
-        )
-        .into());
-    }
-    if require_unique && ids.len() != 1 {
-        return Err(ToolCallError::new(
-            ToolErrorCode::AmbiguousMatch,
-            format!(
-                "expected exactly one match for selector '{selector}', got {}",
-                ids.len()
-            ),
-            json!({"selector": selector, "matchCount": ids.len()}),
-        )
-        .into());
-    }
-    let element_id = ids.get(index).ok_or_else(|| {
-        ToolCallError::new(
-            ToolErrorCode::ElementNotFound,
-            format!(
-                "no element at index {index} for selector '{selector}' (found {})",
-                ids.len()
-            ),
-            json!({"selector": selector, "index": index, "matchCount": ids.len()}),
-        )
-    })?;
-
-    if clear_first {
-        let _ = driver.clear_element(&session_id, element_id).await;
-    }
-    driver.type_element(&session_id, element_id, text).await?;
-
-    Ok(tool_success(
-        json!({
-            "ok": true,
-            "sessionId": session_id,
-            "selector": selector,
-            "index": index,
-            "elementId": element_id,
-            "typedLength": text.chars().count()
-        }),
-        "type complete",
-    ))
-}
-
-async fn web_press_key(state: &AppState, arguments: &Value) -> Result<Value> {
-    let session_id = resolve_session_id(state, arguments).await?;
-    let key = arguments
-        .get("key")
-        .and_then(Value::as_str)
-        .unwrap_or("Enter")
-        .to_lowercase();
-
-    let driver = driver_from_state(state).await?;
-    match key.as_str() {
-        "enter" | "return" | "search" => driver.press_enter(&session_id).await?,
-        _ => bail!("unsupported key '{key}', supported: Enter|Return|Search"),
-    }
-
-    Ok(tool_success(
-        json!({"ok": true, "sessionId": session_id, "key": key}),
-        "key press complete",
-    ))
-}
-
-async fn web_page_source(state: &AppState, arguments: &Value) -> Result<Value> {
-    let session_id = resolve_session_id(state, arguments).await?;
-    let driver = driver_from_state(state).await?;
-    let source = driver.page_source(&session_id).await?;
-
-    Ok(tool_success(
-        json!({
-            "ok": true,
-            "sessionId": session_id,
-            "length": source.len(),
-            "source": source
-        }),
-        "page source captured",
-    ))
-}
-
-async fn web_screenshot(state: &AppState, arguments: &Value) -> Result<Value> {
-    let session_id = resolve_session_id(state, arguments).await?;
-    let driver = driver_from_state(state).await?;
-    let data = driver.screenshot(&session_id).await?;
-
-    Ok(screenshot_tool_result(&session_id, data))
-}
-
-async fn web_eval_js(state: &AppState, arguments: &Value) -> Result<Value> {
-    let session_id = resolve_session_id(state, arguments).await?;
-    let script = required_str(arguments, "script")?;
-    let args = arguments.get("args").cloned().unwrap_or_else(|| json!([]));
-
-    if !args.is_array() {
-        bail!("args must be an array for ios.web.eval_js");
-    }
-
-    let driver = driver_from_state(state).await?;
-    let response = driver.execute_script(&session_id, script, args).await?;
-
-    Ok(tool_success(
-        json!({
-            "ok": true,
-            "risk": "high",
-            "sessionId": session_id,
-            "result": response.get("value").cloned().unwrap_or(Value::Null)
-        }),
-        "script executed",
     ))
 }
 
@@ -7356,7 +7010,7 @@ fn lookup_var_string(vars: &Value, key: &str) -> Option<String> {
     }
 }
 
-async fn driver_from_state(state: &AppState) -> Result<WebDriverClient> {
+pub(crate) async fn driver_from_state(state: &AppState) -> Result<WebDriverClient> {
     let _ = state.restore_persisted_runtime().await;
     let base_url = state.appium_base_url().await.ok_or_else(|| {
         anyhow::Error::new(ToolCallError::new(
@@ -7375,7 +7029,7 @@ async fn driver_from_state(state: &AppState) -> Result<WebDriverClient> {
     Ok(driver)
 }
 
-async fn resolve_session_id(state: &AppState, arguments: &Value) -> Result<String> {
+pub(crate) async fn resolve_session_id(state: &AppState, arguments: &Value) -> Result<String> {
     let _ = state.restore_persisted_runtime().await;
     if let Some(value) = arguments.get("sessionId").and_then(Value::as_str) {
         if !value.trim().is_empty() {
@@ -7417,7 +7071,7 @@ async fn session_is_alive(driver: &WebDriverClient, session_id: &str) -> bool {
     driver.page_source(session_id).await.is_ok()
 }
 
-fn required_str<'a>(arguments: &'a Value, key: &str) -> Result<&'a str> {
+pub(crate) fn required_str<'a>(arguments: &'a Value, key: &str) -> Result<&'a str> {
     arguments
         .get(key)
         .and_then(Value::as_str)
@@ -7464,7 +7118,7 @@ fn resolve_workflow_ref(arguments: &Value) -> Result<String> {
     )))
 }
 
-async fn wait_for_selector(
+pub(crate) async fn wait_for_selector(
     driver: &WebDriverClient,
     session_id: &str,
     selector: &str,
@@ -7521,6 +7175,7 @@ async fn wait_for_selector(
 mod tests {
     use super::*;
     use crate::state::{AppState, AppiumSource};
+    use crate::tools::web;
     use crate::ui_compact::TargetLocator;
     use httpmock::prelude::*;
     use once_cell::sync::Lazy;
@@ -8042,11 +7697,13 @@ mod tests {
             )
             .await;
 
-        let output = web_wait_js(
+        let output = web::handle(
             &state,
+            "ios.web.wait_js",
             &json!({"sessionId": "sess-1", "script": "return true", "timeoutMs": 2000}),
         )
         .await
+        .expect("web tool")
         .expect("wait_js should succeed after retry");
 
         assert_eq!(request_count.load(Ordering::SeqCst), 2);

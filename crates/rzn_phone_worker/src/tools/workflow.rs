@@ -2,16 +2,6 @@ use serde_json::{json, Value};
 
 use super::registry::tool;
 
-#[cfg(test)]
-pub(crate) const TOOL_NAMES: &[&str] = &[
-    "ios.workflow.list",
-    "ios.capability.list",
-    "ios.workflow.run",
-    "rzn.workflow_failure_report.review",
-    "rzn.workflow_failure_report.submit",
-    "rzn.workflow_failure_report.queue",
-];
-
 pub(crate) fn definitions() -> Vec<Value> {
     vec![
         tool(

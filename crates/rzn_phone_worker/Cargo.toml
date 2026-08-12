@@ -17,7 +17,10 @@ path = "src/bin/rzn-phone.rs"
 required-features = ["cli"]
 
 [features]
-default = ["cli"]
+# Keep the MCP worker as the cheap default; the terminal CLI is an explicit
+# release target because it pulls a sizeable set of presentation/packaging
+# dependencies.
+default = []
 cli = [
     "dep:base64",
     "dep:clap",

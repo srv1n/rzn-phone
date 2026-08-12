@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLE_CONFIG = ROOT / "plugin_bundle" / "rzn-phone.bundle.json"
 CARGO_MANIFEST = ROOT / "crates" / "rzn_phone_worker" / "Cargo.toml"
+LEGACY_PLUGIN_CONFIG = ROOT / "claude_plugin" / "rzn-phone" / ".claude-plugin" / "plugin.json"
 
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 CARGO_VERSION_RE = re.compile(r'(?m)^version\s*=\s*"([^"]+)"\s*$')
@@ -47,9 +48,10 @@ def release_tag(version: str) -> str:
 def assert_version_sync() -> None:
     bundle = current_version()
     cargo = cargo_version()
-    if bundle != cargo:
+    legacy = str(json.loads(LEGACY_PLUGIN_CONFIG.read_text(encoding="utf-8"))["version"]).strip()
+    if bundle != cargo or legacy != cargo:
         raise RuntimeError(
-            f"version mismatch: bundle={bundle} cargo={cargo}. Fix version drift first."
+            f"version mismatch: bundle={bundle} cargo={cargo} legacy={legacy}. Fix version drift first."
         )
 
 
@@ -60,6 +62,13 @@ def set_version(raw: str) -> str:
     config["version"] = version
     BUNDLE_CONFIG.write_text(
         json.dumps(config, indent=2, ensure_ascii=True) + "\n",
+        encoding="utf-8",
+    )
+
+    legacy = json.loads(LEGACY_PLUGIN_CONFIG.read_text(encoding="utf-8"))
+    legacy["version"] = version
+    LEGACY_PLUGIN_CONFIG.write_text(
+        json.dumps(legacy, indent=2, ensure_ascii=True) + "\n",
         encoding="utf-8",
     )
 

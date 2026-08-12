@@ -1,25 +1,28 @@
-.PHONY: build build-universal test smoke release-check install-artifacts workflows-pack plugin-bundle release-artifacts artifacts codebasezip install release release-dry-run
+.PHONY: build build-cli build-universal test smoke release-check install-artifacts workflows-pack plugin-bundle release-artifacts artifacts codebasezip install release release-dry-run
 
-VERSION := $(shell python3 ./scripts/release_common.py current-version)
+VERSION = $(shell python3 ./scripts/release_common.py current-version)
 PLATFORM := macos_universal
 RELEASE_DIR := dist/releases/rzn-phone/$(VERSION)/$(PLATFORM)
 
 build:
-	cargo build -p rzn_phone_worker --release
+	cargo build -p rzn_phone_worker --release --bin rzn-phone-worker
+
+build-cli:
+	cargo build -p rzn_phone_worker --release --features cli --bin rzn-phone
 
 build-universal:
 	./scripts/build_universal.sh
 
 test:
-	cargo test -p rzn_phone_worker
+	cargo test -p rzn_phone_worker --lib
 
 smoke:
 	./scripts/run_smoke.sh
 
 release-check:
 	cargo fmt --all -- --check
-	cargo clippy --workspace --all-targets -- -D warnings
-	cargo test --workspace --all-targets
+	cargo clippy --workspace --all-targets --all-features -- -D warnings
+	cargo test --workspace --all-targets --all-features
 	python3 -m compileall -q scripts
 	python3 scripts/validate_workflow_catalog.py --offline
 	python3 scripts/test_validate_workflow_catalog.py

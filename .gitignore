@@ -13,7 +13,6 @@
 /.tmp/
 /artifacts/
 /.playwright-cli/
-/tusker/
 
 # OS / editor noise
 .DS_Store

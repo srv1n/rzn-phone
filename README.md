@@ -128,8 +128,8 @@ That one line finds the latest GitHub release, installs `rzn-phone-<version>-mac
 Pin a specific release when you need repeatability:
 
 ```bash
-TAG="v0.0.2"
-VERSION="${TAG#v}"
+VERSION="<version>"
+TAG="v${VERSION}"
 BASE="https://github.com/srv1n/rzn-phone/releases/download/${TAG}"
 
 curl -fsSL "$BASE/rzn-phone-install.sh" | bash -s -- \
@@ -435,7 +435,7 @@ This README is the product surface. If you are working inside the repo, start he
 - Social card spec: [docs/specs/rzn_social_card_v1.md](docs/specs/rzn_social_card_v1.md)
 - Agent setup guide: [docs/agent_setup.md](docs/agent_setup.md)
 - App notes: [App Store](docs/appstore_workflows.md), [Reddit](docs/reddit_workflows.md), [LinkedIn](docs/linkedin_workflows.md)
-- Build from source: `cargo build -p rzn_phone_worker --release`
+- Build the worker: `make build`; build the terminal CLI: `make build-cli`.
 - Build install artifacts: `make install-artifacts`
 - Build runtime + signed bundle: `make release-artifacts`
 - Public plugin release also requires backend publish registration through the private RZN backend release runbook.
