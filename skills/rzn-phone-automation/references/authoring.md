@@ -6,7 +6,7 @@ This repo wants deterministic workflow JSON, not a pile of one-off scripts. Use 
 
 | Situation | Move |
 | --- | --- |
-| A shipped workflow is close | Patch that JSON and preserve its style |
+| A current workflow is close | Patch that JSON and preserve its style |
 | Navigation/selectors are unclear | Discover with direct `ios.*` tools first |
 | The task is a one-off but deterministic | Use `ios.script.run` with a step array |
 | The task should be reusable | Add or patch workflow JSON |
@@ -28,7 +28,7 @@ rzn-phone run linkedin/comment_post \
   --json
 ```
 
-Patch the nearest sibling workflow. Keep its naming, input style, pacing, `saveAs`/`save_as`, and output shape unless the task is specifically to change the contract.
+Patch the nearest sibling workflow. Keep its naming, input style, pacing, `saveAs`, and output shape unless the task is specifically to change the contract.
 
 ### Path B: LLM-Auto / Direct Discovery
 
@@ -70,7 +70,7 @@ If the step list becomes reusable, move it into workflow JSON rather than keepin
 - Small deterministic steps.
 - `help.examples` that become runnable CLI guidance.
 - Explicit `required_variables` and input metadata for required args.
-- `saveAs` / `save_as` for important intermediate output.
+- `saveAs` for important intermediate output.
 - `output` composition instead of giant opaque blobs.
 - Mutating steps guarded by both an input flag and `requiresCommit: true`.
 - Runtime cleanup controlled by invocation flags, not workflow teardown steps.

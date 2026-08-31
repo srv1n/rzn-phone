@@ -1,4 +1,4 @@
 interface:
   display_name: "RZN Phone Automation"
   short_description: "Automate real iPhone actions safely."
-  default_prompt: "Use $rzn-phone-automation to automate a real iPhone with shipped workflows first, direct ios.* tools when needed, and explicit dry-run/commit gates for mutating actions."
+  default_prompt: "Use $rzn-phone-automation to automate a real iPhone with repository workflows first, direct ios.* tools when needed, and explicit dry-run/commit gates for mutating actions."

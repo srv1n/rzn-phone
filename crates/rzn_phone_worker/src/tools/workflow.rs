@@ -6,7 +6,7 @@ pub(crate) fn definitions() -> Vec<Value> {
     vec![
         tool(
             "ios.workflow.list",
-            "List prebuilt iOS workflows grouped by system. Returns canonical ids as system/workflow plus legacy dot-name aliases.",
+            "List prebuilt iOS workflows grouped by system. Returns workflow ids as system/workflow.",
             json!({
                 "type": "object",
                 "properties": {
@@ -27,7 +27,7 @@ pub(crate) fn definitions() -> Vec<Value> {
         ),
         tool(
             "ios.workflow.run",
-            "Run a named workflow. Accepts system/workflow, system + workflow, or the legacy dotted name.",
+            "Run a named workflow using a system/workflow id or separate system and workflow fields.",
             json!({
                     "type": "object",
                     "properties": {
@@ -39,8 +39,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                         "commit": { "type": "boolean", "default": false },
                         "privacyGate": { "type": "string", "description": "Privacy class grant for workflows that read private phone data, such as messages, otp, calls, or notifications." },
                         "privacyGates": { "type": "array", "items": { "type": "string" }, "description": "Privacy class grants for workflows that read private phone data." },
-                        "disconnectOnFinish": { "type": "boolean", "default": true, "description": "Alias of closeOnFinish." },
-                        "closeOnFinish": { "type": "boolean", "default": true },
+                        "disconnectOnFinish": { "type": "boolean", "default": true },
                         "stopAppiumOnFinish": { "type": "boolean", "default": false },
                         "backgroundAppOnFinish": { "type": "boolean", "default": false },
                         "lockDeviceOnFinish": { "type": "boolean", "default": false }
@@ -50,53 +49,14 @@ pub(crate) fn definitions() -> Vec<Value> {
         ),
         tool(
             "rzn.workflow_failure_report.review",
-            "Build a sanitized phone automation failure draft for host review/submission. Sends nothing.",
+            "Build a sanitized phone automation failure draft for host review. Sends nothing.",
             json!({
                 "type": "object",
                 "properties": {
-                    "summary": {
-                        "type": "object",
-                        "description": "Sanitized failure draft or legacy safe summary returned by ios.workflow.run.",
-                        "properties": {
-                            "surface": { "type": "string" },
-                            "flow": { "type": "string" },
-                            "flow_version": { "type": "string" },
-                            "failed_stage": { "type": "string" },
-                            "error": { "type": "string" },
-                            "app_version": { "type": "string" },
-                            "platform": { "type": "string" }
-                        },
-                        "additionalProperties": false
-                    },
                     "draft": { "type": "object", "description": "FlowFailureReportDraft previously emitted by the worker." },
                     "note": { "type": "string", "description": "Optional user-authored note, max 2000 characters." }
                 },
-                "additionalProperties": false
-            }),
-        ),
-        tool(
-            "rzn.workflow_failure_report.submit",
-            "Deprecated compatibility shim. Builds a sanitized draft and manual host event; it does not submit to the backend.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "summary": { "type": "object", "description": "Sanitized failure draft or legacy safe summary returned by ios.workflow.run." },
-                    "payload": { "type": "object", "description": "FlowFailureReportDraft previously shown to the user." },
-                    "draft": { "type": "object", "description": "FlowFailureReportDraft previously shown to the user." },
-                    "note": { "type": "string", "description": "Optional user-authored note, max 2000 characters." },
-                    "dryRun": { "type": "boolean", "default": true }
-                },
-                "additionalProperties": false
-            }),
-        ),
-        tool(
-            "rzn.workflow_failure_report.queue",
-            "List or clear explicitly queued broken workflow reports.",
-            json!({
-                "type": "object",
-                "properties": {
-                    "action": { "type": "string", "enum": ["list", "clear"], "default": "list" }
-                },
+                "required": ["draft"],
                 "additionalProperties": false
             }),
         ),

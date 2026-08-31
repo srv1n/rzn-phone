@@ -1,0 +1,109 @@
+{
+  "nodes": [
+    {
+      "subject": "architecture",
+      "kind": "canonical",
+      "path": "docs/system/architecture.md",
+      "title": "Architecture",
+      "status": "canonical"
+    },
+    {
+      "subject": "canon",
+      "kind": "canonical",
+      "path": "docs/system/canon.md",
+      "title": "Current canon",
+      "status": "canonical"
+    },
+    {
+      "subject": "cli",
+      "kind": "canonical",
+      "path": "docs/system/cli.md",
+      "title": "CLI reference",
+      "status": "canonical"
+    },
+    {
+      "subject": "contributing",
+      "kind": "canonical",
+      "path": "docs/system/contributing.md",
+      "title": "Contributing",
+      "status": "canonical"
+    },
+    {
+      "subject": "overview",
+      "kind": "canonical",
+      "path": "docs/system/00-overview.md",
+      "title": "System overview",
+      "status": "canonical"
+    },
+    {
+      "subject": "safety",
+      "kind": "canonical",
+      "path": "docs/system/safety.md",
+      "title": "Safety",
+      "status": "canonical"
+    },
+    {
+      "subject": "setup",
+      "kind": "canonical",
+      "path": "docs/system/setup.md",
+      "title": "Setup",
+      "status": "canonical"
+    },
+    {
+      "subject": "testing",
+      "kind": "canonical",
+      "path": "docs/system/testing.md",
+      "title": "Testing and proof",
+      "status": "canonical"
+    },
+    {
+      "subject": "workflows",
+      "kind": "canonical",
+      "path": "docs/system/workflows.md",
+      "title": "Workflows",
+      "status": "canonical"
+    }
+  ],
+  "edges": [
+    {
+      "from": "architecture",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "canon",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "cli",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "contributing",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "safety",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "setup",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "testing",
+      "to": "overview",
+      "kind": "part_of"
+    },
+    {
+      "from": "workflows",
+      "to": "overview",
+      "kind": "part_of"
+    }
+  ]
+}

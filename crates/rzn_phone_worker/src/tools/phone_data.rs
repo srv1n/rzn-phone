@@ -11,7 +11,6 @@ pub(crate) fn definitions() -> Vec<Value> {
                 "type": "object",
                 "properties": {
                     "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
-                    "udid": { "type": "string", "description": "Alias of deviceId." },
                     "maxThreads": { "type": "integer", "minimum": 1, "maximum": 50, "default": 25 },
                     "backgroundAppOnFinish": { "type": "boolean", "default": true },
                     "lockDeviceOnFinish": { "type": "boolean", "default": false }
@@ -26,7 +25,6 @@ pub(crate) fn definitions() -> Vec<Value> {
                 "type": "object",
                 "properties": {
                     "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
-                    "udid": { "type": "string", "description": "Alias of deviceId." },
                     "threadId": { "type": "string", "description": "Thread id returned by phone_messages.list_recent_threads." },
                     "threadIndex": { "type": "integer", "minimum": 0, "default": 0 },
                     "maxMessages": { "type": "integer", "minimum": 1, "maximum": 50, "default": 20 },
@@ -43,7 +41,6 @@ pub(crate) fn definitions() -> Vec<Value> {
                 "type": "object",
                 "properties": {
                     "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
-                    "udid": { "type": "string", "description": "Alias of deviceId." },
                     "maxThreads": { "type": "integer", "minimum": 1, "maximum": 20, "default": 5 },
                     "maxMessages": { "type": "integer", "minimum": 1, "maximum": 50, "default": 8 },
                     "threadContains": { "type": "string", "description": "Optional thread title/preview filter (for example service name)." },
@@ -65,7 +62,6 @@ pub(crate) fn definitions() -> Vec<Value> {
                 "type": "object",
                 "properties": {
                     "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
-                    "udid": { "type": "string", "description": "Alias of deviceId." },
                     "maxCalls": { "type": "integer", "minimum": 1, "maximum": 50, "default": 25 },
                     "backgroundAppOnFinish": { "type": "boolean", "default": true },
                     "lockDeviceOnFinish": { "type": "boolean", "default": false }
@@ -80,7 +76,6 @@ pub(crate) fn definitions() -> Vec<Value> {
                 "type": "object",
                 "properties": {
                     "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
-                    "udid": { "type": "string", "description": "Alias of deviceId." },
                     "maxNotifications": { "type": "integer", "minimum": 1, "maximum": 50, "default": 25 },
                     "backgroundAppOnFinish": { "type": "boolean", "default": false },
                     "lockDeviceOnFinish": { "type": "boolean", "default": false }
@@ -95,9 +90,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                 "type": "object",
                 "properties": {
                     "deviceId": { "type": "string", "description": "Paired iPhone UDID." },
-                    "udid": { "type": "string", "description": "Alias of deviceId." },
                     "appLabel": { "type": "string", "description": "Visible app label to match against notification rows." },
-                    "appPackage": { "type": "string", "description": "Compatibility alias accepted at runtime; appLabel is the canonical required schema field. This worker filters by visible UI label, not bundle id." },
                     "maxNotifications": { "type": "integer", "minimum": 1, "maximum": 50, "default": 25 },
                     "backgroundAppOnFinish": { "type": "boolean", "default": false },
                     "lockDeviceOnFinish": { "type": "boolean", "default": false }
@@ -136,8 +129,6 @@ mod tests {
         assert!(schema
             .get("properties")
             .and_then(|properties| properties.get("appPackage"))
-            .and_then(|property| property.get("description"))
-            .and_then(Value::as_str)
-            .is_some_and(|description| description.contains("Compatibility alias")));
+            .is_none());
     }
 }

@@ -234,20 +234,16 @@ pub fn config_path() -> PathBuf {
     config_dir().join("config.json")
 }
 
-/// `~/.local/state/rzn-phone` — runtime state / history live under the legacy
-/// `~/.rzn-phone` today; reported here for discoverability + cleanup.
+/// Persistent runtime state and CLI history.
+///
+/// `RZN_PHONE_STATE_DIR` overrides the platform/XDG state directory.
 pub fn state_dir() -> PathBuf {
-    xdg_dir("XDG_STATE_HOME", ".local/state")
-}
-
-/// Legacy state dir still in use for runtime-state.json / history.jsonl.
-pub fn legacy_state_dir() -> PathBuf {
-    if let Some(custom) = env::var_os("RZN_PHONE_STATE_DIR").map(PathBuf::from) {
+    if let Some(custom) = env::var_os("RZN_PHONE_STATE_DIR") {
         if !custom.as_os_str().is_empty() {
-            return custom;
+            return PathBuf::from(custom);
         }
     }
-    home().join(".rzn-phone")
+    xdg_dir("XDG_STATE_HOME", ".local/state")
 }
 
 /// `~/.local/share/rzn-phone` — installed runtime/binaries.
@@ -901,6 +897,44 @@ pub fn classify_wda_failure(error_text: &str) -> Option<WdaRemediation> {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn restore_env(name: &str, value: Option<std::ffi::OsString>) {
+        if let Some(value) = value {
+            env::set_var(name, value);
+        } else {
+            env::remove_var(name);
+        }
+    }
+
+    #[test]
+    fn state_dir_prefers_explicit_override() {
+        let _guard = ENV_LOCK.lock().expect("environment lock");
+        let old = env::var_os("RZN_PHONE_STATE_DIR");
+        let expected = env::temp_dir().join("rzn-phone-test-state");
+        env::set_var("RZN_PHONE_STATE_DIR", &expected);
+
+        assert_eq!(state_dir(), expected);
+
+        restore_env("RZN_PHONE_STATE_DIR", old);
+    }
+
+    #[test]
+    fn state_dir_defaults_to_xdg_state_home() {
+        let _guard = ENV_LOCK.lock().expect("environment lock");
+        let old_state = env::var_os("RZN_PHONE_STATE_DIR");
+        let old_xdg = env::var_os("XDG_STATE_HOME");
+        let expected = env::temp_dir().join("rzn-phone-test-xdg-state");
+        env::remove_var("RZN_PHONE_STATE_DIR");
+        env::set_var("XDG_STATE_HOME", &expected);
+
+        assert_eq!(state_dir(), expected.join("rzn-phone"));
+
+        restore_env("RZN_PHONE_STATE_DIR", old_state);
+        restore_env("XDG_STATE_HOME", old_xdg);
+    }
 
     #[test]
     fn parses_xcode_teams_paid_first() {

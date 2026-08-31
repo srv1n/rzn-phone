@@ -152,8 +152,7 @@ impl WebDriverClient {
             "capabilities": {
                 "alwaysMatch": caps,
                 "firstMatch": [{}]
-            },
-            "desiredCapabilities": caps
+            }
         });
 
         let create_timeout = request
@@ -233,8 +232,7 @@ impl WebDriverClient {
             "capabilities": {
                 "alwaysMatch": caps,
                 "firstMatch": [{}]
-            },
-            "desiredCapabilities": caps
+            }
         });
 
         let create_timeout = request
@@ -701,12 +699,6 @@ impl WebDriverClient {
 }
 
 pub fn parse_session_id(response: &Value) -> Result<String> {
-    if let Some(session_id) = response.get("sessionId").and_then(Value::as_str) {
-        if !session_id.is_empty() {
-            return Ok(session_id.to_string());
-        }
-    }
-
     if let Some(session_id) = response
         .get("value")
         .and_then(Value::as_object)
@@ -726,12 +718,6 @@ pub fn parse_element_id(value: &Value) -> Option<String> {
         .get(W3C_ELEMENT_KEY)
         .and_then(Value::as_str)
         .map(ToString::to_string)
-        .or_else(|| {
-            value
-                .get("ELEMENT")
-                .and_then(Value::as_str)
-                .map(ToString::to_string)
-        })
 }
 
 fn extract_value_as_string(response: &Value) -> Option<String> {
@@ -755,18 +741,10 @@ mod tests {
     }
 
     #[test]
-    fn parses_legacy_session_id() {
-        let id = parse_session_id(&json!({"sessionId": "legacy"})).expect("id");
-        assert_eq!(id, "legacy");
-    }
-
-    #[test]
-    fn parses_element_id_w3c_and_legacy() {
+    fn parses_w3c_element_id() {
         let w3c = parse_element_id(&json!({"element-6066-11e4-a52e-4f735466cecf": "one"}));
         assert_eq!(w3c.as_deref(), Some("one"));
-
-        let legacy = parse_element_id(&json!({"ELEMENT": "two"}));
-        assert_eq!(legacy.as_deref(), Some("two"));
+        assert_eq!(parse_element_id(&json!({"ELEMENT": "two"})), None);
     }
 
     #[tokio::test]
@@ -837,7 +815,7 @@ mod tests {
                 then.status(200).json_body(json!({
                     "value": [
                         {"element-6066-11e4-a52e-4f735466cecf": "child-1"},
-                        {"ELEMENT": "child-2"}
+                        {"element-6066-11e4-a52e-4f735466cecf": "child-2"}
                     ]
                 }));
             })

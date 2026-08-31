@@ -414,10 +414,7 @@ fn persistence_file_path() -> Option<PathBuf> {
         }
     }
 
-    let base = env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(env::temp_dir);
-    Some(base.join(".rzn-phone").join("runtime-state.json"))
+    Some(crate::config::state_dir().join("runtime-state.json"))
 }
 
 fn runtime_persistence_update(state: &RuntimeState) -> RuntimePersistenceUpdate {
@@ -538,11 +535,7 @@ fn same_appium_server(left: &str, right: &str) -> bool {
 }
 
 fn appium_server_key(value: &str) -> String {
-    value
-        .trim()
-        .trim_end_matches('/')
-        .trim_end_matches("/wd/hub")
-        .to_string()
+    value.trim().trim_end_matches('/').to_string()
 }
 
 fn create_private_dir(path: &Path) -> std::io::Result<()> {

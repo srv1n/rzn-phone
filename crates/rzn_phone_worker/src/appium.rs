@@ -172,8 +172,7 @@ fn status_payload_is_ready(payload: &Value) -> bool {
         return top_ready;
     }
 
-    payload.get("status").and_then(Value::as_i64) == Some(0)
-        && payload.get("value").is_some_and(Value::is_object)
+    false
 }
 
 async fn wait_until_ready(root_url: &str) -> Result<String> {
@@ -243,25 +242,7 @@ fn base_candidates(input_url: &str) -> Vec<String> {
     if normalized.is_empty() {
         normalized = format!("http://127.0.0.1:{DEFAULT_PORT}");
     }
-
-    let mut out = Vec::new();
-    out.push(normalized.clone());
-
-    if normalized.ends_with("/wd/hub") {
-        let stripped = normalized.trim_end_matches("/wd/hub").to_string();
-        if !stripped.is_empty() {
-            out.push(stripped);
-        }
-    } else {
-        out.push(format!("{normalized}/wd/hub"));
-    }
-
-    out.into_iter().fold(Vec::new(), |mut dedup, entry| {
-        if !dedup.contains(&entry) {
-            dedup.push(entry);
-        }
-        dedup
-    })
+    vec![normalized]
 }
 
 fn build_spawn_remediation(errors: &[String]) -> String {
@@ -302,17 +283,9 @@ mod tests {
     use tokio::time::{sleep, Duration, Instant};
 
     #[test]
-    fn base_candidates_adds_wd_hub_variant() {
+    fn base_candidates_keeps_only_canonical_root() {
         let values = base_candidates("http://127.0.0.1:4723");
-        assert!(values.contains(&"http://127.0.0.1:4723".to_string()));
-        assert!(values.contains(&"http://127.0.0.1:4723/wd/hub".to_string()));
-    }
-
-    #[test]
-    fn base_candidates_strips_wd_hub_variant() {
-        let values = base_candidates("http://127.0.0.1:4723/wd/hub");
-        assert!(values.contains(&"http://127.0.0.1:4723/wd/hub".to_string()));
-        assert!(values.contains(&"http://127.0.0.1:4723".to_string()));
+        assert_eq!(values, vec!["http://127.0.0.1:4723"]);
     }
 
     #[test]
@@ -348,25 +321,6 @@ mod tests {
 
         status_mock.assert_async().await;
         assert!(format!("{err:#}").contains("no healthy Appium/WebDriver endpoint"));
-    }
-
-    #[tokio::test]
-    async fn probe_webdriver_base_accepts_legacy_success_status_payload() {
-        let server = MockServer::start_async().await;
-        let status_mock = server
-            .mock_async(|when, then| {
-                when.method(GET).path("/status");
-                then.status(200)
-                    .json_body(json!({ "status": 0, "value": { "build": { "version": "1" } } }));
-            })
-            .await;
-
-        let base = super::probe_webdriver_base(&server.url(""))
-            .await
-            .expect("legacy Appium status should pass");
-
-        status_mock.assert_async().await;
-        assert_eq!(base, server.url(""));
     }
 
     #[cfg(unix)]

@@ -27,7 +27,7 @@ should_skip() {
   local path="$1"
 
   case "$path" in
-    .beads/*|.git/*|.playwright-cli/*|.secrets/*|.tmp/*|.cache/*|*/.cache/*)
+    .tusker/*|.git/*|.playwright-cli/*|.secrets/*|.tmp/*|.cache/*|*/.cache/*)
       return 0
       ;;
     artifacts/*|dist/*|target/*|output/*|libexec/*|node_modules/*|vendor/*)

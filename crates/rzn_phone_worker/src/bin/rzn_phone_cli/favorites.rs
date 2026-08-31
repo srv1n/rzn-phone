@@ -8,9 +8,10 @@ fn load_favorites() -> Result<Vec<String>> {
     if let Some(values) = payload.as_array() {
         for value in values {
             if let Some(item) = value.as_str() {
-                let normalized = canonicalize_workflow_ref(item);
-                if !normalized.is_empty() && !out.contains(&normalized) {
-                    out.push(normalized);
+                if let Ok(reference) = parse_workflow_ref(item) {
+                    if !out.contains(&reference) {
+                        out.push(reference);
+                    }
                 }
             }
         }
@@ -21,9 +22,10 @@ fn load_favorites() -> Result<Vec<String>> {
 fn save_favorites(favorites: &[String]) -> Result<()> {
     let mut deduped = Vec::new();
     for value in favorites {
-        let normalized = canonicalize_workflow_ref(value);
-        if !normalized.is_empty() && !deduped.contains(&normalized) {
-            deduped.push(normalized);
+        if let Ok(reference) = parse_workflow_ref(value) {
+            if !deduped.contains(&reference) {
+                deduped.push(reference);
+            }
         }
     }
     write_private_file(

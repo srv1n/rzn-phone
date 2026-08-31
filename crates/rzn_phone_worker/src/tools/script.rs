@@ -20,8 +20,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                         "timeoutMs": { "type": "integer" },
                         "retries": { "type": "integer", "default": 0 },
                         "requiresCommit": { "type": "boolean", "default": false },
-                        "saveAs": { "type": "string" },
-                        "save_as": { "type": "string" }
+                        "saveAs": { "type": "string" }
                     },
                     "required": ["tool"],
                     "additionalProperties": false
@@ -31,8 +30,7 @@ pub(crate) fn definitions() -> Vec<Value> {
                 "commit": { "type": "boolean", "default": false },
                 "privacyGate": { "type": "string", "description": "Privacy class grant for private phone-data steps." },
                 "privacyGates": { "type": "array", "items": { "type": "string" }, "description": "Privacy class grants for private phone-data steps." },
-                "disconnectOnFinish": { "type": "boolean", "default": true, "description": "Alias of closeOnFinish." },
-                "closeOnFinish": { "type": "boolean", "default": true },
+                "disconnectOnFinish": { "type": "boolean", "default": true },
                 "stopAppiumOnFinish": { "type": "boolean", "default": false },
                 "backgroundAppOnFinish": { "type": "boolean", "default": false },
                 "lockDeviceOnFinish": { "type": "boolean", "default": false }

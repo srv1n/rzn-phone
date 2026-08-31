@@ -1,0 +1,184 @@
+{
+  "name": "safari/google_search",
+  "version": "1.2.4",
+  "description": "Open Safari on iOS, run a Google search, and extract top organic results (mobile + desktop layouts).",
+  "required_variables": [
+    "query"
+  ],
+  "capability": {
+    "family": "extract",
+    "intent": "search_results",
+    "surface": "web",
+    "mutating": false
+  },
+  "inputs": {
+    "query": {
+      "type": "string",
+      "required": true,
+      "description": "What you want to search on Google.",
+      "example": "best headphones 2026",
+      "group": "core"
+    },
+    "limit": {
+      "type": "integer",
+      "default": 5,
+      "min": 1,
+      "max": 20,
+      "description": "Maximum number of organic results to return.",
+      "example": 5,
+      "group": "advanced"
+    },
+    "captureScreenshot": {
+      "type": "boolean",
+      "default": true,
+      "description": "Keep the Safari screenshot artifact in the result.",
+      "example": true,
+      "group": "advanced"
+    },
+    "capturePageSource": {
+      "type": "boolean",
+      "default": false,
+      "description": "Also return the page source for debugging or downstream parsing.",
+      "example": false,
+      "group": "advanced"
+    }
+  },
+  "help": {
+    "when_to_use": "Use this when you want quick mobile Google results from a real iPhone without dropping into raw Safari tools.",
+    "returns": "Ordered organic Google results with title, URL, snippet, and optional screenshot or page source artifacts.",
+    "parameters": {
+      "query": {
+        "description": "What you want to search on Google.",
+        "example": "best headphones 2026",
+        "group": "core",
+        "structure": "Plain search string."
+      },
+      "limit": {
+        "description": "Maximum number of organic results to return.",
+        "example": 5,
+        "group": "advanced"
+      },
+      "captureScreenshot": {
+        "description": "Keep the Safari screenshot artifact in the result.",
+        "example": true,
+        "group": "advanced"
+      },
+      "capturePageSource": {
+        "description": "Also return the page source for debugging or downstream parsing.",
+        "example": false,
+        "group": "advanced"
+      }
+    },
+    "examples": [
+      {
+        "label": "Basic search",
+        "description": "Read-only search with the default top-five result limit.",
+        "args": {
+          "query": "best headphones 2026"
+        }
+      },
+      {
+        "label": "Search with source capture",
+        "description": "Useful when an agent needs the DOM source for follow-up parsing.",
+        "args": {
+          "query": "openai api pricing",
+          "limit": 8,
+          "capturePageSource": true
+        }
+      }
+    ]
+  },
+  "notes": [
+    "This workflow is read-only.",
+    "Consent and layout variance are handled best-effort."
+  ],
+  "steps": [
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "safari_web",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.web.goto",
+      "arguments": {
+        "url": "https://www.google.com/search?q={{query}}"
+      }
+    },
+    {
+      "tool": "ios.web.wait_js",
+      "arguments": {
+        "script": "return document.querySelectorAll('#rso h3, #search h3, h3.yuRUbf, #rso a[href] [role=\"heading\"], #search a[href] [role=\"heading\"]').length;",
+        "timeoutMs": 15000,
+        "intervalMs": 250
+      }
+    },
+    {
+      "tool": "ios.web.eval_js",
+      "saveAs": "results",
+      "arguments": {
+        "script": "const limit = Number(arguments[0] || 5);\nconst clean = (value) => (value || '').replace(/\\s+/g, ' ').trim();\nconst isGoogleInternal = (url) => {\n  try {\n    const u = new URL(url, location.href);\n    if (/(^|\\.)google\\.[a-z.]+$/i.test(u.hostname)) return true;\n    if (/(^|\\.)(gstatic|googleusercontent|googleadservices|googleadservices)\\.com$/i.test(u.hostname)) return true;\n    return false;\n  } catch {\n    return true;\n  }\n};\nconst containers = [document.querySelector('#rso'), document.querySelector('#search')].filter(Boolean);\nconst roots = containers.length ? containers : [document.body];\nconst cardSelector = 'div.tF2Cxc, div.Xv4xee, div[data-snc], div.g, div[data-hveid], div[data-ved], div.MjjYud, div.N54PNb, div.kvH3mc, article, div';\nconst out = [];\nconst seen = new Set();\nconst pushResult = (title, rawUrl, card) => {\n  if (!title || !rawUrl || seen.has(rawUrl) || isGoogleInternal(rawUrl)) return false;\n  let snippet = '';\n  const snippetRoots = [card, card && card.nextElementSibling, card && card.parentElement, card && card.parentElement && card.parentElement.nextElementSibling].filter(Boolean);\n  for (const root of snippetRoots) {\n    const snippetNodes = root.querySelectorAll('div.VwiC3b, div[data-sncf=\"1\"], div[data-content-feature=\"1\"], span.aCOpRe, div.yXK7lf, div.s3v9rd, div.hgKElc, div.kb0PBd, div.fYyStc, div.IBr9hb, div.wHYlTd, div[role=\"text\"]');\n    for (const node of snippetNodes) {\n      const text = clean(node.textContent);\n      if (text && text !== title) { snippet = text; break; }\n    }\n    if (snippet) break;\n  }\n  if (!snippet && card) {\n    const fallbackText = clean(card.textContent).replace(title, '').replace(rawUrl, '').trim();\n    snippet = fallbackText.slice(0, 280);\n  }\n  seen.add(rawUrl);\n  out.push({ position: out.length + 1, title, url: rawUrl, snippet });\n  return out.length >= limit;\n};\nfor (const root of roots) {\n  // Match desktop (<h3>) and iOS Safari mobile ([role=\"heading\"]) result titles.\n  const headings = root.querySelectorAll('h3, [role=\"heading\"]');\n  for (const heading of headings) {\n    const title = clean(heading.textContent);\n    if (!title) continue;\n    const link = heading.closest('a[href]') || heading.querySelector('a[href]') || (heading.parentElement && heading.parentElement.querySelector('a[href]'));\n    const rawUrl = link && link.href ? link.href : '';\n    if (!rawUrl) continue;\n    const card = (link && link.closest(cardSelector)) || (link && link.parentElement) || root;\n    if (pushResult(title, rawUrl, card)) return out;\n  }\n}\nreturn out;",
+        "args": [
+          "{{limit}}"
+        ]
+      }
+    },
+    {
+      "tool": "util.list.length",
+      "saveAs": "count",
+      "arguments": {
+        "list": "{{steps.results.result}}"
+      }
+    },
+    {
+      "tool": "ios.web.screenshot",
+      "when": {
+        "var": "captureScreenshot",
+        "truthy": true
+      },
+      "arguments": {},
+      "saveAs": "screenshot"
+    },
+    {
+      "tool": "ios.web.page_source",
+      "when": {
+        "var": "capturePageSource",
+        "truthy": true
+      },
+      "arguments": {},
+      "saveAs": "pageSource"
+    }
+  ],
+  "output": {
+    "query": "{{query}}",
+    "results": "{{steps.results.result}}",
+    "resultCount": "{{steps.count.count}}",
+    "screenshot": "{{steps.screenshot}}",
+    "pageSource": "{{steps.pageSource}}"
+  },
+  "presentation": {
+    "cli": {
+      "type": "result_list",
+      "title": "Google results for \"{{query}}\"",
+      "items": "{{steps.results.result}}",
+      "titleField": "title",
+      "urlField": "url",
+      "snippetField": "snippet",
+      "footer": "Found {{steps.count.count}} result(s)."
+    }
+  }
+}

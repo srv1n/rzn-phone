@@ -35,11 +35,16 @@ setup_steps:
     description: "Confirm the worker can create a session and reach the paired iPhone."
 
 context_parameters:
-  - id: "device_id"
+  - id: "privacyGate"
+    label: "Privacy gate"
+    kind: "string"
+    required: true
+    default: "calls"
+  - id: "deviceId"
     label: "Device ID"
     kind: "device_selector"
     required: true
-  - id: "max_calls"
+  - id: "maxCalls"
     label: "Max calls"
     kind: "integer"
     required: false
@@ -51,6 +56,7 @@ quick_starts:
     description: "Open the Phone app and extract visible recents with a read-only tool."
     tool_id: "phone_calls.list_recent_calls"
     args:
+      privacyGate: "calls"
       maxCalls: 25
     example_path: "examples/phone_calls/list_recent_calls.tool_call.json"
 

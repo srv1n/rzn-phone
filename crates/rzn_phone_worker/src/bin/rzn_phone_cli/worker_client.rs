@@ -23,20 +23,15 @@ async fn call_tool(state: &AppState, tool: &str, arguments: Value) -> Result<Val
 }
 
 async fn handle_workflow_broken_report(args: WorkflowBrokenReportArgs) -> Result<()> {
-    let flow = args
-        .flow
-        .or(args.workflow)
-        .ok_or_else(|| anyhow!("--flow is required"))?;
+    let flow = args.flow.ok_or_else(|| anyhow!("--flow is required"))?;
     let flow_version = args
         .flow_version
-        .or(args.workflow_version)
         .ok_or_else(|| anyhow!("--flow-version is required"))?;
     let failed_stage = args
         .failed_stage
-        .or(args.failed_step)
         .ok_or_else(|| anyhow!("--failed-stage is required"))?;
     let summary = json!({
-        "surface": args.surface.or(args.system).unwrap_or_else(|| args.platform.clone()),
+        "surface": args.surface.unwrap_or_else(|| args.platform.clone()),
         "flow": flow,
         "flow_version": flow_version,
         "failed_stage": failed_stage,
@@ -47,11 +42,7 @@ async fn handle_workflow_broken_report(args: WorkflowBrokenReportArgs) -> Result
     let draft = workflow_failure_report::draft_from_value(&summary, args.note.clone())?;
 
     print_value(&workflow_failure_report::review_payload(&draft), true, None)?;
-    if !args.dry_run {
-        println!(
-            "No report was submitted. The RZN host should submit the draft with auth context."
-        );
-    }
+    println!("No report was submitted. The RZN host should submit the draft with auth context.");
     Ok(())
 }
 fn find_tool(name: &str) -> Result<Value> {

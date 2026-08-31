@@ -12,7 +12,6 @@ import validate_workflow_catalog as catalog
 
 def base_workflow() -> dict:
     return {
-        "schema_version": "rzn.mobile.workflow.v1",
         "name": "test.workflow",
         "version": "1.0.0",
         "required_variables": ["query"],

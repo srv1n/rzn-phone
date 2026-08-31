@@ -35,10 +35,10 @@ _{name}_complete() {{
     run|show)
       COMPREPLY=( $(compgen -W "$({command_name} __complete-values workflows)" -- "$cur") )
       ;;
-    tool|tools)
+    tool)
       COMPREPLY=( $(compgen -W "$({command_name} __complete-values tools)" -- "$cur") )
       ;;
-    favorite|favorites)
+    favorite)
       COMPREPLY=( $(compgen -W "$({command_name} __complete-values favorites)" -- "$cur") )
       ;;
   esac
@@ -53,25 +53,29 @@ complete -F _{name}_complete {command_name}
 _{name}_commands() {{
   local -a cmds
   cmds=(
+    'worker:Run the MCP worker over stdio'
     'doctor:Check local prerequisites'
+    'setup:Detect signing identity and write starter config'
+    'config:View or edit persistent configuration'
     'devices:List connected physical iPhones'
-    'favorite:Manage favorite workflows'
-    'favorites:List favorite workflows'
-    'history:Manage local run history'
-    'info:Show install metadata'
-    'list:List workflows grouped by system'
-    'recent:Show recent workflow runs'
-    'rerun:Rerun a previous workflow'
-    'run:Run a workflow'
-    'show:Show a workflow or tool'
-    'shutdown:Shutdown active runtime'
-    'skill:Install agent skill symlinks'
     'status:Show runtime status'
+    'shutdown:Shutdown active runtime'
+    'version:Show runtime and workflow-pack versions'
+    'info:Show install metadata'
+    'run:Run a workflow'
+    'list:List workflows grouped by system'
+    'show:Show a workflow or tool'
+    'capability:Inspect capability families'
     'tool:Inspect or call a tool'
-    'tools:Alias for tool list'
-    'version:Show version'
-    'workflow:Inspect workflows'
+    'recent:Show recent workflow runs'
+    'history:Manage local run history'
+    'rerun:Rerun a previous workflow'
+    'favorite:Manage favorite workflows'
+    'completion:Print shell completion script'
+    'skill:Install agent skill symlinks'
     'workflows:Manage workflow packs'
+    'report:Draft or inspect workflow failure reports'
+    'examples:Show paths to installed examples'
   )
   _describe 'command' cmds
 }}
@@ -87,7 +91,7 @@ _{name}() {{
       refs=("${{(@f)$({command_name} __complete-values workflows)}}")
       _describe 'workflow' refs
       ;;
-    tool|tools)
+    tool)
       local -a tools
       tools=("${{(@f)$({command_name} __complete-values tools)}}")
       _describe 'tool' tools
@@ -109,25 +113,29 @@ _{name} "$@"
 fn complete_values(entity: &str) -> Result<Vec<String>> {
     let values = match entity {
         "commands" => vec![
-            "devices",
+            "worker",
             "doctor",
-            "favorite",
-            "favorites",
-            "history",
-            "info",
-            "list",
-            "recent",
-            "rerun",
-            "run",
-            "show",
-            "shutdown",
-            "skill",
+            "setup",
+            "config",
+            "devices",
             "status",
-            "tool",
-            "tools",
+            "shutdown",
             "version",
-            "workflow",
+            "info",
+            "run",
+            "list",
+            "show",
+            "capability",
+            "tool",
+            "recent",
+            "history",
+            "rerun",
+            "favorite",
+            "completion",
+            "skill",
             "workflows",
+            "report",
+            "examples",
         ]
         .into_iter()
         .map(ToString::to_string)
@@ -169,4 +177,38 @@ fn complete_values(entity: &str) -> Result<Vec<String>> {
         _ => bail!("unknown completion entity: {}", entity),
     };
     Ok(values)
+}
+
+#[cfg(test)]
+mod completion_tests {
+    use super::*;
+
+    #[test]
+    fn completion_commands_match_the_canonical_surface() {
+        let commands = complete_values("commands").expect("commands");
+        for command in [
+            "worker",
+            "setup",
+            "config",
+            "capability",
+            "completion",
+            "report",
+            "examples",
+        ] {
+            assert!(commands.iter().any(|item| item == command), "missing {command}");
+        }
+        for alias in ["tools", "workflow", "favorites", "skills"] {
+            assert!(!commands.iter().any(|item| item == alias), "removed {alias}");
+        }
+    }
+
+    #[test]
+    fn generated_shell_completion_omits_removed_aliases() {
+        for shell in ["bash", "zsh"] {
+            let script = completion_script(shell).expect("completion script");
+            for alias in ["tools", "workflow", "favorites", "skills"] {
+                assert!(!script.contains(&format!("'{alias}:")), "removed {alias} in {shell}");
+            }
+        }
+    }
 }

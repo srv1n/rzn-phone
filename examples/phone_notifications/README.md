@@ -15,11 +15,13 @@ Starter file:
 Usage:
 
 - Replace `<UDID>` before running the example.
+- Pass `privacyGate: "notifications"`. Notification text can contain message
+  or OTP content, so treat the result as private.
 - For normal local use, prefer:
 
 ```bash
 rzn-phone tool call phone_notifications.list_recent_notifications \
-  --args-json '{"deviceId":"<UDID>","maxNotifications":25,"backgroundAppOnFinish":false}'
+  --args-json '{"deviceId":"<UDID>","privacyGate":"notifications","maxNotifications":25,"backgroundAppOnFinish":false}'
 ```
 
 - Treat the `*.tool_call.json` files as raw MCP payload examples only when you are integrating at the worker protocol layer.

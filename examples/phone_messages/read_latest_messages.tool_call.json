@@ -2,6 +2,7 @@
   "name": "phone_messages.read_latest_messages",
   "arguments": {
     "deviceId": "<UDID>",
+    "privacyGate": "messages",
     "threadIndex": 0,
     "maxMessages": 20,
     "backgroundAppOnFinish": true

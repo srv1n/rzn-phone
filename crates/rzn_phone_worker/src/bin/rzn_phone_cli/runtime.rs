@@ -290,7 +290,7 @@ async fn maybe_cleanup_stale_runtime_cache(_runtime: &RuntimePaths) -> Result<()
         let _ = call_tool(
             &state,
             "rzn.worker.shutdown",
-            json!({"stopAppium": true, "shutdownWDA": true, "backgroundApp": false, "lockDevice": false}),
+            json!({"commit": true, "stopAppium": true, "shutdownWDA": true, "backgroundApp": false, "lockDevice": false}),
         )
         .await;
     }
@@ -339,10 +339,7 @@ fn maybe_print_cold_start_notice(smart_cache_active: bool, udid: &str, output_js
 fn runtime_state_file_path() -> PathBuf {
     env::var("RZN_IOS_RUNTIME_STATE_FILE")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            PathBuf::from(env::var("HOME").unwrap_or_else(|_| "/tmp".to_string()))
-                .join(".rzn-phone/runtime-state.json")
-        })
+        .unwrap_or_else(|_| rzn_phone_worker::config::state_dir().join("runtime-state.json"))
 }
 
 fn payload_input_args(_payload: &Value) -> Option<Value> {

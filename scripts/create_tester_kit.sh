@@ -39,10 +39,8 @@ mkdir -p "$STAGE_DIR"/cards
 cp "$PLUGIN_ZIP" "$STAGE_DIR/artifacts/"
 cp "$ROOT/scripts/tester_doctor.sh" "$STAGE_DIR/scripts/"
 cp "$ROOT/scripts/prepare_mcp_plugin.sh" "$STAGE_DIR/scripts/"
-cp "$ROOT/docs/tester_kit_install.md" "$STAGE_DIR/INSTALL.md"
-cp "$ROOT/docs/tester_kit_agent_setup.md" "$STAGE_DIR/AGENT_SETUP.md"
+cp "$ROOT/docs/system/testing.md" "$STAGE_DIR/README.md"
 cp "$ROOT/examples/rzn-phone.mcp.json" "$STAGE_DIR/examples/"
-cp "$ROOT/examples/agent-handoff.md" "$STAGE_DIR/examples/"
 cp -R "$ROOT/cards/social" "$STAGE_DIR/cards/"
 
 chmod +x "$STAGE_DIR/scripts/tester_doctor.sh"

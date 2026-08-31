@@ -1,0 +1,109 @@
+{
+  "name": "appstore/typeahead",
+  "version": "1.1.1",
+  "description": "Open App Store Search, type a query, and capture ordered typeahead suggestions (read-only).",
+  "capability": {
+    "family": "extract",
+    "intent": "typeahead_suggestions",
+    "surface": "native_app",
+    "mutating": false
+  },
+  "inputs": {
+    "query": { "type": "string", "required": true },
+    "prefixes": { "type": "array" },
+    "limit": { "type": "integer", "default": 10, "min": 1, "max": 20 },
+    "typing_mode": { "type": "string", "default": "full" },
+    "country": { "type": "string" },
+    "locale": { "type": "string" }
+  },
+  "notes": [
+    "Read-only workflow: no destructive actions.",
+    "Captures screenshot and full UI source for downstream artifact export."
+  ],
+  "steps": [
+    { "tool": "ios.appium.ensure", "arguments": {} },
+    {
+      "tool": "ios.session.create",
+      "arguments": {
+        "udid": "{{udid}}",
+        "kind": "native_app",
+        "bundleId": "com.apple.AppStore",
+        "replaceExisting": true,
+        "noReset": true,
+        "showXcodeLog": "{{showXcodeLog}}",
+        "allowProvisioningUpdates": "{{allowProvisioningUpdates}}",
+        "allowProvisioningDeviceRegistration": "{{allowProvisioningDeviceRegistration}}",
+        "sessionCreateTimeoutMs": "{{sessionCreateTimeoutMs}}",
+        "wdaLocalPort": "{{wdaLocalPort}}",
+        "wdaLaunchTimeoutMs": "{{wdaLaunchTimeoutMs}}",
+        "wdaConnectionTimeoutMs": "{{wdaConnectionTimeoutMs}}",
+        "signing": {
+          "xcodeOrgId": "{{xcodeOrgId}}",
+          "xcodeSigningId": "{{xcodeSigningId}}",
+          "updatedWDABundleId": "{{updatedWDABundleId}}"
+        }
+      }
+    },
+    {
+      "tool": "ios.app.activate",
+      "arguments": {
+        "bundleId": "com.apple.AppStore",
+        "terminateFirst": true
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "AppStore.tabBar.search" },
+        "timeoutMs": 30000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "AppStore.tabBar.search" }
+      }
+    },
+    {
+      "tool": "ios.action.wait",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "AppStore.searchField" },
+        "timeoutMs": 10000
+      },
+      "retries": 1
+    },
+    {
+      "tool": "ios.action.tap",
+      "arguments": {
+        "target": { "using": "accessibility id", "value": "AppStore.searchField" }
+      }
+    },
+    {
+      "tool": "ios.action.typeahead",
+      "saveAs": "typeahead",
+      "arguments": {
+        "field": { "using": "accessibility id", "value": "AppStore.searchField" },
+        "query": "{{query}}",
+        "prefixes": "{{prefixes}}",
+        "limit": "{{limit}}",
+        "typingMode": "{{typing_mode}}",
+        "suggestionQuery": {
+          "type": "XCUIElementTypeCell",
+          "ancestorName": "AppStore.searchHints"
+        }
+      }
+    },
+    { "tool": "ios.ui.screenshot", "arguments": {}, "saveAs": "screenshot" },
+    { "tool": "ios.ui.source", "arguments": {}, "saveAs": "uiSource" }
+  ],
+  "output": {
+    "query": "{{query}}",
+    "prefixes": "{{steps.typeahead.prefixes}}",
+    "prefixCount": "{{steps.typeahead.prefixCount}}",
+    "suggestions": "{{steps.typeahead.suggestions}}",
+    "suggestionCount": "{{steps.typeahead.suggestionCount}}",
+    "screenshot": "{{steps.screenshot}}",
+    "uiSource": "{{steps.uiSource}}"
+  }
+}

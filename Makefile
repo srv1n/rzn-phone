@@ -27,7 +27,6 @@ release-check:
 	python3 scripts/validate_workflow_catalog.py --offline
 	python3 scripts/test_validate_workflow_catalog.py
 	python3 scripts/test_tester_kit_packaging.py
-	python3 scripts/build_workflow_pack.py --out /tmp/rzn-workflow-pack-test
 	python3 scripts/test_release_archive_safety.py
 
 install-artifacts: build-universal

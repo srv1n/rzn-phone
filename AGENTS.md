@@ -1,28 +1,18 @@
 # Agent Instructions
 
-## Specs And Patterns (Start Here For New Apps)
+## Current product map
 
-- Mobile workflow format (portable): `docs/specs/rzn_mobile_workflow_v1.md`
-  - Completion/cleanup controls: see `### 1.5 Completion and cleanup (runner options)`
-- Social “card” layer (cross-app browse/read/engage): `docs/specs/rzn_social_card_v1.md`
-  - Completion controls guidance: see `## 4.1 Completion controls (close out of the app)`
-- Local CLI entrypoint for validating flows end-to-end: `scripts/rzn_phone.sh`
-  - Global flags for optional close-out behavior: `--disconnect-on-finish`, `--background-on-exit`, `--lock-device-on-exit`
+- Start with `docs/system/00-overview.md`.
+- Use `docs/system/` for the current setup, runtime, safety, CLI, testing, and
+  contribution answer.
+- Workflow data lives in `crates/rzn_phone_worker/resources/workflows/`.
+- The workflow contract is `schema/rzn-mobile-workflow.schema.json`.
+- Local end-to-end helper: `scripts/rzn_phone.sh`.
+  Its close-out flags are `--disconnect-on-finish`, `--background-on-exit`,
+  and `--lock-device-on-exit`.
 
-## Plugin Release Requirement
-
-If the task includes building or publishing the public `rzn-phone` capability bundle, release
-completion also requires backend notification using the contract documented at:
-
-- `/Users/sarav/Downloads/side/rzn/backend/docs/runbook/plugin_team_release_guide.md`
-
-For plugin release work:
-
-- Building a ZIP alone is not enough.
-- Notify the backend through the release registration and catalog publish API flow.
-- Publish to local `http://localhost:8082` first, then cloud `https://cloud.rzn.ai`, unless the user explicitly says otherwise.
-- The release script supports `cloud` directly and retains `prod` as a legacy alias.
-- If local or cloud publish fails at any stage, stop and report exactly what failed.
+For the full terminal command surface, read `docs/system/cli.md`. For source
+authority, read `docs/system/canon.md`.
 
 ## Review Before Git Actions
 

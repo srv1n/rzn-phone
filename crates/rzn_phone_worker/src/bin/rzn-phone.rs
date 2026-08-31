@@ -43,7 +43,6 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     let runtime = runtime_paths()?;
     env::set_var("RZN_PLUGIN_DIR", &runtime.plugin_root);
-    env::set_var("CLAUDE_PLUGIN_ROOT", &runtime.plugin_root);
 
     match cli.command {
         CommandKind::Worker => {
@@ -90,6 +89,7 @@ async fn main() -> Result<()> {
                 &state,
                 "rzn.worker.shutdown",
                 json!({
+                    "commit": true,
                     "stopAppium": args.stop_appium,
                     "shutdownWDA": true,
                     "backgroundApp": args.background_on_exit,
@@ -254,7 +254,7 @@ async fn main() -> Result<()> {
                     print_tool_show(&tool)?;
                 }
             } else {
-                let workflow_ref = normalize_workflow_ref(&args.first, args.second.as_deref())?;
+                let workflow_ref = parse_workflow_parts(&args.first, args.second.as_deref())?;
                 let workflow = find_workflow(&workflow_ref)?;
                 if args.json {
                     print_value(&serde_json::to_value(&workflow)?, true, None)?;
@@ -301,22 +301,6 @@ async fn main() -> Result<()> {
                 print_value(&payload, true, None)?;
             }
         },
-        CommandKind::Tools(args) => {
-            prepare_pretty_output(args.pretty);
-            let tools = filtered_tools(&ToolListArgs {
-                direct: args.direct,
-                search: args.search,
-                family: args.family,
-                tier: args.tier,
-                json: args.json,
-                pretty: args.pretty,
-            })?;
-            if args.json {
-                print_value(&json!({ "tools": tools }), true, None)?;
-            } else {
-                print_tool_list(&tools)?;
-            }
-        }
         CommandKind::Recent(args) => {
             prepare_pretty_output(args.pretty);
             let entries = load_recent(args.limit)?;
@@ -344,7 +328,7 @@ async fn main() -> Result<()> {
         }
         CommandKind::Favorite { command } => match command {
             FavoriteCommand::Add { reference } => {
-                let reference = canonicalize_workflow_ref(&reference);
+                let reference = parse_workflow_ref(&reference)?;
                 let mut favorites = load_favorites()?;
                 if !favorites.contains(&reference) {
                     favorites.push(reference.clone());
@@ -353,7 +337,7 @@ async fn main() -> Result<()> {
                 println!("Favorited {}", reference);
             }
             FavoriteCommand::Remove { reference } => {
-                let reference = canonicalize_workflow_ref(&reference);
+                let reference = parse_workflow_ref(&reference)?;
                 let favorites = load_favorites()?
                     .into_iter()
                     .filter(|item| item != &reference)
@@ -371,15 +355,6 @@ async fn main() -> Result<()> {
                 }
             }
         },
-        CommandKind::Favorites(args) => {
-            prepare_pretty_output(args.pretty);
-            let favorites = load_favorites()?;
-            if args.json {
-                print_value(&serde_json::to_value(favorites)?, true, None)?;
-            } else {
-                print_favorites(&favorites)?;
-            }
-        }
         CommandKind::Completion(args) => {
             print!("{}", completion_script(&args.shell)?);
         }
@@ -440,38 +415,6 @@ async fn main() -> Result<()> {
         CommandKind::Report { command } => match command {
             ReportCommand::WorkflowBroken(args) => {
                 handle_workflow_broken_report(args).await?;
-            }
-            ReportCommand::Queue(args) => {
-                prepare_pretty_output(args.pretty);
-                let state = AppState::new();
-                let payload = call_tool(
-                    &state,
-                    "rzn.workflow_failure_report.queue",
-                    json!({ "action": args.action }),
-                )
-                .await?;
-                print_value(&payload, args.json || !want_pretty(args.pretty), None)?;
-            }
-        },
-        CommandKind::Workflow { command } => match command {
-            WorkflowAliasCommand::List(args) => {
-                prepare_pretty_output(args.pretty);
-                let payload = workflow_payload(args.family.as_deref());
-                if args.json {
-                    print_value(&filtered_workflow_payload(&payload, &args)?, true, None)?;
-                } else {
-                    print_workflow_list(&payload, &args)?;
-                }
-            }
-            WorkflowAliasCommand::Show(args) => {
-                prepare_pretty_output(args.pretty);
-                let workflow_ref = normalize_workflow_ref(&args.first, args.second.as_deref())?;
-                let workflow = find_workflow(&workflow_ref)?;
-                if args.json {
-                    print_value(&serde_json::to_value(&workflow)?, true, None)?;
-                } else {
-                    print_workflow_show(&serde_json::to_value(&workflow)?, args.example)?;
-                }
             }
         },
         CommandKind::Examples { command } => match command {
@@ -721,7 +664,6 @@ fn handle_config(command: ConfigCommand) -> Result<()> {
                     "config": config::config_path(),
                     "configDir": config::config_dir(),
                     "stateDir": config::state_dir(),
-                    "legacyStateDir": config::legacy_state_dir(),
                     "dataDir": config::data_dir(),
                 }),
                 true,

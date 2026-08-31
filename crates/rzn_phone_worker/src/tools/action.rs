@@ -159,20 +159,6 @@ pub(crate) fn definitions() -> Vec<Value> {
             }),
         ),
         tool(
-            "ios.action.swipe",
-            "Swipe the screen in a direction (alias of ios.action.scroll).",
-            json!({
-                "type": "object",
-                "properties": {
-                    "sessionId": { "type": "string" },
-                    "direction": { "type": "string", "enum": ["up", "down", "left", "right"] },
-                    "distance": { "type": "number", "default": 0.6 }
-                },
-                "required": ["direction"],
-                "additionalProperties": false
-            }),
-        ),
-        tool(
             "ios.action.back",
             "Navigate back (best-effort on native apps).",
             json!({

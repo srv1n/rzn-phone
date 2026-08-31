@@ -1,0 +1,35 @@
+{
+  "actor": "agent:codex",
+  "at": "2026-08-23T14:36:49Z",
+  "event_kind": "updated",
+  "id": "01M0QGV054GF3B3ZYPVK85WZBY",
+  "object": "DOC-T-0001",
+  "object_kind": "task",
+  "payload": {
+    "changes": {
+      "next_action": {
+        "from": "Execute the task contract and satisfy proof mode.",
+        "to": "Review evidence and close or return to rework."
+      },
+      "next_owner": {
+        "from": "agent",
+        "to": "reviewer"
+      },
+      "next_ref": {
+        "from": "DOC-T-0001",
+        "to": ""
+      },
+      "next_source": {
+        "from": "task",
+        "to": "review_policy"
+      },
+      "readiness": {
+        "from": "held",
+        "to": "waiting_on_review"
+      }
+    },
+    "source": "task:DOC-T-0001"
+  },
+  "project": "rzn-phone",
+  "schema": "tusker.event/v1"
+}

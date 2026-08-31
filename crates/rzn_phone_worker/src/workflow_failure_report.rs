@@ -493,7 +493,7 @@ mod tests {
     fn sample_context() -> FlowFailureContext {
         FlowFailureContext {
             surface: "ios".to_string(),
-            flow: "ios/messages-send-v1".to_string(),
+            flow: "ios/messages-send".to_string(),
             flow_version: "2026-04-24.1".to_string(),
             app_version: "0.2.5".to_string(),
             platform: "ios".to_string(),
@@ -519,7 +519,7 @@ mod tests {
                 "product": "rzn-phone",
                 "flow_kind": "phone_automation",
                 "surface": "ios",
-                "flow": "ios/messages-send-v1",
+                "flow": "ios/messages-send",
                 "flow_version": "2026-04-24.1",
                 "failed_stage": "tap_recipient",
                 "error": "element_not_found",
@@ -534,7 +534,7 @@ mod tests {
         let draft = draft_from_value(
             &json!({
                 "surface": "ios",
-                "flow": "ios/messages-send-v1",
+                "flow": "ios/messages-send",
                 "flow_version": "2026-04-24.1",
                 "failed_stage": "tap_recipient",
                 "error": "ELEMENT_NOT_FOUND",

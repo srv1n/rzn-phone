@@ -1,7 +1,3 @@
-fn want_pretty(explicit_pretty: bool) -> bool {
-    explicit_pretty || (io::stdout().is_terminal() && !plain_mode_forced())
-}
-
 fn plain_mode_forced() -> bool {
     env::var("RZN_CLI_PLAIN")
         .ok()

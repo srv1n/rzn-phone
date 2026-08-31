@@ -2,6 +2,7 @@
   "name": "phone_notifications.list_recent_notifications",
   "arguments": {
     "deviceId": "<UDID>",
+    "privacyGate": "notifications",
     "maxNotifications": 25,
     "backgroundAppOnFinish": false
   }

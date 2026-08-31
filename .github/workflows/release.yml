@@ -25,9 +25,7 @@ jobs:
       version: ${{ steps.vars.outputs.version }}
       repo: ${{ steps.vars.outputs.repo }}
     steps:
-      # Action SHAs intentionally pin the current reviewed majors/tags. Do not
-      # bump action majors here; Node 24 action-major compatibility is tracked
-      # by phone-msi.
+      # Action SHAs pin the reviewed action revisions.
       - name: Checkout tagged source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:

@@ -2,6 +2,7 @@
   "name": "phone_calls.list_recent_calls",
   "arguments": {
     "deviceId": "<UDID>",
+    "privacyGate": "calls",
     "maxCalls": 25,
     "backgroundAppOnFinish": true
   }

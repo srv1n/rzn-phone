@@ -89,7 +89,7 @@ def fallback_notes(
     files: list[str],
     diff_summary: str,
 ) -> str:
-    highlights = commit_items[:8] or ["Initial public release cut."]
+    highlights = commit_items[:8] or ["Initial build artifact cut."]
     file_lines = files[:10]
     lines = [
         "## Highlights",

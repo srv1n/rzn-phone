@@ -16,11 +16,14 @@ Safe defaults:
 Usage:
 
 - Replace `<UDID>` with the paired iPhone device id.
+- These are private reads. Pass `privacyGate` with value `messages` for normal
+  message reads or `otp` for the OTP example. The result can contain message
+  text; do not log or index it.
 - For normal local use, prefer the CLI:
 
 ```bash
 rzn-phone tool call phone_messages.list_recent_threads \
-  --args-json '{"deviceId":"<UDID>","maxThreads":25,"backgroundAppOnFinish":true}'
+  --args-json '{"deviceId":"<UDID>","privacyGate":"messages","maxThreads":25,"backgroundAppOnFinish":true}'
 ```
 
 - Treat the `*.tool_call.json` files as raw MCP `tools/call` payload examples when you are integrating at the worker protocol layer.

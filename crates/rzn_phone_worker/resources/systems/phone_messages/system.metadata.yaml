@@ -37,42 +37,47 @@ setup_steps:
     description: "Confirm the worker can create a session and reach the paired iPhone."
 
 context_parameters:
-  - id: "device_id"
+  - id: "privacyGate"
+    label: "Privacy gate"
+    kind: "string"
+    required: true
+    description: "Use messages for message reads or otp for OTP lookup."
+  - id: "deviceId"
     label: "Device ID"
     kind: "device_selector"
     required: true
-  - id: "thread_id"
+  - id: "threadId"
     label: "Thread ID"
     kind: "string"
     required: false
-  - id: "thread_index"
+  - id: "threadIndex"
     label: "Thread index"
     kind: "integer"
     required: false
     default: 0
-  - id: "max_threads"
+  - id: "maxThreads"
     label: "Max threads"
     kind: "integer"
     required: false
     default: 25
-  - id: "max_messages"
+  - id: "maxMessages"
     label: "Max messages"
     kind: "integer"
     required: false
     default: 20
-  - id: "thread_contains"
+  - id: "threadContains"
     label: "Thread contains"
     kind: "string"
     required: false
-  - id: "sender_contains"
+  - id: "senderContains"
     label: "Sender contains"
     kind: "string"
     required: false
-  - id: "message_contains"
+  - id: "messageContains"
     label: "Message contains"
     kind: "string"
     required: false
-  - id: "code_length"
+  - id: "codeLength"
     label: "Exact code length"
     kind: "integer"
     required: false
@@ -83,6 +88,7 @@ quick_starts:
     description: "Open Messages and extract the visible conversation list with a read-only tool."
     tool_id: "phone_messages.list_recent_threads"
     args:
+      privacyGate: "messages"
       maxThreads: 25
     example_path: "examples/phone_messages/list_recent_threads.tool_call.json"
   - id: "read_latest_messages"
@@ -90,6 +96,7 @@ quick_starts:
     description: "Open a thread and collect the visible message rows without sending anything."
     tool_id: "phone_messages.read_latest_messages"
     args:
+      privacyGate: "messages"
       threadIndex: 0
       maxMessages: 20
     example_path: "examples/phone_messages/read_latest_messages.tool_call.json"
@@ -98,6 +105,7 @@ quick_starts:
     description: "Scan recent threads and rank likely authentication-code candidates."
     tool_id: "phone_messages.find_recent_otp"
     args:
+      privacyGate: "otp"
       maxThreads: 5
       maxMessages: 8
     example_path: "examples/phone_messages/find_recent_otp.tool_call.json"
@@ -126,7 +134,7 @@ result_handling:
         record_type: "message_thread"
         records_path: "threads[]"
         fields:
-          external_id: "thread_id"
+          external_id: "threadId"
           title: "title"
           body_text: "preview"
           published_at: "timestamp"
@@ -160,7 +168,7 @@ result_handling:
           body_text: "body"
           author: "sender"
           published_at: "sent_at"
-          metadata.thread_id: "thread_id"
+          metadata.thread_id: "threadId"
           metadata.position: "position"
         bm25_text:
           template: "{{title}}\n\n{{body_text}}"

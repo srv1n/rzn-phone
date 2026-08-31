@@ -377,7 +377,6 @@ pub fn tool_capability_family(name: &str) -> &'static str {
     } else if name.starts_with("ios.web.goto")
         || name.starts_with("ios.action.back")
         || name.starts_with("ios.action.scroll")
-        || name.starts_with("ios.action.swipe")
         || name.starts_with("ios.action.scroll_until")
         || name.starts_with("ios.app.activate")
     {

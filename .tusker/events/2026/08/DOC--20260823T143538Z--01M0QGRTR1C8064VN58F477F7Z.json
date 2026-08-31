@@ -1,0 +1,10 @@
+{
+  "actor": "agent:sarav",
+  "at": "2026-08-23T14:35:38Z",
+  "event_kind": "created",
+  "id": "01M0QGRTR1C8064VN58F477F7Z",
+  "object": "DOC",
+  "object_kind": "epic",
+  "project": "rzn-phone",
+  "schema": "tusker.event/v1"
+}

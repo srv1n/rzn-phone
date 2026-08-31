@@ -54,8 +54,6 @@ enum CommandKind {
         #[command(subcommand)]
         command: ToolCommand,
     },
-    /// Alias for `tool list`.
-    Tools(ToolsAliasArgs),
     /// Show recent workflow runs.
     Recent(RecentArgs),
     /// Manage local run history.
@@ -73,11 +71,8 @@ enum CommandKind {
         #[command(subcommand)]
         command: FavoriteCommand,
     },
-    /// List favorite workflows.
-    Favorites(JsonOutputArgs),
     /// Print shell completion script.
     Completion(CompletionArgs),
-    #[command(alias = "skills")]
     /// Install or manage bundled agent skills.
     Skill {
         #[command(subcommand)]
@@ -92,11 +87,6 @@ enum CommandKind {
     Report {
         #[command(subcommand)]
         command: ReportCommand,
-    },
-    /// Workflow command aliases.
-    Workflow {
-        #[command(subcommand)]
-        command: WorkflowAliasCommand,
     },
     /// Show paths to installed examples.
     Examples {
@@ -153,33 +143,11 @@ enum ToolCommand {
     Call(ToolCallArgs),
 }
 
-#[derive(Args)]
-struct ToolsAliasArgs {
-    #[arg(long)]
-    direct: bool,
-    #[arg(long)]
-    search: Option<String>,
-    #[arg(long)]
-    family: Option<String>,
-    #[arg(long)]
-    tier: Option<String>,
-    #[arg(long)]
-    json: bool,
-    #[arg(long)]
-    pretty: bool,
-}
-
 #[derive(Subcommand)]
 enum FavoriteCommand {
     Add { reference: String },
     Remove { reference: String },
     List(JsonOutputArgs),
-}
-
-#[derive(Subcommand)]
-enum WorkflowAliasCommand {
-    List(ListArgs),
-    Show(ShowArgs),
 }
 
 #[derive(Subcommand)]
@@ -202,7 +170,6 @@ enum SkillCommand {
 enum ReportCommand {
     #[command(name = "workflow-broken")]
     WorkflowBroken(WorkflowBrokenReportArgs),
-    Queue(ReportQueueArgs),
 }
 
 #[derive(Args)]
@@ -216,14 +183,6 @@ struct WorkflowBrokenReportArgs {
     #[arg(long = "failed-stage")]
     failed_stage: Option<String>,
     #[arg(long)]
-    system: Option<String>,
-    #[arg(long)]
-    workflow: Option<String>,
-    #[arg(long = "version")]
-    workflow_version: Option<String>,
-    #[arg(long = "step")]
-    failed_step: Option<String>,
-    #[arg(long)]
     error: String,
     #[arg(long = "app-version")]
     app_version: String,
@@ -231,18 +190,6 @@ struct WorkflowBrokenReportArgs {
     platform: String,
     #[arg(long)]
     note: Option<String>,
-    #[arg(long = "dry-run", default_value_t = false)]
-    dry_run: bool,
-}
-
-#[derive(Args)]
-struct ReportQueueArgs {
-    #[arg(long, default_value = "list")]
-    action: String,
-    #[arg(long)]
-    json: bool,
-    #[arg(long)]
-    pretty: bool,
 }
 
 #[derive(Subcommand)]
@@ -631,6 +578,47 @@ mod cli_arg_tests {
                 assert!(!args.lock_device_on_exit);
             }
             _ => panic!("expected shutdown command"),
+        }
+    }
+
+    #[test]
+    fn removed_alias_commands_are_rejected() {
+        for argv in [
+            vec!["rzn-phone", "tools"],
+            vec!["rzn-phone", "workflow", "list"],
+            vec!["rzn-phone", "favorites"],
+            vec!["rzn-phone", "skills", "list"],
+            vec!["rzn-phone", "report", "queue"],
+        ] {
+            assert!(Cli::try_parse_from(argv).is_err());
+        }
+    }
+
+    #[test]
+    fn report_accepts_only_canonical_option_names() {
+        let base = [
+            "rzn-phone",
+            "report",
+            "workflow-broken",
+            "--flow",
+            "safari/google_search",
+            "--flow-version",
+            "0.0.3",
+            "--failed-stage",
+            "run",
+            "--error",
+            "failed",
+            "--app-version",
+            "17.0",
+            "--platform",
+            "ios",
+        ];
+        assert!(Cli::try_parse_from(base).is_ok());
+        for removed in ["--workflow", "--version", "--step", "--system", "--dry-run"] {
+            let mut argv = base.to_vec();
+            argv.push(removed);
+            argv.push("value");
+            assert!(Cli::try_parse_from(argv).is_err(), "accepted {removed}");
         }
     }
 }

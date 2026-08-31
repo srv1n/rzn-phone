@@ -2,7 +2,7 @@
 set -euo pipefail
 
 INSTALL_ROOT="${RZN_PHONE_INSTALL_ROOT:-$HOME/.local/share/rzn-phone}"
-STATE_DIR="${RZN_PHONE_STATE_DIR:-$HOME/.rzn-phone}"
+STATE_DIR="${RZN_PHONE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/rzn-phone}"
 SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd || pwd)"
 RELEASE_ARCHIVE_HELPER="$SCRIPT_DIR/release_archive.py"
@@ -34,7 +34,7 @@ Options:
   --install-root <dir>     Override install root (default: ~/.local/share/rzn-phone).
   --bin-dir <dir>          Override shim directory.
   --uninstall              Remove the installed runtime and installer-managed shim.
-  --purge-state            With --uninstall, also remove local history/favorites (~/.rzn-phone).
+  --purge-state            With --uninstall, also remove local history and favorites.
   --state-dir <dir>        Override state dir used by --purge-state.
   -h, --help               Show this help.
 

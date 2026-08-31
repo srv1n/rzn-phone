@@ -63,7 +63,6 @@ def unix_launcher() -> str:
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export RZN_PLUGIN_DIR="$ROOT"
-export CLAUDE_PLUGIN_ROOT="$ROOT"
 exec "$ROOT/libexec/rzn-phone-worker" "$@"
 """
 
@@ -73,7 +72,6 @@ def windows_cmd_launcher() -> str:
 setlocal
 set "ROOT=%~dp0.."
 set "RZN_PLUGIN_DIR=%ROOT%"
-set "CLAUDE_PLUGIN_ROOT=%ROOT%"
 "%ROOT%\\libexec\\rzn-phone-worker.exe" %*
 """
 
@@ -81,7 +79,6 @@ set "CLAUDE_PLUGIN_ROOT=%ROOT%"
 def windows_ps1_launcher() -> str:
     return """$Root = Split-Path -Parent $PSScriptRoot
 $env:RZN_PLUGIN_DIR = $Root
-$env:CLAUDE_PLUGIN_ROOT = $Root
 & (Join-Path $Root "libexec\\rzn-phone-worker.exe") @args
 exit $LASTEXITCODE
 """

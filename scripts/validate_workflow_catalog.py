@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / "crates" / "rzn_phone_worker" / "resources" / "workflows"
-SCHEMA_PATH = ROOT / "schema" / "rzn-mobile-workflow-v1.schema.json"
+SCHEMA_PATH = ROOT / "schema" / "rzn-mobile-workflow.schema.json"
 BUNDLE_CONFIG = ROOT / "plugin_bundle" / "rzn-phone.bundle.json"
 CARGO_TOML = ROOT / "crates" / "rzn_phone_worker" / "Cargo.toml"
 TOOLS_RS = ROOT / "crates" / "rzn_phone_worker" / "src" / "tools.rs"
@@ -144,7 +144,7 @@ def clamp_integer(value: int, spec: dict) -> int:
 def workflow_sort_key(item):
     data = item[1]
     name = data["name"]
-    system = name.split(".", 1)[0]
+    system = canonical_workflow_id(name).split("/", 1)[0]
     order = APP_ORDER.index(system) if system in APP_ORDER else len(APP_ORDER)
     return (order, name)
 
@@ -152,7 +152,7 @@ def workflow_sort_key(item):
 def build_args(workflow: dict) -> dict:
     inputs = workflow.get("inputs", {})
     name = workflow["name"]
-    system = name.split(".", 1)[0]
+    system = canonical_workflow_id(name).split("/", 1)[0]
     args = {}
 
     if system == "google_maps":
@@ -302,8 +302,6 @@ def validate_json_schema(workflows: list[tuple[Path, dict]], errors: list[str]) 
 
 def validate_workflow_shape(path: Path, workflow: dict, known_tools: set[str], errors: list[str]) -> None:
     label = path.name
-    if workflow.get("schema_version") != "rzn.mobile.workflow.v1":
-        errors.append(f"{label}: schema_version must be rzn.mobile.workflow.v1")
 
     name = workflow.get("name")
     if not isinstance(name, str) or not name.strip():
@@ -379,7 +377,7 @@ def validate_workflow_shape(path: Path, workflow: dict, known_tools: set[str], e
             elif root not in known_vars:
                 errors.append(f"{label}: step {idx} references undeclared template {{{{{ref}}}}}")
 
-        save_as = step.get("saveAs", step.get("save_as"))
+        save_as = step.get("saveAs")
         if isinstance(save_as, str) and save_as.strip():
             saved_outputs.add(save_as.strip())
 
@@ -611,7 +609,7 @@ def shutdown_runtime() -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate the shipped rzn-phone workflow catalog.")
+    parser = argparse.ArgumentParser(description="Validate the repository rzn-phone workflow catalog.")
     parser.add_argument("--offline", action="store_true", help="Run static schema/catalog validation without a device.")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable validation output.")
     parser.add_argument("--udid", help="Physical iPhone UDID to target.")
@@ -636,11 +634,11 @@ def main() -> int:
 
     for path, workflow in parse_workflows():
         workflow_name = workflow["name"]
-        canonical = workflow_name.replace(".", "/", 1)
+        canonical = canonical_workflow_id(workflow_name)
         if selected and workflow_name not in selected and canonical not in selected:
             continue
 
-        system = workflow_name.split(".", 1)[0]
+        system = canonical.split("/", 1)[0]
         if current_system != system and current_system is not None and not args.skip_shutdown:
             shutdown_runtime()
         current_system = system

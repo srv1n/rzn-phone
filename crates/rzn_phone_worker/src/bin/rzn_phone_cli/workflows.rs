@@ -26,48 +26,27 @@ fn read_json_input(raw: &str) -> Result<Value> {
     serde_json::from_str(&text).with_context(|| "invalid JSON input".to_string())
 }
 
-fn canonicalize_workflow_ref(value: &str) -> String {
-    let raw = value.trim().replace('\\', "/");
-    if let Some((system, workflow)) = raw.split_once('/') {
-        return format!(
-            "{}/{}",
-            system.trim_matches(['/', '.']).trim(),
-            workflow.trim_matches(['/', '.']).trim()
-        );
-    }
-    if let Some((system, workflow)) = raw.split_once('.') {
-        return format!(
-            "{}/{}",
-            system.trim_matches(['/', '.']).trim(),
-            workflow.trim_matches(['/', '.']).trim()
-        );
-    }
-    raw.trim_matches(['/', '.']).to_string()
+fn parse_workflow_ref(value: &str) -> Result<String> {
+    workflows::WorkflowReference::parse(value)
+        .map(|reference| reference.canonical_id())
+        .ok_or_else(|| anyhow!("workflow ref '{}' must use system/workflow form", value))
 }
 
-fn normalize_workflow_ref(first: &str, second: Option<&str>) -> Result<String> {
+fn parse_workflow_parts(first: &str, second: Option<&str>) -> Result<String> {
     let joined = if let Some(second) = second {
         format!("{}/{}", first, second)
     } else {
         first.to_string()
     };
-    let normalized = canonicalize_workflow_ref(&joined);
-    if normalized.contains('/') {
-        Ok(normalized)
-    } else {
-        bail!(
-            "workflow ref '{}' is missing a system/workflow shape",
-            joined
-        )
-    }
+    parse_workflow_ref(&joined)
 }
 
 fn resolve_run_target(first: &str, second: Option<&str>) -> Result<RunTarget> {
     if second.is_some() {
-        return Ok(RunTarget::Workflow(normalize_workflow_ref(first, second)?));
+        return Ok(RunTarget::Workflow(parse_workflow_parts(first, second)?));
     }
-    if first.contains('/') || first.contains('.') {
-        return Ok(RunTarget::Workflow(normalize_workflow_ref(first, None)?));
+    if first.contains('/') {
+        return Ok(RunTarget::Workflow(parse_workflow_parts(first, None)?));
     }
 
     let requested = normalize_text(first);
@@ -98,10 +77,10 @@ fn resolve_run_target(first: &str, second: Option<&str>) -> Result<RunTarget> {
 }
 
 fn find_workflow(reference: &str) -> Result<workflows::WorkflowInfo> {
-    let wanted = canonicalize_workflow_ref(reference);
+    let wanted = parse_workflow_ref(reference)?;
     let all = workflows::list_workflows(None, None);
     all.iter()
-        .find(|item| item.id == wanted || canonicalize_workflow_ref(&item.name) == wanted)
+        .find(|item| item.id == wanted)
         .cloned()
         .ok_or_else(|| unknown_workflow_error(reference, &wanted, &all))
 }
@@ -113,9 +92,7 @@ fn unknown_workflow_error(
 ) -> anyhow::Error {
     let suggestions = closest_matches(
         normalized,
-        workflows
-            .iter()
-            .flat_map(|item| [item.id.clone(), canonicalize_workflow_ref(&item.name)]),
+        workflows.iter().map(|item| item.id.clone()),
     );
     if suggestions.is_empty() {
         anyhow!("unknown workflow '{}'", reference)
@@ -392,7 +369,7 @@ fn workflow_title_suffix(workflow: &Value) -> String {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .unwrap_or("");
-    if label.is_empty() || canonicalize_workflow_ref(label) == canonicalize_workflow_ref(short) {
+    if label.is_empty() || label == short {
         String::new()
     } else {
         format!(" - {}", label)

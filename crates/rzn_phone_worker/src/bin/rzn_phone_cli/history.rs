@@ -19,22 +19,16 @@ struct HistoryEntry {
     smart_cache: bool,
 }
 
-fn state_dir() -> Result<PathBuf> {
-    let root = if let Ok(custom) = env::var("RZN_PHONE_STATE_DIR") {
-        PathBuf::from(custom)
-    } else {
-        PathBuf::from(env::var("HOME").unwrap_or_else(|_| "/tmp".to_string())).join(".rzn-phone")
-    };
-    create_private_dir(&root)?;
-    Ok(root)
-}
-
 fn history_path() -> Result<PathBuf> {
-    Ok(state_dir()?.join("history.jsonl"))
+    let root = rzn_phone_worker::config::state_dir();
+    create_private_dir(&root)?;
+    Ok(root.join("history.jsonl"))
 }
 
 fn favorites_path() -> Result<PathBuf> {
-    Ok(state_dir()?.join("favorites.json"))
+    let root = rzn_phone_worker::config::state_dir();
+    create_private_dir(&root)?;
+    Ok(root.join("favorites.json"))
 }
 
 fn load_history() -> Result<Vec<HistoryEntry>> {

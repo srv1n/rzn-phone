@@ -1,12 +1,12 @@
 ---
 name: rzn-phone-automation
 description: >-
-  Use when an agent needs to automate actions on a real iPhone with RZN Phone Automation: run shipped phone workflows, inspect app state, read phone surfaces like Messages/Calls/Notifications, drive native apps or Safari with direct ios.* tools when no workflow fits, or turn a repeated phone action into workflow JSON. Do not use for ordinary web browsing, simulator-only app testing, generic XCTest/Appium test suites, or tasks that do not need a physical logged-in phone.
+  Use when an agent needs to automate actions on a real iPhone with RZN Phone Automation: run current phone workflows, inspect app state, read phone surfaces like Messages/Calls/Notifications, drive native apps or Safari with direct ios.* tools when no workflow fits, or turn a repeated phone action into workflow JSON. Do not use for ordinary web browsing, simulator-only app testing, generic XCTest/Appium test suites, or tasks that do not need a physical logged-in phone.
 ---
 
 # RZN Phone Automation
 
-Use this skill when the task needs a real, logged-in iPhone. The default interface is the public `rzn-phone` CLI. Authoring or debugging workflows is a secondary mode; the first job is to solve the phone task safely.
+Use this skill when the task needs a real, logged-in iPhone. The default interface is the current `rzn-phone` CLI. Authoring or debugging workflows is a secondary mode; the first job is to solve the phone task safely.
 
 ## Start Here
 
@@ -30,7 +30,7 @@ rzn-phone tool list --direct
 
 | Need | Path |
 | --- | --- |
-| A shipped phone workflow exists | Run the named workflow |
+| A current phone workflow exists | Run the named workflow |
 | The flow is close but selectors/args need tuning | Inspect nearby workflow JSON and edit the pack |
 | No workflow fits yet | Use the LLM-auto/autonomy loop with direct `ios.*` tools |
 | The direct loop becomes repeatable | Promote it into workflow JSON |
@@ -53,7 +53,7 @@ Read only what the task needs:
 
 - Prefer an existing workflow before writing a new one.
 - Use canonical slash ids in prompts and commands: `system/workflow`.
-- Preserve legacy dot-form `name` fields inside existing JSON unless a deliberate migration is part of the task.
+- Use slash workflow IDs in JSON, prompts, and commands.
 - Keep app-specific selectors in workflow JSON, not Rust core, unless the defect is truly generic runtime behavior.
 - Default to read-only or dry-run. Mutating workflows need both an execute arg such as `execute_like=true` and the runner gate `--commit 1`.
 - Re-observe after every scroll, navigation, modal open, or state change before tapping. Stale geometry is where automation gets dumb.
@@ -111,7 +111,7 @@ rzn-phone tool call ios.appium.ensure
 rzn-phone tool call ios.session.create \
   --args-json '{"udid":"<udid>","kind":"native_app","bundleId":"com.apple.mobilesafari"}'
 rzn-phone tool call ios.ui.observe_compact --args-json '{"maxNodes":120}'
-rzn-phone tool call ios.action.tap --args-json '{"target":{"encodedId":"btn_1"}}'
+rzn-phone tool call ios.action.tap --args-json '{"target":{"encodedId":"btn_1"},"commit":true}'
 rzn-phone tool call ios.ui.observe_compact --args-json '{"maxNodes":120}'
 ```
 

@@ -81,39 +81,30 @@ pub struct WorkflowReference {
 }
 
 impl WorkflowReference {
-    fn parse(raw: &str) -> Option<Self> {
-        let trimmed = raw.trim().replace('\\', "/");
-        if trimmed.is_empty() {
-            return None;
-        }
-
-        let (system, workflow) = if let Some((system, workflow)) = trimmed.split_once('/') {
-            (system.trim(), workflow.trim())
-        } else if let Some((system, workflow)) = trimmed.split_once('.') {
-            (system.trim(), workflow.trim())
-        } else {
-            return None;
-        };
-
+    pub fn parse(raw: &str) -> Option<Self> {
+        let (system, workflow) = raw.split_once('/')?;
         Self::from_parts(system, workflow)
     }
 
     fn from_parts(system: &str, workflow: &str) -> Option<Self> {
-        let system = system.trim().trim_matches(['/', '.']).to_string();
-        let workflow = workflow.trim().trim_matches(['/', '.']).to_string();
-        if system.is_empty() || workflow.is_empty() {
+        if system.is_empty()
+            || workflow.is_empty()
+            || system.contains(['/', '.'])
+            || workflow.contains(['/', '.'])
+            || system.chars().any(char::is_whitespace)
+            || workflow.chars().any(char::is_whitespace)
+        {
             return None;
         }
 
-        Some(Self { system, workflow })
+        Some(Self {
+            system: system.to_string(),
+            workflow: workflow.to_string(),
+        })
     }
 
     pub fn canonical_id(&self) -> String {
         format!("{}/{}", self.system, self.workflow)
-    }
-
-    pub fn legacy_name(&self) -> String {
-        format!("{}.{}", self.system, self.workflow)
     }
 }
 
@@ -283,10 +274,10 @@ pub fn merge_input_defaults(def: &FileWorkflowDefinition, vars: &mut Value) -> R
 }
 
 pub fn load_file_workflow(name: &str) -> Option<FileWorkflowDefinition> {
-    let want = name.trim();
-    if want.is_empty() {
+    if name.is_empty() {
         return None;
     }
+    let want = name;
 
     let catalog = cached_file_workflow_catalog();
     for entry in catalog.entries {
@@ -316,7 +307,7 @@ mod tests {
     #[test]
     fn merge_input_defaults_injects_missing_values() {
         let def: FileWorkflowDefinition = serde_json::from_value(json!({
-            "name": "test.workflow",
+            "name": "test/workflow",
             "version": "1.0.0",
             "inputs": {
                 "flag": { "type": "boolean", "default": false },
@@ -336,7 +327,7 @@ mod tests {
     #[test]
     fn merge_input_defaults_rejects_missing_required_inputs() {
         let def: FileWorkflowDefinition = serde_json::from_value(json!({
-            "name": "test.workflow",
+            "name": "test/workflow",
             "version": "1.0.0",
             "inputs": {
                 "review_title": { "type": "string", "required": true }
@@ -351,35 +342,39 @@ mod tests {
     }
 
     #[test]
-    fn workflow_reference_parses_dot_and_slash_forms() {
+    fn workflow_reference_accepts_slash_form_only() {
         let slash = WorkflowReference::parse("google_maps/open_place").expect("slash ref");
-        let dot = WorkflowReference::parse("google_maps.open_place").expect("dot ref");
-
-        assert_eq!(slash, dot);
         assert_eq!(slash.canonical_id(), "google_maps/open_place");
-        assert_eq!(slash.legacy_name(), "google_maps.open_place");
+        assert!(WorkflowReference::parse("google_maps.open_place").is_none());
+        assert!(WorkflowReference::parse(" google_maps/open_place").is_none());
     }
 
     #[test]
-    fn compose_workflow_reference_normalizes_parts() {
+    fn compose_workflow_reference_requires_slash_safe_parts() {
         assert_eq!(
-            compose_workflow_reference(" google_maps ", "/open_place/"),
+            compose_workflow_reference("google_maps", "open_place"),
             Some("google_maps/open_place".to_string())
         );
+        assert!(compose_workflow_reference(" google_maps ", "open_place").is_none());
+        assert!(compose_workflow_reference("google_maps", "/open_place").is_none());
     }
 
     #[test]
     fn workflow_matches_accepts_canonical_slash_ref() {
         assert!(workflow_matches(
-            "safari.google_search",
+            "safari/google_search",
             "safari/google_search"
+        ));
+        assert!(!workflow_matches(
+            "safari/google_search",
+            "safari.google_search"
         ));
     }
 
     #[test]
     fn workflow_info_carries_capability_metadata() {
         let def: FileWorkflowDefinition = serde_json::from_value(json!({
-            "name": "safari.google_search",
+            "name": "safari/google_search",
             "version": "1.0.0",
             "capability": {
                 "family": "extract",
@@ -401,7 +396,7 @@ mod tests {
     #[test]
     fn workflow_info_carries_help_metadata() {
         let def: FileWorkflowDefinition = serde_json::from_value(json!({
-            "name": "safari.google_search",
+            "name": "safari/google_search",
             "version": "1.0.0",
             "description": "Search Google in Safari.",
             "required_variables": ["query"],
@@ -463,7 +458,7 @@ mod tests {
                 id: "reddit/open_post".to_string(),
                 system: "reddit".to_string(),
                 workflow: "open_post".to_string(),
-                name: "reddit.open_post".to_string(),
+                name: "reddit/open_post".to_string(),
                 version: "1.0.0".to_string(),
                 description: "Open a Reddit post".to_string(),
                 required_variables: Vec::new(),
@@ -476,7 +471,7 @@ mod tests {
                 id: "appstore/search_results".to_string(),
                 system: "appstore".to_string(),
                 workflow: "search_results".to_string(),
-                name: "appstore.search_results".to_string(),
+                name: "appstore/search_results".to_string(),
                 version: "1.0.0".to_string(),
                 description: "Search App Store".to_string(),
                 required_variables: Vec::new(),
@@ -489,7 +484,7 @@ mod tests {
                 id: "reddit/comment_post".to_string(),
                 system: "reddit".to_string(),
                 workflow: "comment_post".to_string(),
-                name: "reddit.comment_post".to_string(),
+                name: "reddit/comment_post".to_string(),
                 version: "1.0.0".to_string(),
                 description: "Comment on a Reddit post".to_string(),
                 required_variables: Vec::new(),
@@ -595,7 +590,6 @@ mod tests {
         let _guard = ENV_LOCK.lock().unwrap();
         let old_extra = env::var_os("RZN_IOS_WORKFLOW_DIRS");
         let old_plugin = env::var_os("RZN_PLUGIN_DIR");
-        let old_plugin_root = env::var_os("CLAUDE_PLUGIN_ROOT");
         let root = env::temp_dir().join(format!(
             "rzn-phone-workflows-{}-{}",
             std::process::id(),
@@ -611,7 +605,7 @@ mod tests {
         fs::write(
             local.join("demo_open.json"),
             json!({
-                "name": "demo.open",
+                "name": "demo/open",
                 "version": "local",
                 "description": "Local override"
             })
@@ -621,7 +615,7 @@ mod tests {
         fs::write(
             plugin.join("demo_open.json"),
             json!({
-                "name": "demo.open",
+                "name": "demo/open",
                 "version": "plugin",
                 "description": "Plugin copy"
             })
@@ -630,7 +624,6 @@ mod tests {
         .expect("plugin workflow");
         env::set_var("RZN_IOS_WORKFLOW_DIRS", &local);
         env::set_var("RZN_PLUGIN_DIR", root.join("plugin"));
-        env::remove_var("CLAUDE_PLUGIN_ROOT");
 
         let workflows = super::list_workflows(Some("demo"), None);
         let workflow = workflows
@@ -641,7 +634,6 @@ mod tests {
 
         restore_env("RZN_IOS_WORKFLOW_DIRS", old_extra);
         restore_env("RZN_PLUGIN_DIR", old_plugin);
-        restore_env("CLAUDE_PLUGIN_ROOT", old_plugin_root);
         let _ = fs::remove_dir_all(root);
     }
 
@@ -650,7 +642,6 @@ mod tests {
         let _guard = ENV_LOCK.lock().unwrap();
         let old_extra = env::var_os("RZN_IOS_WORKFLOW_DIRS");
         let old_plugin = env::var_os("RZN_PLUGIN_DIR");
-        let old_plugin_root = env::var_os("CLAUDE_PLUGIN_ROOT");
         let root = env::temp_dir().join(format!(
             "rzn-phone-workflow-diagnostics-{}",
             std::process::id()
@@ -660,7 +651,6 @@ mod tests {
         fs::write(&bad_path, "{not json").expect("bad workflow");
         env::set_var("RZN_IOS_WORKFLOW_DIRS", &root);
         env::remove_var("RZN_PLUGIN_DIR");
-        env::remove_var("CLAUDE_PLUGIN_ROOT");
 
         let diagnostics = super::list_workflow_diagnostics();
         assert!(diagnostics.iter().any(|diagnostic| diagnostic.path
@@ -669,7 +659,6 @@ mod tests {
 
         restore_env("RZN_IOS_WORKFLOW_DIRS", old_extra);
         restore_env("RZN_PLUGIN_DIR", old_plugin);
-        restore_env("CLAUDE_PLUGIN_ROOT", old_plugin_root);
         let _ = fs::remove_dir_all(root);
     }
 
@@ -678,7 +667,6 @@ mod tests {
         let _guard = ENV_LOCK.lock().unwrap();
         let old_extra = env::var_os("RZN_IOS_WORKFLOW_DIRS");
         let old_plugin = env::var_os("RZN_PLUGIN_DIR");
-        let old_plugin_root = env::var_os("CLAUDE_PLUGIN_ROOT");
         let root = env::temp_dir().join(format!(
             "rzn-phone-workflow-cache-{}-{}",
             std::process::id(),
@@ -690,12 +678,11 @@ mod tests {
         fs::create_dir_all(&root).expect("workflow dir");
         env::set_var("RZN_IOS_WORKFLOW_DIRS", &root);
         env::remove_var("RZN_PLUGIN_DIR");
-        env::remove_var("CLAUDE_PLUGIN_ROOT");
 
         fs::write(
             root.join("demo_first.json"),
             json!({
-                "name": "demo.first",
+                "name": "demo/first",
                 "version": "1.0.0",
                 "description": "First"
             })
@@ -709,7 +696,7 @@ mod tests {
         fs::write(
             root.join("demo_second.json"),
             json!({
-                "name": "demo.second",
+                "name": "demo/second",
                 "version": "1.0.0",
                 "description": "Second"
             })
@@ -726,7 +713,6 @@ mod tests {
 
         restore_env("RZN_IOS_WORKFLOW_DIRS", old_extra);
         restore_env("RZN_PLUGIN_DIR", old_plugin);
-        restore_env("CLAUDE_PLUGIN_ROOT", old_plugin_root);
         let _ = fs::remove_dir_all(root);
     }
 
@@ -750,10 +736,7 @@ fn workflow_info_from_definition(def: FileWorkflowDefinition) -> WorkflowInfo {
             input.required = true;
         }
     }
-    let reference = WorkflowReference::parse(&def.name).unwrap_or_else(|| WorkflowReference {
-        system: "misc".to_string(),
-        workflow: def.name.clone(),
-    });
+    let reference = WorkflowReference::parse(&def.name).expect("validated workflow reference");
 
     WorkflowInfo {
         id: reference.canonical_id(),
@@ -828,19 +811,7 @@ fn merge_help_parameters(
 }
 
 fn workflow_matches(candidate: &str, want: &str) -> bool {
-    if candidate.trim() == want.trim() {
-        return true;
-    }
-
-    match (
-        WorkflowReference::parse(candidate),
-        WorkflowReference::parse(want),
-    ) {
-        (Some(candidate_ref), Some(want_ref)) => {
-            candidate_ref.canonical_id() == want_ref.canonical_id()
-        }
-        _ => false,
-    }
+    candidate == want
 }
 
 fn list_file_workflows(
@@ -948,6 +919,13 @@ fn load_file_workflow_catalog(dirs: &[PathBuf]) -> WorkflowCatalog {
                 });
                 continue;
             }
+            if WorkflowReference::parse(&def.name).is_none() {
+                diagnostics.push(WorkflowLoadDiagnostic {
+                    path: path.display().to_string(),
+                    reason: "workflow name must use system/workflow form".to_string(),
+                });
+                continue;
+            }
             let info = workflow_info_from_definition(def.clone());
             entries.push(WorkflowCatalogEntry { def, info });
         }
@@ -1008,11 +986,6 @@ fn workflow_search_dirs() -> Vec<PathBuf> {
         let root = PathBuf::from(plugin_dir);
         dirs.push(root.join("resources").join("workflows"));
     }
-    if let Ok(plugin_root) = env::var("CLAUDE_PLUGIN_ROOT") {
-        let root = PathBuf::from(plugin_root);
-        dirs.push(root.join("resources").join("workflows"));
-    }
-
     // Dev fallback (repo root as cwd in claude_plugin/.mcp.json).
     dirs.push(PathBuf::from("crates/rzn_phone_worker/resources/workflows"));
 

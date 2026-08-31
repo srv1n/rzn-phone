@@ -2,6 +2,7 @@
   "name": "phone_messages.list_recent_threads",
   "arguments": {
     "deviceId": "<UDID>",
+    "privacyGate": "messages",
     "maxThreads": 25,
     "backgroundAppOnFinish": true
   }

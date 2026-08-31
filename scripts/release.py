@@ -124,7 +124,6 @@ def main() -> int:
                 "add",
                 "plugin_bundle/rzn-phone.bundle.json",
                 "crates/rzn_phone_worker/Cargo.toml",
-                "claude_plugin/rzn-phone/.claude-plugin/plugin.json",
                 "Cargo.lock",
             ]
         )

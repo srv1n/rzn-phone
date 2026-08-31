@@ -4,7 +4,7 @@ Run an App Store review job end-to-end.
 
 The job JSON shape follows docs/phone-team-spec.md from the outreach repo:
   - launch installed app (bundle id resolved from app_id when needed)
-  - open App Store, draft/submit review through appstore.post_review
+  - open App Store, draft/submit review through appstore/post_review
   - upload proof screenshots to R2
   - POST success/failure callback
 """
@@ -30,7 +30,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKER_BIN = ROOT / "target" / "release" / "rzn-phone-worker"
-WORKFLOW_NAME = "appstore.post_review"
+WORKFLOW_NAME = "appstore/post_review"
 
 
 def parse_args() -> argparse.Namespace:
@@ -193,6 +193,7 @@ def build_session(udid: str) -> dict[str, Any]:
 
 def build_shutdown_args() -> dict[str, Any]:
     return {
+        "commit": True,
         "stopAppium": bool_env("IOS_STOP_APPIUM_ON_EXIT", True),
         "shutdownWDA": True,
         "backgroundApp": bool_env("IOS_BACKGROUND_APP_ON_EXIT", False),
@@ -242,7 +243,6 @@ def run_workflow(
                     "args": workflow_args,
                     "commit": commit,
                     "disconnectOnFinish": disconnect_on_finish,
-                    "closeOnFinish": disconnect_on_finish,
                     "stopAppiumOnFinish": stop_appium_on_finish,
                     "backgroundAppOnFinish": background_on_finish,
                     "lockDeviceOnFinish": lock_on_finish,

@@ -280,40 +280,5 @@ class ReleaseArchiveSafetyTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse((tmp / "install").exists())
 
-    def test_signed_workflow_pack_builds_expected_sidecars(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            tmp = Path(raw)
-            private_key, public_key = write_test_keypair(tmp)
-
-            result = subprocess.run(
-                [
-                    "python3",
-                    str(ROOT / "scripts" / "build_workflow_pack.py"),
-                    "--out",
-                    str(tmp / "packs"),
-                    "--signing-key",
-                    str(private_key),
-                ],
-                cwd=ROOT,
-                env={
-                    **os.environ,
-                    "RZN_PHONE_RELEASE_ALLOW_TEST_SIGNING_KEY": "1",
-                },
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-
-            self.assertEqual(result.returncode, 0, result.stderr)
-            out_dir = Path(result.stdout.strip())
-            archives = list(out_dir.glob("rzn-phone-workflows-*.tar.gz"))
-            self.assertEqual(len(archives), 1)
-            archive = archives[0]
-            self.assertTrue(archive.with_name(f"{archive.name}.sha256").is_file())
-            sig_path = archive.with_name(f"{archive.name}.sig")
-            self.assertTrue(sig_path.is_file())
-            release_archive.verify_signature(archive, sig_path, public_key)
-
-
 if __name__ == "__main__":
     unittest.main()

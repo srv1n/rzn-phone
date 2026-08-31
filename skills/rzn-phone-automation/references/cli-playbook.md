@@ -1,6 +1,7 @@
 # CLI Playbook
 
-Use the public CLI directly. Repo helper scripts are release/maintainer tooling, not the agent runtime path.
+Use the current CLI directly. Repo helper scripts are maintainer tooling, not
+the agent runtime path.
 
 ## Health And Catalog
 
@@ -81,16 +82,17 @@ rzn-phone run reddit/comment_post \
 
 ## LLM-Auto / Direct Tool Loop
 
-Use this when no shipped workflow fits. It is the CLI version of the MCP `ios.autonomy.loop` prompt.
+Use this when no current workflow fits. It is the CLI form of the MCP
+`ios.autonomy.loop` prompt.
 
 ```bash
 rzn-phone tool call ios.appium.ensure
 rzn-phone tool call ios.session.create \
   --args-json '{"udid":"<udid>","kind":"native_app","bundleId":"com.apple.mobilesafari"}'
 rzn-phone tool call ios.ui.observe_compact --args-json '{"maxNodes":120}'
-rzn-phone tool call ios.action.tap --args-json '{"target":{"encodedId":"btn_1"}}'
+rzn-phone tool call ios.action.tap --args-json '{"target":{"encodedId":"btn_1"},"commit":true}'
 rzn-phone tool call ios.action.type \
-  --args-json '{"target":{"encodedId":"fld_1"},"text":"hello","clearFirst":true}'
+  --args-json '{"target":{"encodedId":"fld_1"},"text":"hello","clearFirst":true,"commit":true}'
 rzn-phone tool call ios.action.scroll --args-json '{"direction":"down","distance":0.65}'
 rzn-phone tool call ios.ui.observe_compact --args-json '{"maxNodes":120}'
 ```

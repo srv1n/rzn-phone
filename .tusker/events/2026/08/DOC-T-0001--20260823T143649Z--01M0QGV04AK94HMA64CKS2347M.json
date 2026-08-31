@@ -1,0 +1,15 @@
+{
+  "actor": "agent:codex",
+  "at": "2026-08-23T14:36:49Z",
+  "event_kind": "status_changed",
+  "id": "01M0QGV04AK94HMA64CKS2347M",
+  "object": "DOC-T-0001",
+  "object_kind": "task",
+  "payload": {
+    "from": "backlog",
+    "reason": "Automated repository proof is attached.",
+    "to": "review"
+  },
+  "project": "rzn-phone",
+  "schema": "tusker.event/v1"
+}

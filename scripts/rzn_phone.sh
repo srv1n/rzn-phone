@@ -29,71 +29,71 @@ Commands:
   wda-shutdown [port]   Best-effort shutdown of WebDriverAgent (default port: 8100).
   package [priv] [pub]  Build and sign plugin ZIP, then verify signature
   workflow-smoke <udid> [query] [limit]
-                        Run safari.google_search workflow on real iPhone.
+                        Run safari/google_search workflow on real iPhone.
                         Optional env: IOS_XCODE_ORG_ID, IOS_XCODE_SIGNING_ID, IOS_UPDATED_WDA_BUNDLE_ID, IOS_SHOW_XCODE_LOG=1,
                                       IOS_ALLOW_PROVISIONING_UPDATES=1, IOS_ALLOW_PROVISIONING_DEVICE_REGISTRATION=1,
                                       IOS_SESSION_CREATE_TIMEOUT_MS=600000,
                                       IOS_WDA_LAUNCH_TIMEOUT_MS=240000, IOS_WDA_CONNECTION_TIMEOUT_MS=120000,
                                       IOS_STOP_APPIUM_ON_EXIT=1
   messages-find-otp <udid> [--out <dir>] [--max-threads <n>] [--max-messages <n>] [--thread-contains <text>] [--sender-contains <text>] [--message-contains <text>] [--code-length <n>] [--min-code-length <n>] [--max-code-length <n>]
-                        Run phone_messages.find_recent_otp and write result.json + screenshot.png when present.
+                        Run phone_messages/find_recent_otp and write result.json + screenshot.png when present.
   reddit-read-smoke <udid>
-                        Run reddit.read_first_post workflow (read-only) and return compact snapshot.
+                        Run reddit/read_first_post workflow (read-only) and return compact snapshot.
   reddit-comment-smoke <udid> <commentText> [commit=0|1]
-                        Run reddit.comment_first_post workflow. commit must be 1 to actually submit.
+                        Run reddit/comment_first_post workflow. commit must be 1 to actually submit.
   reddit-daily-scroll <udid> [--out <dir>] [--max-posts <n>] [--max-scrolls <n>] [--min-engagement-score <n>]
-                        Run reddit.daily_scroll_digest and emit digest.json + thread.md from structured feed rows.
+                        Run reddit/daily_scroll_digest and emit digest.json + thread.md from structured feed rows.
   reddit-open-post <udid> [--out <dir>] [--post-index <n>]
-                        Run reddit.open_post for deterministic post targeting (read-only).
+                        Run reddit/open_post for deterministic post targeting (read-only).
   reddit-like-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>]
-                        Run reddit.like_post. Default is dry-run (execute=0).
+                        Run reddit/like_post. Default is dry-run (execute=0).
   reddit-comment-post <udid> <comment> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>]
-                        Run reddit.comment_post. Default is dry-run draft (execute=0).
+                        Run reddit/comment_post. Default is dry-run draft (execute=0).
   reddit-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]
-                        Run reddit.reply_to_comment. Default is dry-run draft (execute=0).
+                        Run reddit/reply_to_comment. Default is dry-run draft (execute=0).
   reddit-open-inbox <udid> [--out <dir>]
-                        Run reddit.open_inbox to open Reddit inbox/chat view (read-only).
+                        Run reddit/open_inbox to open Reddit inbox/chat view (read-only).
   reddit-open-dm-thread <udid> [--out <dir>] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]
-                        Run reddit.open_dm_thread for deterministic DM thread targeting (read-only).
+                        Run reddit/open_dm_thread for deterministic DM thread targeting (read-only).
   reddit-send-dm <udid> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]
-                        Run reddit.send_dm. Default is dry-run draft (execute=0).
+                        Run reddit/send_dm. Default is dry-run draft (execute=0).
   reddit-send-dm-user <udid> <username> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--max-thread-scrolls <n>]
-                        Run reddit.send_dm_by_username via Start Chatting username search (max-thread-scrolls ignored).
+                        Run reddit/send_dm_by_username via Start Chatting username search (max-thread-scrolls ignored).
   reddit-reply-dm <udid> <message> [--out <dir>] [--execute 0|1] [--commit 0|1] [--thread-index <n>] [--max-thread-scrolls <n>] [--thread-contains <text>]
-                        Run reddit.reply_dm_thread. Default is dry-run draft (execute=0).
+                        Run reddit/reply_dm_thread. Default is dry-run draft (execute=0).
   reddit-engage-seq <udid> <comment> [--reply <text>] [--out <dir>] [--execute-like 0|1] [--execute-comment 0|1] [--execute-reply 0|1] [--commit 0|1] [--post-index <n>]
                         Run reddit open/like/comment/reply as a single operation reusing one iOS session.
   appstore-typeahead <udid> <query> [--out <dir>] [--limit <n>] [--typing-mode <full|char-by-char>] [--country <cc>] [--locale <locale>]
-                        Run appstore.typeahead and write result.json + screenshot.png + ui_source.xml.
+                        Run appstore/typeahead and write result.json + screenshot.png + ui_source.xml.
   appstore-search-results <udid> <query> [--out <dir>] [--limit <n>] [--target-app-name <name>] [--max-scrolls <n>] [--country <cc>] [--locale <locale>]
   appstore-search-results <udid> <query> [--out <dir>] [--limit <n>] [--target-app-name <name>] [--max-scrolls <n>] [--submit-mode <suggestion|keyboard>] [--country <cc>] [--locale <locale>]
-                        Run appstore.search_results and write result.json + screenshot.png + ui_source.xml.
+                        Run appstore/search_results and write result.json + screenshot.png + ui_source.xml.
   appstore-smoke <udid> [query]
                         Real-device smoke test; asserts at least 1 suggestion and 1 result row.
   linkedin-read-feed <udid> [--out <dir>] [--limit <n>]
-                        Run linkedin.read_feed and write result.json + screenshot/ui source artifacts when present.
+                        Run linkedin/read_feed and write result.json + screenshot/ui source artifacts when present.
   linkedin-open-post <udid> [--out <dir>] [--post-index <n>] [--max-feed-scrolls <n>]
-                        Run linkedin.open_post for deterministic post targeting (read-only).
+                        Run linkedin/open_post for deterministic post targeting (read-only).
   linkedin-like-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-feed-scrolls <n>]
-                        Run linkedin.like_post. Default is dry-run (execute=0).
+                        Run linkedin/like_post. Default is dry-run (execute=0).
   linkedin-comment-post <udid> <comment> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-feed-scrolls <n>]
-                        Run linkedin.comment_post. Default is dry-run draft (execute=0).
+                        Run linkedin/comment_post. Default is dry-run draft (execute=0).
   linkedin-reply-comment <udid> <reply> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--reply-index <n>] [--max-feed-scrolls <n>] [--max-comment-scrolls <n>] [--target-comment-contains <text>]
-                        Run linkedin.reply_to_comment. Default is dry-run draft (execute=0).
+                        Run linkedin/reply_to_comment. Default is dry-run draft (execute=0).
   linkedin-create-post <udid> <text> [--out <dir>] [--submit 0|1] [--commit 0|1]
-                        Run linkedin.create_post. Default is dry-run draft capture (submit=0).
+                        Run linkedin/create_post. Default is dry-run draft capture (submit=0).
   linkedin-update-post <udid> <text> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]
-                        Run linkedin.update_latest_post. Default is dry-run edit preparation (execute=0).
+                        Run linkedin/update_latest_post. Default is dry-run edit preparation (execute=0).
   linkedin-delete-post <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--post-index <n>] [--max-profile-scrolls <n>]
-                        Run linkedin.delete_latest_post. Default is dry-run delete preparation (execute=0).
+                        Run linkedin/delete_latest_post. Default is dry-run delete preparation (execute=0).
   linkedin-daily-scroll <udid> [--out <dir>] [--max-posts <n>] [--max-scrolls <n>] [--min-engagement-score <n>]
-                        Run linkedin.daily_scroll_digest and emit digest.json + thread.md from structured feed rows.
+                        Run linkedin/daily_scroll_digest and emit digest.json + thread.md from structured feed rows.
   google-maps-place <udid> <query> [--out <dir>]
-                        Run google_maps.open_place and write result.json + screenshot.png + ui_source.xml.
+                        Run google_maps/open_place and write result.json + screenshot.png + ui_source.xml.
   google-maps-directions <udid> <query> [--out <dir>]
-                        Run google_maps.open_directions and capture the post-Directions screen state.
+                        Run google_maps/open_directions and capture the post-Directions screen state.
   google-maps-start <udid> <query> [--out <dir>] [--execute 0|1] [--commit 0|1]
-                        Run google_maps.start_navigation. Default is dry-run capture (execute=0).
+                        Run google_maps/start_navigation. Default is dry-run capture (execute=0).
   social-card-list [--app <name>] [--json]
                         List card-based workflows from cards/social catalogs.
   social-card-run <card-id> <udid> [--out <dir>] [--execute 0|1] [--commit 0|1] [--text <value>] [--set key=value ...]
@@ -227,7 +227,7 @@ build_shutdown_args_json() {
     --argjson stopAppium "$stop_appium_json" \
     --argjson backgroundApp "$background_app_json" \
     --argjson lockDevice "$lock_device_json" \
-    '{stopAppium:$stopAppium,shutdownWDA:true,backgroundApp:$backgroundApp,lockDevice:$lockDevice}'
+    '{commit:true,stopAppium:$stopAppium,shutdownWDA:true,backgroundApp:$backgroundApp,lockDevice:$lockDevice}'
 }
 
 load_ios_session_env() {
@@ -297,7 +297,7 @@ run_workflow_rpc() {
   cat <<JSON > "$req_file"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"$workflow_name","session":$session_json,"args":$args_json,"commit":$commit_json,"disconnectOnFinish":$disconnect_on_finish_json,"closeOnFinish":$disconnect_on_finish_json,"stopAppiumOnFinish":$stop_appium_on_finish_json,"backgroundAppOnFinish":$background_on_finish_json,"lockDeviceOnFinish":$lock_on_finish_json}}}
+{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"$workflow_name","session":$session_json,"args":$args_json,"commit":$commit_json,"disconnectOnFinish":$disconnect_on_finish_json,"stopAppiumOnFinish":$stop_appium_on_finish_json,"backgroundAppOnFinish":$background_on_finish_json,"lockDeviceOnFinish":$lock_on_finish_json}}}
 JSON
 
   if [[ "$shutdown_after_run_json" == "true" ]]; then
@@ -462,7 +462,7 @@ build_linkedin_digest() {
     | .result.structuredContent
     | {
         generatedAt: (now | todateiso8601),
-        workflow: "linkedin.daily_scroll_digest",
+        workflow: "linkedin/daily_scroll_digest",
         scannedPosts: (.rowCount // ((.rows // []) | length)),
         scrolls: (.scrolls // 0),
         thresholdScore: $minScore,
@@ -576,7 +576,7 @@ build_reddit_digest() {
     | .result.structuredContent
     | {
         generatedAt: (now | todateiso8601),
-        workflow: "reddit.daily_scroll_digest",
+        workflow: "reddit/daily_scroll_digest",
         scannedPosts: (.rowCount // ((.rows // []) | length)),
         scrolls: (.scrolls // 0),
         thresholdScore: $minScore,
@@ -727,7 +727,7 @@ case "$cmd" in
     cat <<JSON | "$BIN"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"safari.google_search","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{"query":"$QUERY","limit":$LIMIT},"commit":false}}}
+{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"safari/google_search","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{"query":"$QUERY","limit":$LIMIT},"commit":false}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
     ;;
@@ -829,7 +829,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "phone_messages.find_recent_otp" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "phone_messages/find_recent_otp" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "messages-find-otp failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
 
@@ -881,7 +881,7 @@ JSON
     cat <<JSON | "$BIN"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.read_first_post","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{},"commit":false}}}
+{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit/read_first_post","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{},"commit":false}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
     ;;
@@ -932,7 +932,7 @@ JSON
     cat <<JSON | "$BIN"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.comment_first_post","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{"commentText":"$COMMENT_TEXT"},"commit":$COMMIT_JSON}}}
+{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit/comment_first_post","session":{"udid":"$UDID","showXcodeLog":$SHOW_XCODE_LOG_JSON,"allowProvisioningUpdates":$ALLOW_PROVISIONING_UPDATES_JSON,"allowProvisioningDeviceRegistration":$ALLOW_PROVISIONING_DEVICE_REGISTRATION_JSON,"sessionCreateTimeoutMs":$IOS_SESSION_CREATE_TIMEOUT_MS,"wdaLaunchTimeoutMs":$IOS_WDA_LAUNCH_TIMEOUT_MS,"wdaConnectionTimeoutMs":$IOS_WDA_CONNECTION_TIMEOUT_MS,"signing":$SIGNING_JSON},"args":{"commentText":"$COMMENT_TEXT"},"commit":$COMMIT_JSON}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
     ;;
@@ -1007,7 +1007,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "reddit.daily_scroll_digest" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "reddit/daily_scroll_digest" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "reddit-daily-scroll failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     build_reddit_digest "$RAW_OUT" "$OUT_DIR" "$MIN_ENGAGEMENT_SCORE"
@@ -1067,7 +1067,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "reddit.open_post" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "reddit/open_post" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "reddit-open-post failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "reddit open_post saved artifacts to: $OUT_DIR"
@@ -1141,7 +1141,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "reddit.like_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "reddit/like_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "reddit-like-post failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "reddit like_post saved artifacts to: $OUT_DIR"
@@ -1219,7 +1219,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "reddit.comment_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "reddit/comment_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "reddit-comment-post failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "reddit comment_post saved artifacts to: $OUT_DIR"
@@ -1318,7 +1318,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "reddit.reply_to_comment" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "reddit/reply_to_comment" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "reddit-reply-comment failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "reddit reply_to_comment saved artifacts to: $OUT_DIR"
@@ -1369,7 +1369,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "reddit.open_inbox" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "reddit/open_inbox" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "reddit-open-inbox failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "reddit open_inbox saved artifacts to: $OUT_DIR"
@@ -1441,7 +1441,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "reddit.open_dm_thread" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "reddit/open_dm_thread" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "reddit-open-dm-thread failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "reddit open_dm_thread saved artifacts to: $OUT_DIR"
@@ -1530,7 +1530,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "reddit.send_dm" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "reddit/send_dm" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "reddit-send-dm failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "reddit send_dm saved artifacts to: $OUT_DIR"
@@ -1612,7 +1612,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "reddit.send_dm_by_username" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "reddit/send_dm_by_username" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "reddit-send-dm-user failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "reddit send_dm_by_username saved artifacts to: $OUT_DIR"
@@ -1701,7 +1701,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "reddit.reply_dm_thread" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "reddit/reply_dm_thread" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "reddit-reply-dm failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "reddit reply_dm_thread saved artifacts to: $OUT_DIR"
@@ -1881,15 +1881,15 @@ JSON
     cat <<JSON > "$REQ_FILE"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"wf-open","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.open_post","session":$SESSION_JSON,"args":$OPEN_ARGS_JSON,"commit":false,"closeOnFinish":false,"stopAppiumOnFinish":false}}}
-{"jsonrpc":"2.0","id":"wf-like","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.like_post","session":$SESSION_JSON,"args":$LIKE_ARGS_JSON,"commit":$COMMIT_JSON,"closeOnFinish":false,"stopAppiumOnFinish":false}}}
-{"jsonrpc":"2.0","id":"wf-comment","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.comment_post","session":$SESSION_JSON,"args":$COMMENT_ARGS_JSON,"commit":$COMMIT_JSON,"closeOnFinish":false,"stopAppiumOnFinish":false}}}
+{"jsonrpc":"2.0","id":"wf-open","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit/open_post","session":$SESSION_JSON,"args":$OPEN_ARGS_JSON,"commit":false,"disconnectOnFinish":false,"stopAppiumOnFinish":false}}}
+{"jsonrpc":"2.0","id":"wf-like","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit/like_post","session":$SESSION_JSON,"args":$LIKE_ARGS_JSON,"commit":$COMMIT_JSON,"disconnectOnFinish":false,"stopAppiumOnFinish":false}}}
+{"jsonrpc":"2.0","id":"wf-comment","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit/comment_post","session":$SESSION_JSON,"args":$COMMENT_ARGS_JSON,"commit":$COMMIT_JSON,"disconnectOnFinish":false,"stopAppiumOnFinish":false}}}
 JSON
 
     RUN_IDS=(wf-open wf-like wf-comment)
     if [[ "$RUN_REPLY_JSON" == "true" ]]; then
       cat <<JSON >> "$REQ_FILE"
-{"jsonrpc":"2.0","id":"wf-reply","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit.reply_to_comment","session":$SESSION_JSON,"args":$REPLY_ARGS_JSON,"commit":$COMMIT_JSON,"closeOnFinish":false,"stopAppiumOnFinish":false}}}
+{"jsonrpc":"2.0","id":"wf-reply","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"reddit/reply_to_comment","session":$SESSION_JSON,"args":$REPLY_ARGS_JSON,"commit":$COMMIT_JSON,"disconnectOnFinish":false,"stopAppiumOnFinish":false}}}
 JSON
       RUN_IDS+=(wf-reply)
     fi
@@ -1998,7 +1998,7 @@ JSON
     cat <<JSON | "$BIN" > "$RAW_OUT"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"appstore.typeahead","session":$SESSION_JSON,"args":$ARGS_JSON,"commit":false}}}
+{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"appstore/typeahead","session":$SESSION_JSON,"args":$ARGS_JSON,"commit":false}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
 
@@ -2116,7 +2116,7 @@ JSON
     cat <<JSON | "$BIN" > "$RAW_OUT"
 {"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rzn-phone-cli","version":"0.1"}}}
 {"jsonrpc":"2.0","method":"initialized","params":{}}
-{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"appstore.search_results","session":$SESSION_JSON,"args":$ARGS_JSON,"commit":false}}}
+{"jsonrpc":"2.0","id":"wf-1","method":"tools/call","params":{"name":"ios.workflow.run","arguments":{"name":"appstore/search_results","session":$SESSION_JSON,"args":$ARGS_JSON,"commit":false}}}
 {"jsonrpc":"2.0","id":"shutdown-1","method":"tools/call","params":{"name":"rzn.worker.shutdown","arguments":$SHUTDOWN_ARGS_JSON}}
 JSON
 
@@ -2209,7 +2209,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "linkedin.read_feed" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "linkedin/read_feed" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "linkedin-read-feed failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "linkedin read_feed saved artifacts to: $OUT_DIR"
@@ -2256,7 +2256,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "google_maps.open_place" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "google_maps/open_place" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "google-maps-place failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "google maps open_place saved artifacts to: $OUT_DIR"
@@ -2303,7 +2303,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "google_maps.open_directions" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "google_maps/open_directions" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "google-maps-directions failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "google maps open_directions saved artifacts to: $OUT_DIR"
@@ -2362,7 +2362,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "google_maps.start_navigation" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "google_maps/start_navigation" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "google-maps-start failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "google maps start_navigation saved artifacts to: $OUT_DIR"
@@ -2425,7 +2425,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "linkedin.open_post" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "linkedin/open_post" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "linkedin-open-post failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "linkedin open_post saved artifacts to: $OUT_DIR"
@@ -2503,7 +2503,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "linkedin.like_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "linkedin/like_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "linkedin-like-post failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "linkedin like_post saved artifacts to: $OUT_DIR"
@@ -2587,7 +2587,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "linkedin.comment_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "linkedin/comment_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "linkedin-comment-post failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "linkedin comment_post saved artifacts to: $OUT_DIR"
@@ -2692,7 +2692,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "linkedin.reply_to_comment" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "linkedin/reply_to_comment" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "linkedin-reply-comment failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "linkedin reply_to_comment saved artifacts to: $OUT_DIR"
@@ -2754,7 +2754,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "linkedin.create_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "linkedin/create_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "linkedin-create-post failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "linkedin create_post saved artifacts to: $OUT_DIR"
@@ -2840,7 +2840,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "linkedin.update_latest_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "linkedin/update_latest_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "linkedin-update-post failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "linkedin update_latest_post saved artifacts to: $OUT_DIR"
@@ -2924,7 +2924,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "linkedin.delete_latest_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "linkedin/delete_latest_post" "$SESSION_JSON" "$ARGS_JSON" "$COMMIT_JSON" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "linkedin-delete-post failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     echo "linkedin delete_latest_post saved artifacts to: $OUT_DIR"
@@ -2988,7 +2988,7 @@ JSON
 
     BIN="$(worker_bin)"
     RAW_OUT="$OUT_DIR/.raw.jsonl"
-    run_workflow_rpc "$BIN" "linkedin.daily_scroll_digest" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
+    run_workflow_rpc "$BIN" "linkedin/daily_scroll_digest" "$SESSION_JSON" "$ARGS_JSON" "false" "$STOP_APPIUM_ON_EXIT_JSON" "$RAW_OUT"
     ensure_workflow_success "$RAW_OUT" "linkedin-daily-scroll failed" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
     build_linkedin_digest "$RAW_OUT" "$OUT_DIR" "$MIN_ENGAGEMENT_SCORE"
@@ -3154,10 +3154,10 @@ JSON
     ensure_workflow_success "$RAW_OUT" "social-card-run failed ($CARD_ID)" || exit 1
     extract_workflow_artifacts "$RAW_OUT" "$OUT_DIR"
 
-    if [[ "$WORKFLOW_NAME" == "linkedin.daily_scroll_digest" ]]; then
+    if [[ "$WORKFLOW_NAME" == "linkedin/daily_scroll_digest" ]]; then
       MIN_SCORE="$(jq -r '.min_engagement_score // 20' <<<"$ARGS_JSON")"
       build_linkedin_digest "$RAW_OUT" "$OUT_DIR" "$MIN_SCORE"
-    elif [[ "$WORKFLOW_NAME" == "reddit.daily_scroll_digest" ]]; then
+    elif [[ "$WORKFLOW_NAME" == "reddit/daily_scroll_digest" ]]; then
       MIN_SCORE="$(jq -r '.min_engagement_score // 20' <<<"$ARGS_JSON")"
       build_reddit_digest "$RAW_OUT" "$OUT_DIR" "$MIN_SCORE"
     fi

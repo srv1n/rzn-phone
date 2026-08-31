@@ -9,7 +9,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CLAUDE_MCP_JSON = ROOT / "claude_plugin" / "rzn-phone" / ".mcp.json"
 EXAMPLE_MCP_JSON = ROOT / "examples" / "rzn-phone.mcp.json"
 
 
@@ -21,38 +20,23 @@ def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def validate_mcp_config(errors: list[str]) -> None:
-    config = read_json(CLAUDE_MCP_JSON)
-    server = config.get("mcpServers", {}).get("rzn-phone", {})
-    command = str(server.get("command", ""))
-    cwd = str(server.get("cwd", ""))
-    env = server.get("env", {})
-
-    if "../../dist" in command or "dist/bin" in command:
-        fail(errors, f"{CLAUDE_MCP_JSON}: command points at dist instead of the plugin root")
-    expected = "${CLAUDE_PLUGIN_ROOT}/bin/macos/universal/rzn-phone-worker"
-    if command != expected:
-        fail(errors, f"{CLAUDE_MCP_JSON}: command must be {expected!r}, got {command!r}")
-    if cwd != "${CLAUDE_PLUGIN_ROOT}":
-        fail(errors, f"{CLAUDE_MCP_JSON}: cwd must be '${{CLAUDE_PLUGIN_ROOT}}', got {cwd!r}")
-    if not isinstance(env, dict):
-        fail(errors, f"{CLAUDE_MCP_JSON}: env must be an object")
-        return
-    if env.get("RZN_PLUGIN_DIR") != "${CLAUDE_PLUGIN_ROOT}":
-        fail(errors, f"{CLAUDE_MCP_JSON}: RZN_PLUGIN_DIR must resolve to the plugin root")
-    if env.get("RZN_IOS_APPIUM_URL") == "":
-        fail(errors, f"{CLAUDE_MCP_JSON}: RZN_IOS_APPIUM_URL must not be shipped as an empty string")
-
-
 def validate_example_config(errors: list[str]) -> None:
     config = read_json(EXAMPLE_MCP_JSON)
     server = config.get("mcpServers", {}).get("rzn-phone", {})
+    command = str(server.get("command", ""))
     env = server.get("env", {})
+
+    if "../../dist" in command or "dist/bin" in command:
+        fail(errors, f"{EXAMPLE_MCP_JSON}: command points at dist instead of the plugin root")
+    if not command.endswith("/bin/macos/universal/rzn-phone-worker"):
+        fail(errors, f"{EXAMPLE_MCP_JSON}: command must target the packaged worker, got {command!r}")
     if not isinstance(env, dict):
         fail(errors, f"{EXAMPLE_MCP_JSON}: env must be an object")
         return
+    if not env.get("RZN_PLUGIN_DIR"):
+        fail(errors, f"{EXAMPLE_MCP_JSON}: RZN_PLUGIN_DIR must be set")
     if env.get("RZN_IOS_APPIUM_URL") == "":
-        fail(errors, f"{EXAMPLE_MCP_JSON}: RZN_IOS_APPIUM_URL must not be empty")
+        fail(errors, f"{EXAMPLE_MCP_JSON}: RZN_IOS_APPIUM_URL must not be shipped as an empty string")
 
 
 def kit_root(names: list[str]) -> str:
@@ -77,17 +61,19 @@ def validate_generated_kit(path: Path, errors: list[str]) -> None:
         name_set = set(names)
 
         required = [
-            "INSTALL.md",
-            "AGENT_SETUP.md",
+            "README.md",
             "scripts/tester_doctor.sh",
             "scripts/prepare_mcp_plugin.sh",
             "examples/rzn-phone.mcp.json",
-            "examples/agent-handoff.md",
         ]
         for rel in required:
             member = f"{root}/{rel}"
             if member not in name_set:
                 fail(errors, f"{path}: missing {rel}")
+
+        for rel in ["INSTALL.md", "AGENT_SETUP.md", "examples/agent-handoff.md"]:
+            if f"{root}/{rel}" in name_set:
+                fail(errors, f"{path}: removed narrative must not be packaged: {rel}")
 
         for rel in ["scripts/tester_doctor.sh", "scripts/prepare_mcp_plugin.sh"]:
             member = f"{root}/{rel}"
@@ -105,17 +91,15 @@ def validate_generated_kit(path: Path, errors: list[str]) -> None:
             fail(errors, f"{path}: expected exactly one plugin artifact, found {len(artifacts)}")
             return
 
-        for rel in ["INSTALL.md", "AGENT_SETUP.md"]:
-            member = f"{root}/{rel}"
-            if member not in name_set:
-                continue
+        member = f"{root}/README.md"
+        if member in name_set:
             text = zf.read(member).decode("utf-8")
             forbidden = ["install.sh", "scripts/create_tester_kit.sh"]
             for needle in forbidden:
                 if needle in text:
-                    fail(errors, f"{path}: {rel} references non-shipped {needle}")
+                    fail(errors, f"{path}: README.md references non-shipped {needle}")
             if "./scripts/prepare_mcp_plugin.sh" not in text:
-                fail(errors, f"{path}: {rel} must document ./scripts/prepare_mcp_plugin.sh")
+                fail(errors, f"{path}: README.md must document ./scripts/prepare_mcp_plugin.sh")
 
         with zf.open(artifacts[0]) as artifact_file:
             with zipfile.ZipFile(artifact_file) as plugin_zf:
@@ -134,7 +118,6 @@ def main() -> int:
     args = parser.parse_args()
 
     errors: list[str] = []
-    validate_mcp_config(errors)
     validate_example_config(errors)
     if args.kit:
         validate_generated_kit(args.kit, errors)

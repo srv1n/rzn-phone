@@ -1,0 +1,42 @@
+[
+  {
+    "created_at": "2026-08-23T14:35:38Z",
+    "created_by": "agent:sarav",
+    "dependencies": [],
+    "domains": [],
+    "epic": "DOC",
+    "evidence_budget": 1,
+    "evidence_required": [
+      "automated_test"
+    ],
+    "gates": [],
+    "id": "DOC-T-0001",
+    "kind": "task",
+    "next_action": "Review evidence and close or return to rework.",
+    "next_owner": "reviewer",
+    "next_ref": "",
+    "next_source": "review_policy",
+    "path": "work/tasks/DOC-T-0001.md",
+    "priority": "p1",
+    "project": "rzn-phone",
+    "proof_mode": "card",
+    "proof_required": [
+      "focused_test",
+      "broad_test"
+    ],
+    "proof_status": "satisfied",
+    "raw_artifacts_allowed": false,
+    "readiness": "waiting_on_review",
+    "risk": "medium",
+    "schema": "tusker.task/v7",
+    "size": "l",
+    "spec_refs": [
+      "docs/system/canon.md"
+    ],
+    "state_rev": "sha256:1ef124bc424e692b60bcef57a00a9c09dec488479b649dfd7988d5438a0aacf1",
+    "status": "review",
+    "title": "Verify current-only documentation and clean source surface",
+    "updated_at": "2026-08-23T14:36:49Z",
+    "updated_by": "agent:codex"
+  }
+]

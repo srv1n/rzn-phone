@@ -85,7 +85,6 @@ async fn handle_tool_call_unchecked(
         "ios.action.typeahead" => action_typeahead(state, &arguments).await,
         "ios.action.wait" => action_wait(state, &arguments).await,
         "ios.action.scroll" => action_scroll(state, &arguments).await,
-        "ios.action.swipe" => action_swipe(state, &arguments).await,
         "ios.action.back" => action_back(state, &arguments).await,
         "ios.action.scroll_until" => action_scroll_until(state, &arguments).await,
         "ios.element.text" => element_text(state, &arguments).await,
@@ -99,8 +98,6 @@ async fn handle_tool_call_unchecked(
         "ios.capability.list" => capability_list(&arguments).await,
         "ios.workflow.run" => workflow_run(state, &arguments).await,
         "rzn.workflow_failure_report.review" => workflow_failure_report_review(&arguments).await,
-        "rzn.workflow_failure_report.submit" => workflow_failure_report_submit(&arguments).await,
-        "rzn.workflow_failure_report.queue" => workflow_failure_report_queue(&arguments).await,
         "ios.script.run" => script_run(state, &arguments).await,
         "phone_messages.list_recent_threads" => {
             phone_messages_list_recent_threads(state, &arguments).await
@@ -315,7 +312,6 @@ fn session_create_timeout_error(
 fn explicit_workflow_step_timeout_ms(step: &Map<String, Value>) -> Option<u64> {
     step.get("timeoutMs")
         .and_then(Value::as_u64)
-        .or_else(|| step.get("timeout_ms").and_then(Value::as_u64))
         .map(|timeout_ms| {
             timeout_ms.clamp(
                 MIN_WORKFLOW_STEP_TIMEOUT_MS,
@@ -1350,7 +1346,6 @@ async fn ui_extract_rows(state: &AppState, arguments: &Value) -> Result<Value> {
     let max_scrolls = arguments
         .get("maxScrolls")
         .and_then(Value::as_u64)
-        .or_else(|| arguments.get("max_scrolls").and_then(Value::as_u64))
         .unwrap_or(0)
         .clamp(0, 50) as u32;
     if source_override.is_some() && max_scrolls > 0 {
@@ -1473,7 +1468,6 @@ async fn ui_find_row(state: &AppState, arguments: &Value) -> Result<Value> {
     let max_scrolls = arguments
         .get("maxScrolls")
         .and_then(Value::as_u64)
-        .or_else(|| arguments.get("max_scrolls").and_then(Value::as_u64))
         .unwrap_or(0)
         .clamp(0, 50) as u32;
     if source_override.is_some() && max_scrolls > 0 {
@@ -1727,10 +1721,7 @@ async fn resolve_target(state: &AppState, arguments: &Value) -> Result<Option<Re
         None => 0,
     };
 
-    let explicit_require_unique = target
-        .get("requireUnique")
-        .and_then(Value::as_bool)
-        .or_else(|| target.get("require_unique").and_then(Value::as_bool));
+    let explicit_require_unique = target.get("requireUnique").and_then(Value::as_bool);
 
     if let Some(encoded) = target
         .get("encodedId")
@@ -1880,7 +1871,6 @@ async fn action_type(state: &AppState, arguments: &Value) -> Result<Value> {
     let press_enter = arguments
         .get("pressEnter")
         .and_then(Value::as_bool)
-        .or_else(|| arguments.get("press_enter").and_then(Value::as_bool))
         .unwrap_or(false);
 
     let resolved = resolve_target(state, arguments).await?.ok_or_else(|| {
@@ -2160,10 +2150,6 @@ async fn perform_scroll_gesture(
     });
     driver.perform_actions(session_id, payload).await?;
     Ok(())
-}
-
-async fn action_swipe(state: &AppState, arguments: &Value) -> Result<Value> {
-    action_scroll(state, arguments).await
 }
 
 async fn action_back(state: &AppState, arguments: &Value) -> Result<Value> {
@@ -3715,9 +3701,7 @@ async fn workflow_failure_report_review(arguments: &Value) -> Result<Value> {
         .map(ToString::to_string);
     let draft_value = arguments
         .get("draft")
-        .or_else(|| arguments.get("payload"))
-        .or_else(|| arguments.get("summary"))
-        .ok_or_else(|| anyhow!("draft or summary is required"))?;
+        .ok_or_else(|| anyhow!("draft is required"))?;
     let draft = workflow_failure_report::draft_from_value(draft_value, note)?;
     let review = workflow_failure_report::review_payload(&draft);
 
@@ -3725,61 +3709,6 @@ async fn workflow_failure_report_review(arguments: &Value) -> Result<Value> {
         review,
         "phone automation failure draft ready for host",
     ))
-}
-
-async fn workflow_failure_report_submit(arguments: &Value) -> Result<Value> {
-    let note = arguments
-        .get("note")
-        .and_then(Value::as_str)
-        .map(ToString::to_string);
-    let mut draft = if let Some(draft) = arguments.get("draft").or_else(|| arguments.get("payload"))
-    {
-        workflow_failure_report::draft_from_value(draft, None)?
-    } else if let Some(summary) = arguments.get("summary") {
-        workflow_failure_report::draft_from_value(summary, note.clone())?
-    } else {
-        bail!("draft or summary is required");
-    };
-    workflow_failure_report::apply_note_if_missing(&mut draft, note)?;
-
-    let review = workflow_failure_report::review_payload(&draft);
-    Ok(tool_success(
-        json!({
-            "ok": true,
-            "status": "draft_only",
-            "deprecated": true,
-            "message": "Draft created. The host must submit it with user/auth context.",
-            "review": review,
-            "draft": draft,
-            "hostEvent": draft.host_event(),
-            "manualReportCommand": workflow_failure_report::manual_report_command(&draft)
-        }),
-        "phone automation failure draft created; host submission required",
-    ))
-}
-
-async fn workflow_failure_report_queue(arguments: &Value) -> Result<Value> {
-    let action = arguments
-        .get("action")
-        .and_then(Value::as_str)
-        .unwrap_or("list");
-
-    let payload = match action {
-        "list" => json!({
-            "ok": true,
-            "queuedCount": 0,
-            "reports": [],
-            "message": "Local failure-report queues are deprecated. The host owns submission retries."
-        }),
-        "clear" => json!({
-            "ok": true,
-            "queuedCount": 0,
-            "message": "No local failure-report queue is maintained by the worker."
-        }),
-        other => bail!("unknown queue action '{other}'"),
-    };
-
-    Ok(tool_success(payload, "workflow failure report queue"))
 }
 
 async fn capability_list(_arguments: &Value) -> Result<Value> {
@@ -3881,7 +3810,6 @@ async fn workflow_run(state: &AppState, arguments: &Value) -> Result<Value> {
     let disconnect_on_finish = arguments
         .get("disconnectOnFinish")
         .and_then(Value::as_bool)
-        .or_else(|| arguments.get("closeOnFinish").and_then(Value::as_bool))
         .unwrap_or(true);
     let background_app_on_finish = arguments
         .get("backgroundAppOnFinish")
@@ -4093,14 +4021,7 @@ fn build_flow_failure_report_draft(
     let (system, flow) = workflow_ref
         .split_once('/')
         .map(|(system, workflow)| (system.to_string(), format!("{system}/{workflow}")))
-        .unwrap_or_else(|| {
-            let system = def
-                .name
-                .split_once('.')
-                .map(|(system, _)| system)
-                .unwrap_or("unknown");
-            (system.to_string(), workflow_ref.to_string())
-        });
+        .unwrap_or_else(|| ("unknown".to_string(), workflow_ref.to_string()));
     let surface = def
         .capability
         .as_ref()
@@ -4221,7 +4142,6 @@ async fn script_run(state: &AppState, arguments: &Value) -> Result<Value> {
     let disconnect_on_finish = arguments
         .get("disconnectOnFinish")
         .and_then(Value::as_bool)
-        .or_else(|| arguments.get("closeOnFinish").and_then(Value::as_bool))
         .unwrap_or(true);
     let background_app_on_finish = arguments
         .get("backgroundAppOnFinish")
@@ -5561,30 +5481,26 @@ fn string_contains_ci(haystack: &str, needle: &str) -> bool {
 }
 
 fn required_device_id(arguments: &Value) -> Result<String> {
-    for key in ["deviceId", "device_id", "udid"] {
-        if let Some(value) = arguments.get(key).and_then(Value::as_str) {
-            let trimmed = value.trim();
-            if !trimmed.is_empty() {
-                return Ok(trimmed.to_string());
-            }
+    if let Some(value) = arguments.get("deviceId").and_then(Value::as_str) {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Ok(trimmed.to_string());
         }
     }
 
     Err(ToolCallError::new(
         ToolErrorCode::InvalidParams,
-        "'deviceId' (or 'udid') is required",
+        "'deviceId' is required",
         json!({"param": "deviceId"}),
     )
     .into())
 }
 
 fn required_app_label(arguments: &Value) -> Result<String> {
-    for key in ["appLabel", "app_label", "appPackage", "app_package"] {
-        if let Some(value) = arguments.get(key).and_then(Value::as_str) {
-            let trimmed = value.trim();
-            if !trimmed.is_empty() {
-                return Ok(trimmed.to_string());
-            }
+    if let Some(value) = arguments.get("appLabel").and_then(Value::as_str) {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Ok(trimmed.to_string());
         }
     }
 
@@ -5598,9 +5514,6 @@ fn required_app_label(arguments: &Value) -> Result<String> {
 
 fn resolve_thread_index(arguments: &Value) -> Result<usize> {
     if let Some(value) = arguments.get("threadIndex").and_then(Value::as_u64) {
-        return Ok(value as usize);
-    }
-    if let Some(value) = arguments.get("thread_index").and_then(Value::as_u64) {
         return Ok(value as usize);
     }
     if let Some(value) = arguments.get("threadId").and_then(Value::as_str) {
@@ -6014,7 +5927,6 @@ async fn run_steps(
         let requires_commit = obj
             .get("requiresCommit")
             .and_then(Value::as_bool)
-            .or_else(|| obj.get("requires_commit").and_then(Value::as_bool))
             .unwrap_or(false);
         if requires_commit && !commit {
             let message = format!("step {idx} requires commit=true (tool={tool})");
@@ -6068,11 +5980,7 @@ async fn run_steps(
             .unwrap_or(0)
             .clamp(0, 10) as u32;
 
-        let raw_args = obj
-            .get("arguments")
-            .cloned()
-            .or_else(|| obj.get("args").cloned())
-            .unwrap_or_else(|| json!({}));
+        let raw_args = obj.get("arguments").cloned().unwrap_or_else(|| json!({}));
         let args = substitute_vars(raw_args, &vars);
         let timeout_ms = workflow_step_timeout_ms(tool, obj, &args);
 
@@ -6771,7 +6679,6 @@ fn ensure_workflow_steps_var(vars: &mut Value) {
 fn step_save_as(step: &serde_json::Map<String, Value>) -> Option<String> {
     step.get("saveAs")
         .and_then(Value::as_str)
-        .or_else(|| step.get("save_as").and_then(Value::as_str))
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
@@ -7104,8 +7011,7 @@ fn resolve_workflow_ref(arguments: &Value) -> Result<String> {
         if let Some(value) = arguments
             .get(key)
             .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
+            .filter(|value| workflows::WorkflowReference::parse(value).is_some())
         {
             return Ok(value.to_string());
         }
@@ -7113,7 +7019,7 @@ fn resolve_workflow_ref(arguments: &Value) -> Result<String> {
 
     Err(anyhow::Error::new(ToolCallError::new(
         ToolErrorCode::InvalidParams,
-        "workflow ref is required via 'name' or 'workflow' (optionally pair 'workflow' with 'system')",
+        "workflow ref is required via 'name' or 'workflow' in system/workflow form (optionally pair 'workflow' with 'system')",
         json!({"params": ["name", "workflow", "system"]}),
     )))
 }

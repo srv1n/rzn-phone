@@ -335,8 +335,8 @@ def main() -> int:
 
     flows = []
     for path, workflow in catalog.parse_workflows():
-        canonical = workflow["name"].replace(".", "/", 1)
-        system = workflow["name"].split(".", 1)[0]
+        canonical = catalog.canonical_workflow_id(workflow["name"])
+        system = canonical.split("/", 1)[0]
         if system != args.system:
             continue
         if selected and canonical not in selected and workflow["name"] not in selected:

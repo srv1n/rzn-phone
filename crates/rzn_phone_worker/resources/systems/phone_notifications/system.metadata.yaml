@@ -36,15 +36,20 @@ setup_steps:
     description: "Confirm the worker can create a session and reach the paired iPhone."
 
 context_parameters:
-  - id: "device_id"
+  - id: "privacyGate"
+    label: "Privacy gate"
+    kind: "string"
+    required: true
+    default: "notifications"
+  - id: "deviceId"
     label: "Device ID"
     kind: "device_selector"
     required: true
-  - id: "app_label"
+  - id: "appLabel"
     label: "App label"
     kind: "string"
     required: false
-  - id: "max_notifications"
+  - id: "maxNotifications"
     label: "Max notifications"
     kind: "integer"
     required: false
@@ -56,6 +61,7 @@ quick_starts:
     description: "Pull down Notification Center and extract visible rows with a read-only tool."
     tool_id: "phone_notifications.list_recent_notifications"
     args:
+      privacyGate: "notifications"
       maxNotifications: 25
     example_path: "examples/phone_notifications/list_recent_notifications.tool_call.json"
   - id: "filter_notifications_by_app"
@@ -63,6 +69,7 @@ quick_starts:
     description: "Use the same starter script, then project notifications for one app label."
     tool_id: "phone_notifications.filter_notifications_by_app"
     args:
+      privacyGate: "notifications"
       appLabel: "Messages"
       maxNotifications: 25
     example_path: "examples/phone_notifications/filter_notifications_by_app.tool_call.json"
