@@ -1,0 +1,13 @@
+{
+  "actor": "agent:sarav",
+  "at": "2026-08-31T13:17:50Z",
+  "event_kind": "created",
+  "id": "01M1BZG45TJCVDH3ST5XFJFR25",
+  "object": "DOC-T-0002",
+  "object_kind": "task",
+  "payload": {
+    "path": "work/tasks/DOC-T-0002.md"
+  },
+  "project": "rzn-phone",
+  "schema": "tusker.event/v1"
+}
